@@ -1,13 +1,31 @@
-import { firebaseAuth } from "@/lib/firebase";
+import { onAuthStateChanged, type User } from "firebase/auth";
+import { firebaseAuth, firebasePersistenceReady } from "@/lib/firebase";
 
 type ApiOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   requireAuth?: boolean;
 };
 
+async function getCurrentUserToken() {
+  if (!firebaseAuth) return undefined;
+  const auth = firebaseAuth;
+  await firebasePersistenceReady;
+
+  const user =
+    auth.currentUser ??
+    (await new Promise<User | null>((resolve) => {
+      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        unsubscribe();
+        resolve(currentUser);
+      });
+    }));
+
+  return user?.getIdToken();
+}
+
 export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
   const { body, requireAuth, ...init } = options;
-  const token = await firebaseAuth?.currentUser?.getIdToken();
+  const token = await getCurrentUserToken();
 
   if (requireAuth !== false && !token) {
     throw new Error("You must be signed in");

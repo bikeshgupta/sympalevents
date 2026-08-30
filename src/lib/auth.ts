@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, type User } from "firebase/auth";
 import { apiFetch } from "@/lib/api";
-import { firebaseAuth, missingFirebaseConfigKeys } from "@/lib/firebase";
+import { firebaseAuth, firebasePersistenceReady, missingFirebaseConfigKeys } from "@/lib/firebase";
 
 export type EventRole = "admin" | "committee" | "read_only";
 
@@ -37,25 +37,28 @@ function getFirebaseSession(): Promise<AuthSession | null> {
   if (!firebaseAuth) return Promise.resolve(null);
   const auth = firebaseAuth;
 
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      unsubscribe();
-      const appUser = user ? await getAppUser(user) : null;
-      resolve(
-        user
-          ? {
-              user: {
-                id: user.uid,
-                appUserId: appUser?.id ?? null,
-                email: appUser?.email ?? user.email,
-                name: appUser?.full_name ?? user.displayName,
-                avatarUrl: appUser?.photo_url ?? user.photoURL,
-              },
-            }
-          : null,
-      );
-    });
-  });
+  return firebasePersistenceReady.then(
+    () =>
+      new Promise((resolve) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+          unsubscribe();
+          const appUser = user ? await getAppUser(user) : null;
+          resolve(
+            user
+              ? {
+                  user: {
+                    id: user.uid,
+                    appUserId: appUser?.id ?? null,
+                    email: appUser?.email ?? user.email,
+                    name: appUser?.full_name ?? user.displayName,
+                    avatarUrl: appUser?.photo_url ?? user.photoURL,
+                  },
+                }
+              : null,
+          );
+        });
+      }),
+  );
 }
 
 export function useSession() {
@@ -75,8 +78,8 @@ export async function signInWithGoogle() {
   }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
+  await firebasePersistenceReady;
   await signInWithPopup(firebaseAuth, provider);
-  window.location.assign("/");
 }
 
 export async function signOut() {

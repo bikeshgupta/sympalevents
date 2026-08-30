@@ -1,12 +1,16 @@
 import { LogIn } from "lucide-react";
 import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { signInWithGoogle } from "@/lib/auth";
 
 export function LoginPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const from = typeof location.state?.from === "string" ? location.state.from : "/dashboard";
 
   async function handleGoogleSignIn() {
     setError(null);
@@ -14,6 +18,7 @@ export function LoginPage() {
 
     try {
       await signInWithGoogle();
+      navigate(from, { replace: true });
     } catch (item) {
       const message = item instanceof Error ? item.message : "Google sign-in failed";
       setError(message);

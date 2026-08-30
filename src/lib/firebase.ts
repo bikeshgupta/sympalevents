@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
 
 function readEnvValue(value: string | undefined) {
   return value?.trim().replace(/^["']|["']$/g, "");
@@ -24,6 +24,12 @@ export const isFirebaseConfigured = Boolean(
 export const firebaseApp = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
 
 export const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
+
+export const firebasePersistenceReady = firebaseAuth
+  ? setPersistence(firebaseAuth, browserLocalPersistence).catch((error) => {
+      console.warn("Unable to enable Firebase local persistence:", error);
+    })
+  : Promise.resolve();
 
 export const missingFirebaseConfigKeys = [
   ["VITE_FIREBASE_API_KEY", firebaseConfig.apiKey],
