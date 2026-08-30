@@ -4,7 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 
-export const publicPageKeys = new Set(["dashboard", "expenses"]);
+export const publicPageKeys = new Set(["dashboard"]);
 
 export const pageLabels: Record<string, string> = {
   dashboard: "Dashboard",

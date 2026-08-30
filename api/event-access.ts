@@ -1,6 +1,6 @@
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
-const publicPageKeys = ["dashboard", "expenses"];
+const publicPageKeys = ["dashboard"];
 const eventPageKeys = [
   "dashboard",
   "contributions",
@@ -74,19 +74,6 @@ export default async function handler(req: any, res: any) {
       sendJson(res, 200, {
         role,
         pages: [...eventPageKeys, "settings"].map((pageKey) => ({
-          pageKey,
-          canView: true,
-          canEdit: true,
-          accessLevel: "edit",
-        })),
-      });
-      return;
-    }
-
-    if (role === "committee") {
-      sendJson(res, 200, {
-        role,
-        pages: eventPageKeys.map((pageKey) => ({
           pageKey,
           canView: true,
           canEdit: true,

@@ -1,6 +1,6 @@
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
-const publicPageKeys = new Set(["dashboard", "expenses"]);
+const publicPageKeys = new Set(["dashboard"]);
 
 export default async function handler(req: any, res: any) {
   try {
@@ -53,18 +53,13 @@ export default async function handler(req: any, res: any) {
     const role = member?.role ?? null;
     const accessLevel = permission?.access_level ?? "none";
     const isAdmin = role === "admin";
-    const isCommittee = role === "committee";
     const isReadOnly = role === "read_only";
     const isSettings = pageKey === "settings";
     const canView =
       isSettings
         ? isAdmin
-        : publicPageKeys.has(pageKey) ||
-          isAdmin ||
-          isCommittee ||
-          accessLevel === "view" ||
-          accessLevel === "edit";
-    const canEdit = isSettings ? isAdmin : isAdmin || isCommittee || accessLevel === "edit";
+        : publicPageKeys.has(pageKey) || isAdmin || accessLevel === "view" || accessLevel === "edit";
+    const canEdit = isSettings ? isAdmin : isAdmin || accessLevel === "edit";
 
     sendJson(res, 200, {
       canView,

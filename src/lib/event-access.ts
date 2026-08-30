@@ -28,13 +28,18 @@ export function useEventAccess() {
   return useQuery({
     queryKey: ["event-access", selectedEventId, session?.user.appUserId ?? "guest"],
     queryFn: () =>
-      apiFetch<{
-        role: "admin" | "committee" | "read_only" | null;
-        pages: PageAccess[];
-      }>(`/api/event-access?eventId=${selectedEventId}`, { requireAuth: false }).catch((error) => {
-        console.warn("Falling back to public page access:", error);
-        return publicAccess;
-      }),
+      session
+        ? apiFetch<{
+            role: "admin" | "committee" | "read_only" | null;
+            pages: PageAccess[];
+          }>(`/api/event-access?eventId=${selectedEventId}`)
+        : apiFetch<{
+            role: "admin" | "committee" | "read_only" | null;
+            pages: PageAccess[];
+          }>(`/api/event-access?eventId=${selectedEventId}`, { requireAuth: false }).catch((error) => {
+            console.warn("Falling back to public page access:", error);
+            return publicAccess;
+          }),
     initialData: publicAccess,
     enabled: Boolean(selectedEventId) && !isSessionLoading,
   });
