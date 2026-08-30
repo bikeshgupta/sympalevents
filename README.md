@@ -20,14 +20,22 @@ cp .env.example .env
 npm run dev
 ```
 
+Use the full-stack dev server when testing Firebase-backed roles and admin actions:
+
+```bash
+npm run dev:full
+```
+
 ## Supabase
 
-Create a Supabase project and add these values to `.env`:
+Create a Supabase project and add these browser/public values to `.env`:
 
 ```bash
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
+
+In Vercel, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as **Config** values. These are intentionally available to the browser.
 
 Run the migration in `supabase/migrations/001_initial_schema.sql`, then optionally run `supabase/seed.sql` for demo development data.
 
@@ -37,7 +45,7 @@ Run `supabase/migrations/002_access_control.sql` after the initial schema to add
 
 Create a Firebase project, enable Authentication > Sign-in method > Google, and add your local/dev domain to the authorized domains list.
 
-Add these values from Project settings > General > Your apps > Firebase SDK snippet > Config to `.env`:
+Add these browser/public values from Project settings > General > Your apps > Firebase SDK snippet > Config to `.env`:
 
 ```bash
 VITE_FIREBASE_API_KEY=
@@ -47,6 +55,37 @@ VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 ```
+
+In Vercel, add the `VITE_FIREBASE_*` values as **Config** values. Firebase web config is public by design.
+
+For server-side Firebase token verification, create a Firebase service account in Project settings > Service accounts and add either:
+
+```bash
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+```
+
+or the full JSON as:
+
+```bash
+FIREBASE_SERVICE_ACCOUNT_JSON=
+```
+
+The private key must remain server-only. Do not prefix it with `VITE_`.
+
+## Server API
+
+Firebase login is verified by Vercel serverless functions under `api/`. These functions use the Supabase service role key to map Firebase users into `app_users` and manage per-event roles.
+
+Add these server-only values locally and in Vercel:
+
+```bash
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+In Vercel, add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` as **Secret** values. Do not expose `SUPABASE_SERVICE_ROLE_KEY` or Firebase private keys in browser code.
 
 ## Testing Live Data
 
@@ -75,11 +114,9 @@ Access model:
 
 - `/dashboard` and `/expenses` are public read pages.
 - Other pages require Google login.
-- Event creator becomes the event owner/admin automatically.
-- Settings lets an admin create more events and grant a member view/edit access to specific pages.
+- Event creator becomes the event admin automatically.
+- Settings lets an admin grant admin, committee, or read-only access to members for each event.
 - A member must sign in with Google once before an admin can grant access by email.
-
-Note: Firebase Auth handles the client login session. Supabase Row Level Security policies and RPC helpers that rely on `auth.uid()` still need a backend integration before Firebase users can authorize protected Supabase writes.
 
 ## Build
 
@@ -91,8 +128,9 @@ npm run build
 
 1. Push this repository to GitHub.
 2. Import the project in Vercel.
-3. Add the `VITE_SUPABASE_*` and `VITE_FIREBASE_*` values in Vercel environment variables.
-4. Deploy using the default Vite settings.
+3. Add the `VITE_SUPABASE_*` and `VITE_FIREBASE_*` values in Vercel as Config values.
+4. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` in Vercel as Secret values.
+5. Deploy using the default Vite settings.
 
 ## Next Modules
 

@@ -13,6 +13,7 @@ export function AppLayout() {
   const { data: session } = useSession();
   const { events, selectedEventId, setSelectedEventId } = useEventContext();
   const event = data?.event;
+  const userName = session?.user.name ?? session?.user.email ?? "Signed in";
 
   return (
     <div className="min-h-screen bg-background pb-20 lg:pb-0">
@@ -75,9 +76,17 @@ export function AppLayout() {
             <Bell className="h-4 w-4" />
           </Button>
           {session ? (
-            <Button variant="secondary" size="sm" onClick={() => void signOut()}>
-              Sign out
-            </Button>
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="hidden min-w-0 text-right sm:block">
+                <p className="max-w-36 truncate text-xs font-medium text-foreground">{userName}</p>
+                {session.user.email && session.user.name ? (
+                  <p className="max-w-36 truncate text-[11px] text-muted-foreground">{session.user.email}</p>
+                ) : null}
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => void signOut()}>
+                Sign out
+              </Button>
+            </div>
           ) : (
             <Button variant="secondary" size="sm" asChild>
               <Link to="/login">Sign in</Link>

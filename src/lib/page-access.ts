@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
+import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
-import { supabase } from "@/lib/supabase";
 
 export const publicPageKeys = new Set(["dashboard", "expenses"]);
 
@@ -29,10 +29,6 @@ export function pageKeyFromPath(pathname: string) {
   return pathname.split("/").filter(Boolean)[0] || "dashboard";
 }
 
-function isUuid(value: string | undefined) {
-  return Boolean(value?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i));
-}
-
 export function useCurrentPageAccess() {
   const location = useLocation();
   const pageKey = pageKeyFromPath(location.pathname);
@@ -42,55 +38,31 @@ export function useCurrentPageAccess() {
 export function usePageAccess(pageKey: string) {
   const { data: session, isLoading: isSessionLoading } = useSession();
   const { selectedEventId } = useEventContext();
-  const supabaseUserId = isUuid(session?.user.id) ? session?.user.id : null;
+  const isPublicPage = publicPageKeys.has(pageKey);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["page-access", selectedEventId, supabaseUserId, pageKey],
-    enabled: Boolean(selectedEventId && supabaseUserId && supabase),
-    queryFn: async () => {
-      if (!supabase || !selectedEventId || !supabaseUserId) {
-        return { canView: publicPageKeys.has(pageKey), canEdit: false, role: null };
-      }
-
-      const [{ data: member }, { data: permission }] = await Promise.all([
-        supabase
-          .from("event_members")
-          .select("role")
-          .eq("event_id", selectedEventId)
-          .eq("user_id", supabaseUserId)
-          .maybeSingle(),
-        supabase
-          .from("event_page_permissions")
-          .select("access_level")
-          .eq("event_id", selectedEventId)
-          .eq("user_id", supabaseUserId)
-          .eq("page_key", pageKey)
-          .maybeSingle(),
-      ]);
-
-      const role = member?.role ?? null;
-      const isAdmin = role === "owner" || role === "admin";
-      const level = permission?.access_level ?? "none";
-
-      return {
-        canView: publicPageKeys.has(pageKey) || isAdmin || level === "view" || level === "edit",
-        canEdit: isAdmin || level === "edit",
-        role,
-      };
-    },
+    queryKey: ["page-access", selectedEventId, session?.user.appUserId, pageKey],
+    enabled: Boolean(selectedEventId && session && !isPublicPage),
+    queryFn: () =>
+      apiFetch<{
+        canView: boolean;
+        canEdit: boolean;
+        role: "admin" | "committee" | "read_only" | null;
+        accessLevel: "none" | "view" | "edit";
+      }>(`/api/page-access?eventId=${selectedEventId}&pageKey=${pageKey}`),
   });
 
-  if (publicPageKeys.has(pageKey) && !session) {
+  if (isPublicPage) {
     return { canView: true, canEdit: false, requiresLogin: false, isLoading: false, role: null };
   }
 
-  if (session && !supabaseUserId) {
+  if (pageKey === "settings" && session && !selectedEventId) {
     return {
       canView: true,
-      canEdit: false,
+      canEdit: true,
       requiresLogin: false,
       isLoading: isSessionLoading,
-      role: "firebase-user",
+      role: null,
     };
   }
 

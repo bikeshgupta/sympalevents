@@ -1,11 +1,21 @@
+import { Check } from "lucide-react";
 import { DataSource } from "@/lib/event-data";
 
 export function DataSourceBadge({ source }: { source?: DataSource }) {
   const isLive = source === "supabase";
+  const label = isLive ? "Supabase data" : "Demo fallback";
 
   return (
-    <span className={isLive ? "rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800" : "rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800"}>
-      {isLive ? "Supabase data" : "Demo fallback"}
+    <span
+      aria-label={label}
+      title={label}
+      className={
+        isLive
+          ? "inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"
+          : "inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700"
+      }
+    >
+      <Check className="h-4 w-4" />
     </span>
   );
 }
