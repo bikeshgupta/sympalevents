@@ -17,10 +17,10 @@ export default function handler(req: any, res: any) {
     env: {
       supabaseUrl: hasValue("SUPABASE_URL") || hasValue("VITE_SUPABASE_URL"),
       supabaseServiceRoleKey: hasValue("SUPABASE_SERVICE_ROLE_KEY"),
-      firebaseProjectId: hasValue("FIREBASE_PROJECT_ID"),
-      firebaseClientEmail: hasValue("FIREBASE_CLIENT_EMAIL"),
-      firebasePrivateKey: hasValue("FIREBASE_PRIVATE_KEY"),
-      firebaseServiceAccountJson: hasValue("FIREBASE_SERVICE_ACCOUNT_JSON"),
+      firebaseProjectId: hasValue("FIREBASE_PROJECT_ID") || hasValue("VITE_FIREBASE_PROJECT_ID"),
+      firebaseAdminClientEmail: hasValue("FIREBASE_CLIENT_EMAIL"),
+      firebaseAdminPrivateKey: hasValue("FIREBASE_PRIVATE_KEY"),
+      firebaseAdminServiceAccountJson: hasValue("FIREBASE_SERVICE_ACCOUNT_JSON"),
     },
   });
 }

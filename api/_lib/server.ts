@@ -2,59 +2,17 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const firebaseProjectId =
+  readEnvValue(process.env.FIREBASE_PROJECT_ID) ?? readEnvValue(process.env.VITE_FIREBASE_PROJECT_ID);
+const firebaseJwksUrl = new URL(
+  "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com",
+);
 
 export const serviceSupabase =
   supabaseUrl && supabaseServiceRoleKey ? createClient(supabaseUrl, supabaseServiceRoleKey) : null;
 
 function readEnvValue(value: string | undefined) {
   return value?.trim().replace(/^["']|["']$/g, "");
-}
-
-function getFirebasePrivateKey() {
-  const key = readEnvValue(process.env.FIREBASE_PRIVATE_KEY);
-  return key?.replace(/\\n/g, "\n");
-}
-
-async function initFirebaseAdmin() {
-  const { cert, getApps, initializeApp } = await import("firebase-admin/app");
-
-  if (getApps().length) return;
-
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-  if (serviceAccountJson) {
-    initializeApp({
-      credential: cert(JSON.parse(serviceAccountJson)),
-    });
-    return;
-  }
-
-  const projectId = readEnvValue(process.env.FIREBASE_PROJECT_ID);
-  const clientEmail = readEnvValue(process.env.FIREBASE_CLIENT_EMAIL);
-  const privateKey = getFirebasePrivateKey();
-  const missing = [
-    ["FIREBASE_PROJECT_ID", projectId],
-    ["FIREBASE_CLIENT_EMAIL", clientEmail],
-    ["FIREBASE_PRIVATE_KEY", privateKey],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-
-  if (missing.length) {
-    throw new Error(
-      `Firebase Admin environment variables are not configured. Missing ${missing.join(
-        ", ",
-      )}. Add those values or FIREBASE_SERVICE_ACCOUNT_JSON from Firebase Project settings > Service accounts.`,
-    );
-  }
-
-  initializeApp({
-    credential: cert({
-      projectId,
-      clientEmail,
-      privateKey,
-    }),
-  });
 }
 
 export function sendJson(res: any, status: number, body: unknown) {
@@ -74,9 +32,34 @@ export async function getRequestBody(req: any) {
   return req.body;
 }
 
+async function verifyFirebaseIdToken(token: string) {
+  if (!firebaseProjectId) {
+    throw new Error("Firebase project id is not configured. Missing FIREBASE_PROJECT_ID.");
+  }
+
+  const { createRemoteJWKSet, jwtVerify } = await import("jose");
+  const jwks = createRemoteJWKSet(firebaseJwksUrl);
+  const { payload } = await jwtVerify(token, jwks, {
+    audience: firebaseProjectId,
+    issuer: `https://securetoken.google.com/${firebaseProjectId}`,
+  });
+  const uid = typeof payload.user_id === "string" ? payload.user_id : payload.sub;
+
+  if (!uid) {
+    const error = new Error("Invalid Firebase token");
+    Object.assign(error, { statusCode: 401 });
+    throw error;
+  }
+
+  return {
+    uid,
+    email: typeof payload.email === "string" ? payload.email : undefined,
+    name: typeof payload.name === "string" ? payload.name : undefined,
+    picture: typeof payload.picture === "string" ? payload.picture : undefined,
+  };
+}
+
 export async function requireAppUser(req: any) {
-  await initFirebaseAdmin();
-  const { getAuth } = await import("firebase-admin/auth");
   const supabase = assertServiceSupabase();
   const authHeader = String(req.headers.authorization ?? "");
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
@@ -87,7 +70,7 @@ export async function requireAppUser(req: any) {
     throw error;
   }
 
-  const decoded = await getAuth().verifyIdToken(token);
+  const decoded = await verifyFirebaseIdToken(token);
   const email = decoded.email;
 
   if (!email) {

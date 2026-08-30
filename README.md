@@ -60,21 +60,13 @@ VITE_FIREBASE_APP_ID=
 
 In Vercel, add the `VITE_FIREBASE_*` values as **Config** values. Firebase web config is public by design.
 
-For server-side Firebase token verification, create a Firebase service account in Project settings > Service accounts and add either:
+For server-side Firebase token verification, add the project id as a server-only value:
 
 ```bash
 FIREBASE_PROJECT_ID=
-FIREBASE_CLIENT_EMAIL=
-FIREBASE_PRIVATE_KEY=
 ```
 
-or the full JSON as:
-
-```bash
-FIREBASE_SERVICE_ACCOUNT_JSON=
-```
-
-The private key must remain server-only. Do not prefix it with `VITE_`.
+The API verifies Firebase ID tokens against Google's public signing keys, so it does not need a Firebase service account private key.
 
 ## Server API
 
@@ -85,9 +77,10 @@ Add these server-only values locally and in Vercel:
 ```bash
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
+FIREBASE_PROJECT_ID=
 ```
 
-In Vercel, add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` as **Secret** values. Do not expose `SUPABASE_SERVICE_ROLE_KEY` or Firebase private keys in browser code.
+In Vercel, add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `FIREBASE_PROJECT_ID` as **Secret** values. Do not expose `SUPABASE_SERVICE_ROLE_KEY` in browser code.
 
 ## Testing Live Data
 
@@ -131,7 +124,7 @@ npm run build
 1. Push this repository to GitHub.
 2. Import the project in Vercel.
 3. Add the `VITE_SUPABASE_*` and `VITE_FIREBASE_*` values in Vercel as Config values.
-4. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` in Vercel as Secret values.
+4. Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `FIREBASE_PROJECT_ID` in Vercel as Secret values.
 5. Deploy using the default Vite settings.
 
 ## Next Modules
