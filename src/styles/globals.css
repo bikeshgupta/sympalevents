@@ -3,6 +3,12 @@
 @tailwind utilities;
 
 @layer base {
+  @font-face {
+    font-family: "EventDigital";
+    src: url("/fonts/event-digital.woff2") format("woff2");
+    font-display: swap;
+  }
+
   :root {
     --background: 42 31% 97%;
     --foreground: 218 23% 15%;
@@ -31,5 +37,9 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  .font-digital {
+    font-family: "EventDigital", "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
 }

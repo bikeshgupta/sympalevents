@@ -6,6 +6,7 @@ import { LoginPage } from "@/features/auth/login-page";
 import { BudgetPage } from "@/features/budget/budget-page";
 import { ContributionsPage } from "@/features/contributions/contributions-page";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
+import { ExpensesPage } from "@/features/expenses/expenses-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { SponsorsPage } from "@/features/sponsors/sponsors-page";
@@ -24,7 +25,7 @@ export function App() {
           <Route path="/sponsors" element={<SponsorsPage />} />
           <Route path="/budget" element={<BudgetPage />} />
           <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/expenses" element={<PlaceholderPage title="Expense Ledger" />} />
+          <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/procurement" element={<PlaceholderPage title="Procurement" />} />
           <Route path="/prasad" element={<PlaceholderPage title="Prasad Tracker" />} />
           <Route path="/volunteers" element={<PlaceholderPage title="Volunteers" />} />

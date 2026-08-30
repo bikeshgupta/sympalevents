@@ -19,6 +19,11 @@ export type AppEvent = {
   name: string;
   dates: string;
   location: string;
+  startDate: string;
+  endDate: string;
+  timezone: string;
+  heroImageUrl?: string | null;
+  status?: string;
 };
 
 export type ContributionRow = {
@@ -110,6 +115,10 @@ type EventData = {
   eventPlan: EventPlanRow[];
 };
 
+type UseEventDataOptions = {
+  includeTasks?: boolean;
+};
+
 const demoData: EventData = {
   source: "demo",
   event: demoEvent,
@@ -121,6 +130,10 @@ const demoData: EventData = {
   expenses: expenseRows,
   eventPlan: eventPlanRows,
 };
+
+function eventDataWithTaskPolicy(data: EventData, includeTasks: boolean): EventData {
+  return includeTasks ? data : { ...data, tasks: [] };
+}
 
 export async function getFirstEventId() {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -149,16 +162,17 @@ function dateRange(startDate: string, endDate: string) {
   return `${formatter.format(start)} - ${formatter.format(end)}`;
 }
 
-export function useEventData() {
+export function useEventData(options: UseEventDataOptions = {}) {
   const { selectedEventId } = useEventContext();
+  const includeTasks = options.includeTasks ?? true;
 
   return useQuery({
-    queryKey: ["event-data", selectedEventId],
-    initialData: demoData,
+    queryKey: ["event-data", selectedEventId, { includeTasks }],
+    initialData: eventDataWithTaskPolicy(demoData, includeTasks),
     queryFn: async (): Promise<EventData> => {
       if (!isSupabaseConfigured || !supabase) {
         return {
-          ...demoData,
+          ...eventDataWithTaskPolicy(demoData, includeTasks),
           fallbackReason: "Supabase browser config is missing",
         };
       }
@@ -178,7 +192,7 @@ export function useEventData() {
         const fallbackReason = eventError?.message ?? "No events found in Supabase";
         console.warn("Falling back to demo data:", fallbackReason);
         return {
-          ...demoData,
+          ...eventDataWithTaskPolicy(demoData, includeTasks),
           fallbackReason,
         };
       }
@@ -213,7 +227,9 @@ export function useEventData() {
             .from("expenses")
             .select("id,expense_date,category,item,amount,paid_by,payment_mode,expense_type,sponsored,approved_by,notes")
             .eq("event_id", eventId),
-          supabase.from("tasks").select("id,task,owner_name,priority,due_date,status").eq("event_id", eventId),
+          includeTasks
+            ? supabase.from("tasks").select("id,task,owner_name,priority,due_date,status").eq("event_id", eventId)
+            : Promise.resolve({ data: [], error: null }),
           supabase
             .from("event_schedule")
             .select("id,day,activity_date,activity,start_time,end_time,location,expected_attendance,owner_name,status,notes")
@@ -232,7 +248,7 @@ export function useEventData() {
       if (queryError) {
         console.warn("Falling back to demo data:", queryError.message);
         return {
-          ...demoData,
+          ...eventDataWithTaskPolicy(demoData, includeTasks),
           fallbackReason: queryError.message,
         };
       }
@@ -341,6 +357,11 @@ export function useEventData() {
           name: eventRecord.name,
           dates: dateRange(eventRecord.start_date, eventRecord.end_date),
           location: eventRecord.location ?? "",
+          startDate: eventRecord.start_date,
+          endDate: eventRecord.end_date,
+          timezone: "Asia/Kolkata",
+          heroImageUrl: null,
+          status: "planning",
         },
         financials: {
           totalBudget,

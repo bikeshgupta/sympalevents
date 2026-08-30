@@ -2,6 +2,11 @@ export const demoEvent = {
   name: "Ganesh Chaturthi 2026",
   dates: "14-16 September 2026",
   location: "Tru WindChimes",
+  startDate: "2026-09-14",
+  endDate: "2026-09-16",
+  timezone: "Asia/Kolkata",
+  heroImageUrl: null,
+  status: "planning",
 };
 
 export const demoFinancials = {
