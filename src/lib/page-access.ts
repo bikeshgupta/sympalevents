@@ -68,7 +68,7 @@ export function usePageAccess(pageKey: string) {
 
   if (pageKey === "settings" && session) {
     return {
-      canView: true,
+      canView: data?.canView ?? false,
       canEdit: data?.canEdit ?? false,
       requiresLogin: false,
       isLoading: isSessionLoading || isLoading,

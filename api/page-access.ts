@@ -55,13 +55,16 @@ export default async function handler(req: any, res: any) {
     const isAdmin = role === "admin";
     const isCommittee = role === "committee";
     const isReadOnly = role === "read_only";
+    const isSettings = pageKey === "settings";
     const canView =
-      publicPageKeys.has(pageKey) ||
-      isAdmin ||
-      isCommittee ||
-      accessLevel === "view" ||
-      accessLevel === "edit";
-    const canEdit = isAdmin || (isCommittee && accessLevel === "edit");
+      isSettings
+        ? isAdmin
+        : publicPageKeys.has(pageKey) ||
+          isAdmin ||
+          isCommittee ||
+          accessLevel === "view" ||
+          accessLevel === "edit";
+    const canEdit = isSettings ? isAdmin : isAdmin || isCommittee || accessLevel === "edit";
 
     sendJson(res, 200, {
       canView,

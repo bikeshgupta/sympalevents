@@ -3,17 +3,27 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signOut, useSession } from "@/lib/auth";
+import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { cn } from "@/lib/utils";
 import { mobileNavItems, navItems } from "./nav-items";
 
+function pageKeyFromHref(href: string) {
+  return href.split("/").filter(Boolean)[0] || "dashboard";
+}
+
 export function AppLayout() {
   const { data } = useEventData();
   const { data: session } = useSession();
+  const { data: eventAccess } = useEventAccess();
   const { events, selectedEventId, setSelectedEventId } = useEventContext();
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
+  const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
+  const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
+  const visibleNavItems = navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
+  const visibleMobileNavItems = mobileNavItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
 
   return (
     <div className="min-h-screen bg-background pb-20 lg:pb-0">
@@ -25,7 +35,7 @@ export function AppLayout() {
           </div>
         </div>
         <nav className="space-y-1 p-3">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.href}
               to={item.href}
@@ -99,7 +109,7 @@ export function AppLayout() {
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card lg:hidden">
-        {mobileNavItems.map((item) => (
+        {visibleMobileNavItems.map((item) => (
           <NavLink
             key={item.href}
             to={item.href}
@@ -111,10 +121,12 @@ export function AppLayout() {
             <span>{item.label}</span>
           </NavLink>
         ))}
-        <NavLink to="/settings" className="flex flex-col items-center gap-1 px-2 py-2 text-[11px] text-muted-foreground">
-          <ChevronsUpDown className="h-5 w-5" />
-          <span>More</span>
-        </NavLink>
+        {accessiblePageKeys.has("settings") ? (
+          <NavLink to="/settings" className="flex flex-col items-center gap-1 px-2 py-2 text-[11px] text-muted-foreground">
+            <ChevronsUpDown className="h-5 w-5" />
+            <span>More</span>
+          </NavLink>
+        ) : null}
       </nav>
     </div>
   );

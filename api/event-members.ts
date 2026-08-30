@@ -23,13 +23,19 @@ export default async function handler(req: any, res: any) {
     const eventId = String(body.eventId ?? "");
     const email = String(body.email ?? "").trim().toLowerCase();
     const role = String(body.role ?? "");
-    const pageKey = String(body.pageKey ?? "");
-    const accessLevel = String(body.accessLevel ?? "none");
+    const permissions = Array.isArray(body.permissions) ? body.permissions : [];
 
-    if (!eventId || !email || !validRoles.has(role) || !pageKey || !validAccessLevels.has(accessLevel)) {
-      sendJson(res, 400, { error: "eventId, email, role, pageKey, and accessLevel are required" });
+    if (!eventId || !email || !validRoles.has(role)) {
+      sendJson(res, 400, { error: "eventId, email, and role are required" });
       return;
     }
+
+    const normalizedPermissions = permissions
+      .map((permission) => ({
+        pageKey: String(permission?.pageKey ?? ""),
+        accessLevel: String(permission?.accessLevel ?? "none"),
+      }))
+      .filter((permission) => permission.pageKey && validAccessLevels.has(permission.accessLevel));
 
     await requireEventAdmin(eventId, appUser.id);
 
@@ -57,18 +63,28 @@ export default async function handler(req: any, res: any) {
 
     if (memberError) throw memberError;
 
-    const { error: permissionError } = await supabase.from("event_page_permissions").upsert(
-      {
+    const { error: deletePermissionError } = await supabase
+      .from("event_page_permissions")
+      .delete()
+      .eq("event_id", eventId)
+      .eq("user_id", targetUser.id);
+
+    if (deletePermissionError) throw deletePermissionError;
+
+    const permissionRows = normalizedPermissions
+      .filter((permission) => permission.accessLevel !== "none")
+      .map((permission) => ({
         event_id: eventId,
         user_id: targetUser.id,
-        page_key: pageKey,
-        access_level: accessLevel,
+        page_key: permission.pageKey,
+        access_level: permission.accessLevel,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "event_id,user_id,page_key" },
-    );
+      }));
 
-    if (permissionError) throw permissionError;
+    if (permissionRows.length) {
+      const { error: permissionError } = await supabase.from("event_page_permissions").insert(permissionRows);
+      if (permissionError) throw permissionError;
+    }
 
     sendJson(res, 200, { ok: true });
   } catch (error) {

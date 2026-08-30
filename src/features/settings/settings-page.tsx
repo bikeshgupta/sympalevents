@@ -10,7 +10,11 @@ import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { pageLabels, usePageAccess } from "@/lib/page-access";
 
-const grantablePages = Object.entries(pageLabels).filter(([key]) => !["dashboard", "expenses", "settings"].includes(key));
+type AccessLevel = "none" | "view" | "edit";
+
+const grantablePages = Object.entries(pageLabels).filter(([key]) => key !== "settings");
+
+const initialPageAccess = Object.fromEntries(grantablePages.map(([key]) => [key, "none"])) as Record<string, AccessLevel>;
 
 export function SettingsPage() {
   const { data } = useEventData();
@@ -20,6 +24,7 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const [eventMessage, setEventMessage] = useState<string | null>(null);
   const [accessMessage, setAccessMessage] = useState<string | null>(null);
+  const [pageAccess, setPageAccess] = useState<Record<string, AccessLevel>>(initialPageAccess);
 
   async function createEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,13 +69,18 @@ export function SettingsPage() {
           eventId: selectedEventId,
           email: String(formData.get("email")),
           role: String(formData.get("role")),
-          pageKey: String(formData.get("page")),
-          accessLevel: String(formData.get("access")),
+          permissions: Object.entries(pageAccess).map(([pageKey, accessLevel]) => ({
+            pageKey,
+            accessLevel,
+          })),
         },
       });
 
       await queryClient.invalidateQueries({ queryKey: ["page-access"] });
+      await queryClient.invalidateQueries({ queryKey: ["event-access"] });
       setAccessMessage("Access granted.");
+      setPageAccess(initialPageAccess);
+      event.currentTarget.reset();
     } catch (error) {
       setAccessMessage(error instanceof Error ? error.message : "Unable to grant access");
       return;
@@ -137,21 +147,33 @@ export function SettingsPage() {
                     <option value="admin">Admin</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="page">Page</label>
-                  <select id="page" name="page" className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-                    {grantablePages.map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
-                  </select>
+              </div>
+              <div className="overflow-hidden rounded-md border">
+                <div className="grid grid-cols-[1fr_9rem] border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  <span>Page</span>
+                  <span>Access</span>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="access">Access</label>
-                  <select id="access" name="access" className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-                    <option value="view">View</option>
-                    <option value="edit">Edit</option>
-                    <option value="none">No access</option>
-                  </select>
+                <div className="divide-y">
+                  {grantablePages.map(([key, label]) => (
+                    <div key={key} className="grid grid-cols-[1fr_9rem] items-center gap-3 px-3 py-2">
+                      <span className="min-w-0 truncate text-sm">{label}</span>
+                      <select
+                        aria-label={`${label} access`}
+                        className="h-9 rounded-md border bg-background px-2 text-sm"
+                        value={pageAccess[key]}
+                        onChange={(item) =>
+                          setPageAccess((current) => ({
+                            ...current,
+                            [key]: item.target.value as AccessLevel,
+                          }))
+                        }
+                      >
+                        <option value="none">None</option>
+                        <option value="view">Read</option>
+                        <option value="edit">Read/write</option>
+                      </select>
+                    </div>
+                  ))}
                 </div>
               </div>
               {accessMessage ? <p className="text-sm text-muted-foreground">{accessMessage}</p> : null}
