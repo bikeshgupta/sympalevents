@@ -94,7 +94,7 @@ export function SettingsPage() {
           <h2 className="text-2xl font-semibold">Settings</h2>
           <p className="text-sm text-muted-foreground">Create events and manage member access for the active event.</p>
         </div>
-        <DataSourceBadge source={data.source} />
+        <DataSourceBadge source={data.source} reason={data.fallbackReason} />
       </div>
 
       {!session ? (

@@ -33,3 +33,13 @@ export const missingFirebaseConfigKeys = [
 ]
   .filter(([, value]) => !value)
   .map(([name]) => name);
+
+if (import.meta.env.DEV) {
+  const exposedSecrets = ["VITE_FIREBASE_PRIVATE_KEY", "VITE_FIREBASE_CLIENT_EMAIL"].filter(
+    (name) => import.meta.env[name],
+  );
+
+  if (exposedSecrets.length) {
+    console.warn(`Remove server-only Firebase values from VITE_ env vars: ${exposedSecrets.join(", ")}`);
+  }
+}

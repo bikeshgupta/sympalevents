@@ -28,7 +28,7 @@ export function BudgetPage() {
             <h2 className="text-2xl font-semibold">Budget</h2>
             <p className="text-sm text-muted-foreground">Plan category-wise costs and compare estimates against actuals.</p>
           </div>
-          <DataSourceBadge source={data.source} />
+          <DataSourceBadge source={data.source} reason={data.fallbackReason} />
         </div>
       </div>
       <section className="grid gap-3 sm:grid-cols-3">

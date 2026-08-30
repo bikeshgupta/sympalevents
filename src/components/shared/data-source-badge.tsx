@@ -1,9 +1,9 @@
 import { Check } from "lucide-react";
 import { DataSource } from "@/lib/event-data";
 
-export function DataSourceBadge({ source }: { source?: DataSource }) {
+export function DataSourceBadge({ source, reason }: { source?: DataSource; reason?: string }) {
   const isLive = source === "supabase";
-  const label = isLive ? "Supabase data" : "Demo fallback";
+  const label = isLive ? "Supabase data" : `Demo fallback${reason ? `: ${reason}` : ""}`;
 
   return (
     <span

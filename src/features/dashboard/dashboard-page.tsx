@@ -34,7 +34,7 @@ export function DashboardPage() {
             <h2 className="mt-1 text-2xl font-semibold">{data?.event.name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{data?.event.dates} - Live planning dashboard</p>
           </div>
-          <DataSourceBadge source={isLoading ? undefined : data?.source} />
+          <DataSourceBadge source={isLoading ? undefined : data?.source} reason={data?.fallbackReason} />
         </div>
       </section>
 

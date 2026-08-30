@@ -58,6 +58,7 @@ export type TaskRow = {
 
 type EventData = {
   source: DataSource;
+  fallbackReason?: string;
   event: AppEvent;
   financials: typeof demoFinancials;
   contributions: ContributionRow[];
@@ -110,7 +111,12 @@ export function useEventData() {
     queryKey: ["event-data", selectedEventId],
     initialData: demoData,
     queryFn: async (): Promise<EventData> => {
-      if (!isSupabaseConfigured || !supabase) return demoData;
+      if (!isSupabaseConfigured || !supabase) {
+        return {
+          ...demoData,
+          fallbackReason: "Supabase browser config is missing",
+        };
+      }
 
       let eventQuery = supabase
         .from("events")
@@ -124,8 +130,12 @@ export function useEventData() {
       const { data: events, error: eventError } = await eventQuery.limit(1);
 
       if (eventError || !events?.length) {
-        console.warn("Falling back to demo data:", eventError?.message ?? "No events found");
-        return demoData;
+        const fallbackReason = eventError?.message ?? "No events found in Supabase";
+        console.warn("Falling back to demo data:", fallbackReason);
+        return {
+          ...demoData,
+          fallbackReason,
+        };
       }
 
       const eventRecord = events[0];
@@ -160,7 +170,10 @@ export function useEventData() {
 
       if (queryError) {
         console.warn("Falling back to demo data:", queryError.message);
-        return demoData;
+        return {
+          ...demoData,
+          fallbackReason: queryError.message,
+        };
       }
 
       const residentsById = new Map(

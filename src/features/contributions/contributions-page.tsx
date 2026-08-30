@@ -30,7 +30,7 @@ export function ContributionsPage() {
           <p className="text-sm text-muted-foreground">Track resident interest, expected amount, collections, and payment mode.</p>
         </div>
         <div className="flex items-center gap-2">
-          <DataSourceBadge source={data.source} />
+          <DataSourceBadge source={data.source} reason={data.fallbackReason} />
           <Button variant="outline">
             <Download className="h-4 w-4" />
             Export CSV

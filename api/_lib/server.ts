@@ -8,8 +8,12 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 export const serviceSupabase =
   supabaseUrl && supabaseServiceRoleKey ? createClient(supabaseUrl, supabaseServiceRoleKey) : null;
 
+function readEnvValue(value: string | undefined) {
+  return value?.trim().replace(/^["']|["']$/g, "");
+}
+
 function getFirebasePrivateKey() {
-  const key = process.env.FIREBASE_PRIVATE_KEY;
+  const key = readEnvValue(process.env.FIREBASE_PRIVATE_KEY);
   return key?.replace(/\\n/g, "\n");
 }
 
@@ -25,8 +29,8 @@ function initFirebaseAdmin() {
     return;
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const projectId = readEnvValue(process.env.FIREBASE_PROJECT_ID);
+  const clientEmail = readEnvValue(process.env.FIREBASE_CLIENT_EMAIL);
   const privateKey = getFirebasePrivateKey();
   const missing = [
     ["FIREBASE_PROJECT_ID", projectId],
@@ -142,6 +146,7 @@ export async function requireEventAdmin(eventId: string, userId: string) {
 
 export function handleApiError(res: any, error: unknown) {
   const item = error as { message?: string; statusCode?: number; code?: string };
+  console.error("API error", item);
   sendJson(res, item.statusCode ?? 500, {
     error: item.message ?? "Unexpected API error",
     code: item.code,

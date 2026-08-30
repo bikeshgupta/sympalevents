@@ -25,7 +25,7 @@ export function TasksPage() {
             <h2 className="text-2xl font-semibold">Tasks</h2>
             <p className="text-sm text-muted-foreground">Kanban-style tracker for owners, priorities, dates, and blockers.</p>
           </div>
-          <DataSourceBadge source={data.source} />
+          <DataSourceBadge source={data.source} reason={data.fallbackReason} />
         </div>
       </div>
       <PageTools

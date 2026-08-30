@@ -31,7 +31,7 @@ export function SponsorsPage() {
             <h2 className="text-2xl font-semibold">Sponsors</h2>
             <p className="text-sm text-muted-foreground">Manage monetary and in-kind sponsorship commitments.</p>
           </div>
-          <DataSourceBadge source={data.source} />
+          <DataSourceBadge source={data.source} reason={data.fallbackReason} />
         </div>
       </div>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
