@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, type User } from "firebase/auth";
 import { apiFetch } from "@/lib/api";
-import { firebaseAuth } from "@/lib/firebase";
+import { firebaseAuth, missingFirebaseConfigKeys } from "@/lib/firebase";
 
 export type EventRole = "admin" | "committee" | "read_only";
 
@@ -66,7 +66,13 @@ export function useSession() {
 }
 
 export async function signInWithGoogle() {
-  if (!firebaseAuth) throw new Error("Firebase is not configured");
+  if (!firebaseAuth) {
+    throw new Error(
+      missingFirebaseConfigKeys.length
+        ? `Firebase is not configured. Missing ${missingFirebaseConfigKeys.join(", ")}.`
+        : "Firebase is not configured. Restart the dev server after changing .env.",
+    );
+  }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   await signInWithPopup(firebaseAuth, provider);

@@ -28,9 +28,20 @@ function initFirebaseAdmin() {
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = getFirebasePrivateKey();
+  const missing = [
+    ["FIREBASE_PROJECT_ID", projectId],
+    ["FIREBASE_CLIENT_EMAIL", clientEmail],
+    ["FIREBASE_PRIVATE_KEY", privateKey],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
 
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error("Firebase Admin environment variables are not configured");
+  if (missing.length) {
+    throw new Error(
+      `Firebase Admin environment variables are not configured. Missing ${missing.join(
+        ", ",
+      )}. Add those values or FIREBASE_SERVICE_ACCOUNT_JSON from Firebase Project settings > Service accounts.`,
+    );
   }
 
   initializeApp({

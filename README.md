@@ -20,11 +20,13 @@ cp .env.example .env
 npm run dev
 ```
 
-Use the full-stack dev server when testing Firebase-backed roles and admin actions:
+Use the local Vite dev server when testing Firebase-backed roles and admin actions:
 
 ```bash
-npm run dev:full
+npm run dev
 ```
+
+Local `/api/*` routes are executed through a Vite development middleware. The same files deploy as Vercel serverless functions.
 
 ## Supabase
 
