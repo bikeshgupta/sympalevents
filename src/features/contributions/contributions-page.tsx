@@ -168,7 +168,7 @@ export function ContributionsPage() {
           </CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
         }
       />
-      <div className="grid gap-3 lg:hidden">
+      <div className="hidden">
         <TableToolbar
           columns={contributionColumns}
           sortKey={contributionTable.sortKey}
@@ -203,7 +203,7 @@ export function ContributionsPage() {
           </Card>
         ))}
       </div>
-      <Card className="hidden overflow-hidden lg:block">
+      <Card className="overflow-x-auto">
         <TableToolbar
           columns={contributionColumns}
           sortKey={contributionTable.sortKey}

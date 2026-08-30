@@ -35,7 +35,3 @@ export const navItems = [
   { label: "Safety", href: "/risks", icon: ShieldAlert },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
-
-export const mobileNavItems = navItems.filter((item) =>
-  ["Dashboard", "Contributions", "Tasks", "Procurement"].includes(item.label),
-);

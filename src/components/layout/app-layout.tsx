@@ -1,4 +1,5 @@
-import { Bell, ChevronsUpDown, Search } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { Bell, ChevronsUpDown, LogOut, Search } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { cn } from "@/lib/utils";
-import { mobileNavItems, navItems } from "./nav-items";
+import { navItems } from "./nav-items";
 
 function pageKeyFromHref(href: string) {
   return href.split("/").filter(Boolean)[0] || "dashboard";
@@ -25,7 +26,6 @@ export function AppLayout() {
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
   const visibleNavItems = navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
-  const visibleMobileNavItems = mobileNavItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const canRequestCommitteeAccess = Boolean(
     session && selectedEventId && eventAccess.role !== "admin" && eventAccess.role !== "committee",
@@ -112,17 +112,53 @@ export function AppLayout() {
             </Button>
           ) : null}
           {session ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="hidden min-w-0 text-right sm:block">
-                <p className="max-w-36 truncate text-xs font-medium text-foreground">{userName}</p>
-                {session.user.email && session.user.name ? (
-                  <p className="max-w-36 truncate text-[11px] text-muted-foreground">{session.user.email}</p>
-                ) : null}
-              </div>
-              <Button variant="secondary" size="sm" onClick={() => void signOut()}>
-                Sign out
-              </Button>
-            </div>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-muted"
+                >
+                  {session.user.avatarUrl ? (
+                    <img
+                      src={session.user.avatarUrl}
+                      alt=""
+                      className="h-8 w-8 rounded-full border object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full border bg-muted text-xs font-semibold">
+                      {(userName[0] ?? "U").toUpperCase()}
+                    </span>
+                  )}
+                  <span className="hidden max-w-32 truncate text-xs font-medium text-foreground sm:block">{userName}</span>
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={8}
+                  className="z-50 w-64 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+                >
+                  <div className="px-2 py-2">
+                    <p className="truncate text-sm font-medium">{userName}</p>
+                    {session.user.email ? (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{session.user.email}</p>
+                    ) : null}
+                  </div>
+                  <DropdownMenu.Separator className="my-1 h-px bg-border" />
+                  <DropdownMenu.Item asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-muted"
+                      onClick={() => void signOut()}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign out
+                    </button>
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           ) : (
             <Button variant="secondary" size="sm" asChild>
               <Link to="/login">Sign in</Link>
@@ -137,25 +173,22 @@ export function AppLayout() {
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-card lg:hidden">
-        {visibleMobileNavItems.map((item) => (
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex gap-1 overflow-x-auto border-t bg-card px-2 lg:hidden">
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.href}
             to={item.href}
             className={({ isActive }) =>
-              cn("flex flex-col items-center gap-1 px-2 py-2 text-[11px] text-muted-foreground", isActive && "text-primary")
+              cn(
+                "flex min-w-20 flex-col items-center gap-1 px-2 py-2 text-[11px] text-muted-foreground",
+                isActive && "text-primary",
+              )
             }
           >
             <item.icon className="h-5 w-5" />
             <span>{item.label}</span>
           </NavLink>
         ))}
-        {accessiblePageKeys.has("settings") ? (
-          <NavLink to="/settings" className="flex flex-col items-center gap-1 px-2 py-2 text-[11px] text-muted-foreground">
-            <ChevronsUpDown className="h-5 w-5" />
-            <span>More</span>
-          </NavLink>
-        ) : null}
       </nav>
     </div>
   );

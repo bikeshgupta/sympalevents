@@ -175,7 +175,7 @@ export function ColumnFilter({
       onChange={(event) => onFilterChange(columnKey, event.target.value)}
       placeholder={label}
       aria-label={`Filter ${label}`}
-      className="mt-2 hidden h-8 min-w-24 bg-background px-2 text-xs font-normal lg:block"
+      className="mt-2 h-8 min-w-24 bg-background px-2 text-xs font-normal"
     />
   );
 }

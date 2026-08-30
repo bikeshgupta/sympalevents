@@ -17,7 +17,6 @@ import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
 import {
   ColumnFilter,
-  ColumnFilterPanel,
   SortableHeader,
   TableColumn,
   TableToolbar,
@@ -83,7 +82,7 @@ export function BudgetPage() {
           </CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
         }
       />
-      <Card className="overflow-hidden">
+      <Card className="overflow-x-auto">
         <TableToolbar
           columns={budgetColumns}
           sortKey={budgetTable.sortKey}
@@ -92,11 +91,6 @@ export function BudgetPage() {
           setSortDirection={budgetTable.setSortDirection}
           resultCount={budgetTable.rows.length}
           totalCount={budgetRows.length}
-        />
-        <ColumnFilterPanel
-          columns={budgetColumns}
-          filters={budgetTable.filters}
-          onFilterChange={budgetTable.setColumnFilter}
         />
         <table className="min-w-[1100px] w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">

@@ -16,6 +16,7 @@ function readEnvValue(value: string | undefined) {
 }
 
 export function sendJson(res: any, status: number, body: unknown) {
+  res.setHeader?.("Cache-Control", "no-store");
   res.status(status).json(body);
 }
 

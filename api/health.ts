@@ -3,6 +3,7 @@ function hasValue(name: string) {
 }
 
 function sendJson(res: any, status: number, body: unknown) {
+  res.setHeader?.("Cache-Control", "no-store");
   res.status(status).json(body);
 }
 

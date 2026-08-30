@@ -17,7 +17,6 @@ import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
 import {
   ColumnFilter,
-  ColumnFilterPanel,
   SortableHeader,
   TableColumn,
   TableToolbar,
@@ -74,7 +73,7 @@ export function SponsorsPage() {
           </CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
         }
       />
-      <Card className="overflow-hidden">
+      <Card className="overflow-x-auto">
         <TableToolbar
           columns={sponsorColumns}
           sortKey={sponsorTable.sortKey}
@@ -84,12 +83,7 @@ export function SponsorsPage() {
           resultCount={sponsorTable.rows.length}
           totalCount={sponsorRows.length}
         />
-        <ColumnFilterPanel
-          columns={sponsorColumns}
-          filters={sponsorTable.filters}
-          onFilterChange={sponsorTable.setColumnFilter}
-        />
-        <div className="grid gap-3 p-3 lg:hidden">
+        <div className="hidden">
           {sponsorTable.rows.map((row) => (
             <div key={row.name} className="rounded-md border p-4">
               <div className="flex justify-between gap-3">
@@ -103,10 +97,10 @@ export function SponsorsPage() {
             </div>
           ))}
         </div>
-        <table className="hidden min-w-[900px] w-full text-sm lg:table">
+        <table className="min-w-[1080px] w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
-              {sponsorColumns.filter((column) => column.key !== "flat" && column.key !== "item").map((column) => (
+              {sponsorColumns.map((column) => (
                 <th key={column.key} className="px-4 py-3 font-medium">
                   <SortableHeader
                     label={column.label}
@@ -130,7 +124,9 @@ export function SponsorsPage() {
             {sponsorTable.rows.map((row) => (
               <tr key={row.name} className="border-t">
                 <td className="px-4 py-3 font-medium">{row.name}</td>
+                <td className="px-4 py-3">{row.flat}</td>
                 <td className="px-4 py-3">{row.category}</td>
+                <td className="px-4 py-3">{row.item}</td>
                 <td className="px-4 py-3">{formatCurrency(row.committed)}</td>
                 <td className="px-4 py-3">{formatCurrency(row.received)}</td>
                 <td className="px-4 py-3">{row.inKind ? "Yes" : "No"}</td>
