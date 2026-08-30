@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { CirclePlus, Download, HandCoins, Home, Wallet } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
@@ -135,10 +135,10 @@ export function ContributionsPage() {
         </div>
       </div>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Total Flats" value={String(contributionRows.length)} icon={Download} />
-        <StatCard title="Expected" value={formatCurrency(expected)} icon={Download} />
-        <StatCard title="Received" value={formatCurrency(received)} icon={Download} />
-        <StatCard title="Additional Contribution" value={formatCurrency(additionalContribution)} icon={Download} />
+        <StatCard title="Total Flats" value={String(contributionRows.length)} icon={Home} />
+        <StatCard title="Expected" value={formatCurrency(expected)} icon={Wallet} />
+        <StatCard title="Received" value={formatCurrency(received)} icon={HandCoins} />
+        <StatCard title="Additional Contribution" value={formatCurrency(additionalContribution)} icon={CirclePlus} />
       </section>
       <PageTools
         action={

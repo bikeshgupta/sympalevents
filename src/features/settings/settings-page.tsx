@@ -8,11 +8,11 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
-import { pageLabels, usePageAccess } from "@/lib/page-access";
+import { pageLabels, publicPageKeys, usePageAccess } from "@/lib/page-access";
 
 type AccessLevel = "none" | "view" | "edit";
 
-const grantablePages = Object.entries(pageLabels).filter(([key]) => key !== "settings");
+const grantablePages = Object.entries(pageLabels).filter(([key]) => key !== "settings" && !publicPageKeys.has(key));
 
 const initialPageAccess = Object.fromEntries(grantablePages.map(([key]) => [key, "none"])) as Record<string, AccessLevel>;
 

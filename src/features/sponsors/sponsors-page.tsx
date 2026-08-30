@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { HeartHandshake } from "lucide-react";
+import { HandCoins, HeartHandshake, Hourglass, Users } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
@@ -55,9 +55,9 @@ export function SponsorsPage() {
       </div>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Committed" value={formatCurrency(committed)} icon={HeartHandshake} />
-        <StatCard title="Received" value={formatCurrency(received)} icon={HeartHandshake} />
-        <StatCard title="Outstanding" value={formatCurrency(committed - received)} icon={HeartHandshake} />
-        <StatCard title="Sponsors" value={String(sponsorRows.length)} icon={HeartHandshake} />
+        <StatCard title="Received" value={formatCurrency(received)} icon={HandCoins} />
+        <StatCard title="Outstanding" value={formatCurrency(committed - received)} icon={Hourglass} />
+        <StatCard title="Sponsors" value={String(sponsorRows.length)} icon={Users} />
       </section>
       <PageTools
         action={

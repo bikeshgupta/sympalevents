@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Calculator } from "lucide-react";
+import { Calculator, HandCoins, Scale } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
@@ -72,8 +72,8 @@ export function BudgetPage() {
       </div>
       <section className="grid gap-3 sm:grid-cols-3">
         <StatCard title="Estimated" value={formatCurrency(estimated)} icon={Calculator} />
-        <StatCard title="Actual" value={formatCurrency(actual)} icon={Calculator} />
-        <StatCard title="Variance" value={formatCurrency(estimated - actual)} icon={Calculator} />
+        <StatCard title="Actual" value={formatCurrency(actual)} icon={HandCoins} />
+        <StatCard title="Variance" value={formatCurrency(estimated - actual)} icon={Scale} />
       </section>
       <PageTools
         action={
