@@ -1,4 +1,4 @@
-import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
+import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server";
 
 const publicPageKeys = new Set(["dashboard", "expenses"]);
 

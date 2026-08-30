@@ -1,4 +1,4 @@
-import { handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
+import { handleApiError, requireAppUser, sendJson } from "./_lib/server";
 
 export default async function handler(req: any, res: any) {
   try {
