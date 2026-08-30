@@ -75,11 +75,6 @@ export function SponsorsPage() {
       />
       <Card className="overflow-x-auto">
         <TableToolbar
-          columns={sponsorColumns}
-          sortKey={sponsorTable.sortKey}
-          setSortKey={sponsorTable.setSortKey}
-          sortDirection={sponsorTable.sortDirection}
-          setSortDirection={sponsorTable.setSortDirection}
           resultCount={sponsorTable.rows.length}
           totalCount={sponsorRows.length}
         />
@@ -110,8 +105,8 @@ export function SponsorsPage() {
                     onSort={sponsorTable.toggleSort}
                   />
                   <ColumnFilter
-                    label={column.label}
-                    columnKey={column.key}
+                    column={column}
+                    rows={sponsorRows}
                     filters={sponsorTable.filters}
                     onFilterChange={sponsorTable.setColumnFilter}
                   />

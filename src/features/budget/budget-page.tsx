@@ -84,11 +84,6 @@ export function BudgetPage() {
       />
       <Card className="overflow-x-auto">
         <TableToolbar
-          columns={budgetColumns}
-          sortKey={budgetTable.sortKey}
-          setSortKey={budgetTable.setSortKey}
-          sortDirection={budgetTable.sortDirection}
-          setSortDirection={budgetTable.setSortDirection}
           resultCount={budgetTable.rows.length}
           totalCount={budgetRows.length}
         />
@@ -105,8 +100,8 @@ export function BudgetPage() {
                     onSort={budgetTable.toggleSort}
                   />
                   <ColumnFilter
-                    label={column.label}
-                    columnKey={column.key}
+                    column={column}
+                    rows={budgetRows}
                     filters={budgetTable.filters}
                     onFilterChange={budgetTable.setColumnFilter}
                   />

@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, ListFilter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export type SortDirection = "asc" | "desc";
-export type ColumnFilters = Record<string, string>;
+export type ColumnFilters = Record<string, string[]>;
 
 export type TableColumn<T> = {
   key: string;
@@ -23,6 +24,12 @@ function compareValues(left: ReturnType<typeof normalize>, right: ReturnType<typ
   return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
 }
 
+function displayFilterValue(value: string | number | boolean | null | undefined) {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  const text = String(value ?? "").trim();
+  return text || "(Blank)";
+}
+
 export function useFilteredSortedRows<T>(rows: T[], columns: TableColumn<T>[], defaultSortKey: string) {
   const [filters, setFilters] = useState<ColumnFilters>({});
   const [sortKey, setSortKey] = useState(defaultSortKey);
@@ -30,14 +37,14 @@ export function useFilteredSortedRows<T>(rows: T[], columns: TableColumn<T>[], d
 
   const sortedRows = useMemo(() => {
     const activeFilters = Object.entries(filters)
-      .map(([key, value]) => [key, value.trim().toLowerCase()] as const)
-      .filter(([, value]) => value);
+      .map(([key, values]) => [key, new Set(values)] as const)
+      .filter(([, values]) => values.size);
     const activeColumn = columns.find((column) => column.key === sortKey) ?? columns[0];
     const filtered = activeFilters.length
       ? rows.filter((row) =>
-          activeFilters.every(([key, filter]) => {
+          activeFilters.every(([key, selectedValues]) => {
             const column = columns.find((item) => item.key === key);
-            return String(column?.getValue(row) ?? "").toLowerCase().includes(filter);
+            return selectedValues.has(displayFilterValue(column?.getValue(row)));
           }),
         )
       : rows;
@@ -48,10 +55,10 @@ export function useFilteredSortedRows<T>(rows: T[], columns: TableColumn<T>[], d
     });
   }, [columns, filters, rows, sortDirection, sortKey]);
 
-  function setColumnFilter(columnKey: string, value: string) {
+  function setColumnFilter(columnKey: string, values: string[]) {
     setFilters((current) => ({
       ...current,
-      [columnKey]: value,
+      [columnKey]: values,
     }));
   }
 
@@ -78,47 +85,17 @@ export function useFilteredSortedRows<T>(rows: T[], columns: TableColumn<T>[], d
 }
 
 export function TableToolbar<T>({
-  columns,
-  sortKey,
-  setSortKey,
-  sortDirection,
-  setSortDirection,
   resultCount,
   totalCount,
 }: {
-  columns: TableColumn<T>[];
-  sortKey: string;
-  setSortKey: (key: string) => void;
-  sortDirection: SortDirection;
-  setSortDirection: (direction: SortDirection) => void;
   resultCount: number;
   totalCount: number;
 }) {
   return (
-    <div className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:items-center sm:justify-end">
+    <div className="flex justify-end border-b p-3">
       <span className="text-sm text-muted-foreground">
         {resultCount} of {totalCount}
       </span>
-      <select
-        className="h-10 rounded-md border bg-background px-3 text-sm"
-        value={sortKey}
-        onChange={(event) => setSortKey(event.target.value)}
-      >
-        {columns.map((column) => (
-          <option key={column.key} value={column.key}>
-            Sort by {column.label}
-          </option>
-        ))}
-      </select>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        aria-label="Toggle sort direction"
-        onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
-      >
-        {sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-      </Button>
     </div>
   );
 }
@@ -159,24 +136,95 @@ export function SortableHeader({
 }
 
 export function ColumnFilter({
-  label,
-  columnKey,
+  column,
+  rows,
   filters,
   onFilterChange,
 }: {
-  label: string;
-  columnKey: string;
+  column: TableColumn<any>;
+  rows: any[];
   filters: ColumnFilters;
-  onFilterChange: (columnKey: string, value: string) => void;
+  onFilterChange: (columnKey: string, values: string[]) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const selectedValues = filters[column.key] ?? [];
+  const selectedSet = new Set(selectedValues);
+  const options = useMemo(
+    () =>
+      [...new Set(rows.map((row) => displayFilterValue(column.getValue(row))))].sort((left, right) =>
+        left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }),
+      ),
+    [column, rows],
+  );
+  const visibleOptions = query.trim()
+    ? options.filter((option) => option.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
+  function toggleValue(value: string) {
+    const next = selectedSet.has(value)
+      ? selectedValues.filter((item) => item !== value)
+      : [...selectedValues, value];
+    onFilterChange(column.key, next);
+  }
+
   return (
-    <Input
-      value={filters[columnKey] ?? ""}
-      onChange={(event) => onFilterChange(columnKey, event.target.value)}
-      placeholder={label}
-      aria-label={`Filter ${label}`}
-      className="mt-2 h-8 min-w-24 bg-background px-2 text-xs font-normal"
-    />
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Button
+          type="button"
+          variant={selectedValues.length ? "secondary" : "ghost"}
+          size="icon"
+          className="ml-1 h-7 w-7"
+          aria-label={`Filter ${column.label}`}
+        >
+          <ListFilter className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={6}
+          className="z-50 w-56 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+        >
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={`Search ${column.label}`}
+            className="mb-2 h-8 text-xs"
+          />
+          <div className="max-h-56 overflow-y-auto">
+            {visibleOptions.map((option) => (
+              <DropdownMenu.CheckboxItem
+                key={option}
+                checked={selectedSet.has(option)}
+                onCheckedChange={() => toggleValue(option)}
+                onSelect={(event) => event.preventDefault()}
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none hover:bg-muted"
+              >
+                <span className="flex h-4 w-4 items-center justify-center rounded-sm border text-[10px]">
+                  {selectedSet.has(option) ? <Check className="h-3 w-3" /> : null}
+                </span>
+                <span className="truncate">{option}</span>
+              </DropdownMenu.CheckboxItem>
+            ))}
+          </div>
+          {selectedValues.length ? (
+            <>
+              <DropdownMenu.Separator className="my-2 h-px bg-border" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-full justify-start"
+                onClick={() => onFilterChange(column.key, [])}
+              >
+                Clear filter
+              </Button>
+            </>
+          ) : null}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 
@@ -187,7 +235,7 @@ export function ColumnFilterPanel<T>({
 }: {
   columns: TableColumn<T>[];
   filters: ColumnFilters;
-  onFilterChange: (columnKey: string, value: string) => void;
+  onFilterChange: (columnKey: string, values: string[]) => void;
 }) {
   return (
     <div className="grid gap-2 border-b p-3 sm:grid-cols-2 lg:hidden">
@@ -198,8 +246,10 @@ export function ColumnFilterPanel<T>({
           </label>
           <Input
             id={`filter-${column.key}`}
-            value={filters[column.key] ?? ""}
-            onChange={(event) => onFilterChange(column.key, event.target.value)}
+            value={(filters[column.key] ?? []).join(", ")}
+            onChange={(event) =>
+              onFilterChange(column.key, event.target.value ? [event.target.value] : [])
+            }
             className="h-9"
           />
         </div>

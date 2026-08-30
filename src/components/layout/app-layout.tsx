@@ -1,9 +1,8 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Bell, ChevronsUpDown, LogOut, Search } from "lucide-react";
+import { Bell, ChevronsUpDown, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
@@ -98,10 +97,6 @@ export function AppLayout() {
             <p className="truncate text-xs text-muted-foreground">
               {event ? `${event.dates} · ${event.location}` : "Loading event"}
             </p>
-          </div>
-          <div className="hidden w-72 items-center gap-2 rounded-md border bg-card px-3 lg:flex">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input className="border-0 px-0 shadow-none focus-visible:ring-0" placeholder="Search event records" />
           </div>
           <Button variant="ghost" size="icon" aria-label="Notifications">
             <Bell className="h-4 w-4" />

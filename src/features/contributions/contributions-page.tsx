@@ -43,14 +43,11 @@ const contributionColumns: TableColumn<ContributionRow>[] = [
 ];
 
 function escapeHtml(value: string | number) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function exportContributionsToExcel(rows: ContributionRow[]) {
+function exportContributionsToCsv(rows: ContributionRow[]) {
   const headers = ["Flat", "Resident", "Type", "Expected", "Received", "Payment Date", "Mode", "Status", "Reference"];
   const bodyRows = rows.map((row) => [
     row.flat,
@@ -63,30 +60,12 @@ function exportContributionsToExcel(rows: ContributionRow[]) {
     row.status,
     row.reference,
   ]);
-  const html = `
-    <html>
-      <head>
-        <meta charset="utf-8" />
-      </head>
-      <body>
-        <table>
-          <thead>
-            <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-          </thead>
-          <tbody>
-            ${bodyRows
-              .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-              .join("")}
-          </tbody>
-        </table>
-      </body>
-    </html>
-  `;
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const csv = [headers, ...bodyRows].map((row) => row.map(escapeHtml).join(",")).join("\r\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `contributions-${todayDateInputValue()}.xls`;
+  link.download = `contributions-${todayDateInputValue()}.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -149,9 +128,9 @@ export function ContributionsPage() {
         </div>
         <div className="flex items-center gap-2">
           <DataSourceBadge source={data.source} reason={data.fallbackReason} />
-          <Button variant="outline" onClick={() => exportContributionsToExcel(contributionTable.rows)}>
+          <Button variant="outline" onClick={() => exportContributionsToCsv(contributionTable.rows)}>
             <Download className="h-4 w-4" />
-            Export Excel
+            Export CSV
           </Button>
         </div>
       </div>
@@ -170,11 +149,6 @@ export function ContributionsPage() {
       />
       <div className="hidden">
         <TableToolbar
-          columns={contributionColumns}
-          sortKey={contributionTable.sortKey}
-          setSortKey={contributionTable.setSortKey}
-          sortDirection={contributionTable.sortDirection}
-          setSortDirection={contributionTable.setSortDirection}
           resultCount={contributionTable.rows.length}
           totalCount={contributionRows.length}
         />
@@ -205,11 +179,6 @@ export function ContributionsPage() {
       </div>
       <Card className="overflow-x-auto">
         <TableToolbar
-          columns={contributionColumns}
-          sortKey={contributionTable.sortKey}
-          setSortKey={contributionTable.setSortKey}
-          sortDirection={contributionTable.sortDirection}
-          setSortDirection={contributionTable.setSortDirection}
           resultCount={contributionTable.rows.length}
           totalCount={contributionRows.length}
         />
@@ -224,13 +193,13 @@ export function ContributionsPage() {
                     sortKey={contributionTable.sortKey}
                     sortDirection={contributionTable.sortDirection}
                     onSort={contributionTable.toggleSort}
-                  />
-                  <ColumnFilter
-                    label={column.label}
-                    columnKey={column.key}
-                    filters={contributionTable.filters}
-                    onFilterChange={contributionTable.setColumnFilter}
-                  />
+                    />
+                    <ColumnFilter
+                      column={column}
+                      rows={contributionRows}
+                      filters={contributionTable.filters}
+                      onFilterChange={contributionTable.setColumnFilter}
+                    />
                 </th>
               ))}
               <th className="px-4 py-3 font-medium" />

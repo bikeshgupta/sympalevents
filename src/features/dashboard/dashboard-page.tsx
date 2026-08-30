@@ -13,10 +13,11 @@ export function DashboardPage() {
   const sponsors = data!.sponsors;
   const contributions = data!.contributions;
   const remainingBudget = financials.totalBudget - financials.actualExpenses;
+  const totalCollection = financials.contributionReceived + financials.sponsorshipReceived;
   const financeData = [
     { name: "Budget", value: financials.totalBudget },
     { name: "Expenses", value: financials.actualExpenses },
-    { name: "Remaining", value: remainingBudget },
+    { name: "Collection", value: totalCollection },
   ];
 
   return (
