@@ -1,7 +1,9 @@
-import { sendJson } from "./_lib/server";
-
 function hasValue(name: string) {
   return Boolean(process.env[name]?.trim());
+}
+
+function sendJson(res: any, status: number, body: unknown) {
+  res.status(status).json(body);
 }
 
 export default function handler(req: any, res: any) {

@@ -5,7 +5,7 @@ import {
   requireAppUser,
   requireEventAdmin,
   sendJson,
-} from "./_lib/server";
+} from "./_lib/server.js";
 
 const validActions = new Set(["approve", "reject"]);
 

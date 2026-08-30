@@ -1,6 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { cert, getApps, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -17,7 +15,9 @@ function getFirebasePrivateKey() {
   return key?.replace(/\\n/g, "\n");
 }
 
-function initFirebaseAdmin() {
+async function initFirebaseAdmin() {
+  const { cert, getApps, initializeApp } = await import("firebase-admin/app");
+
   if (getApps().length) return;
 
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -75,7 +75,8 @@ export async function getRequestBody(req: any) {
 }
 
 export async function requireAppUser(req: any) {
-  initFirebaseAdmin();
+  await initFirebaseAdmin();
+  const { getAuth } = await import("firebase-admin/auth");
   const supabase = assertServiceSupabase();
   const authHeader = String(req.headers.authorization ?? "");
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";

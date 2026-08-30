@@ -5,7 +5,7 @@ import {
   requireAppUser,
   requireEventAdmin,
   sendJson,
-} from "./_lib/server";
+} from "./_lib/server.js";
 
 const validRoles = new Set(["admin", "committee", "read_only"]);
 const validAccessLevels = new Set(["none", "view", "edit"]);
