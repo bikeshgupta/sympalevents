@@ -123,3 +123,57 @@ export const taskRows = [
   { task: "Finalize prasad menu", owner: "Meera", priority: "High", due: "2026-09-08", status: "Not Started" },
   { task: "Volunteer briefing", owner: "Rohan", priority: "Medium", due: "2026-09-13", status: "Blocked" },
 ];
+
+export const expenseRows = [
+  {
+    date: "2026-09-10",
+    category: "Idol",
+    item: "Booking advance",
+    amount: 5000,
+    paidBy: "Aarav",
+    mode: "UPI",
+    type: "Advance",
+    sponsored: false,
+    approvedBy: "Committee",
+    notes: "",
+  },
+  {
+    date: "2026-09-12",
+    category: "Prasad",
+    item: "Dry fruits",
+    amount: 6500,
+    paidBy: "Meera",
+    mode: "Cash",
+    type: "Purchase",
+    sponsored: false,
+    approvedBy: "Treasurer",
+    notes: "",
+  },
+];
+
+export const eventPlanRows = [
+  {
+    day: "Day 1",
+    date: "2026-09-14",
+    activity: "Ganesh sthapana",
+    startTime: "09:00",
+    endTime: "10:30",
+    location: "Clubhouse",
+    attendance: 80,
+    owner: "Aarav",
+    status: "Planned",
+    notes: "",
+  },
+  {
+    day: "Day 2",
+    date: "2026-09-15",
+    activity: "Evening aarti and prasad",
+    startTime: "19:00",
+    endTime: "21:00",
+    location: "Central lawn",
+    attendance: 120,
+    owner: "Meera",
+    status: "Planned",
+    notes: "",
+  },
+];

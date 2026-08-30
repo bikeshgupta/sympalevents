@@ -1,5 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { budgetRows, contributionRows, demoEvent, demoFinancials, sponsorRows, taskRows } from "@/data/demo";
+import {
+  budgetRows,
+  contributionRows,
+  demoEvent,
+  demoFinancials,
+  eventPlanRows,
+  expenseRows,
+  sponsorRows,
+  taskRows,
+} from "@/data/demo";
 import { useEventContext } from "@/lib/event-context";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
@@ -60,6 +69,34 @@ export type TaskRow = {
   status: string;
 };
 
+export type ExpenseRow = {
+  id?: string;
+  date: string;
+  category: string;
+  item: string;
+  amount: number;
+  paidBy: string;
+  mode: string;
+  type: string;
+  sponsored: boolean;
+  approvedBy: string;
+  notes: string;
+};
+
+export type EventPlanRow = {
+  id?: string;
+  day: string;
+  date: string;
+  activity: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  attendance: number;
+  owner: string;
+  status: string;
+  notes: string;
+};
+
 type EventData = {
   source: DataSource;
   fallbackReason?: string;
@@ -69,6 +106,8 @@ type EventData = {
   sponsors: SponsorRow[];
   budgets: BudgetRow[];
   tasks: TaskRow[];
+  expenses: ExpenseRow[];
+  eventPlan: EventPlanRow[];
 };
 
 const demoData: EventData = {
@@ -79,6 +118,8 @@ const demoData: EventData = {
   sponsors: sponsorRows,
   budgets: budgetRows,
   tasks: taskRows,
+  expenses: expenseRows,
+  eventPlan: eventPlanRows,
 };
 
 export async function getFirstEventId() {
@@ -145,7 +186,15 @@ export function useEventData() {
       const eventRecord = events[0];
       const eventId = eventRecord.id;
 
-      const [residentsResult, contributionsResult, sponsorsResult, budgetsResult, expensesResult, tasksResult] =
+      const [
+        residentsResult,
+        contributionsResult,
+        sponsorsResult,
+        budgetsResult,
+        expensesResult,
+        tasksResult,
+        scheduleResult,
+      ] =
         await Promise.all([
           supabase.from("residents").select("id,flat_no,resident_name,resident_type").eq("event_id", eventId),
           supabase
@@ -160,8 +209,15 @@ export function useEventData() {
             .from("budgets")
             .select("id,category,item,estimated_qty,unit,unit_cost,actual_cost,funding_type,status")
             .eq("event_id", eventId),
-          supabase.from("expenses").select("amount").eq("event_id", eventId),
+          supabase
+            .from("expenses")
+            .select("id,expense_date,category,item,amount,paid_by,payment_mode,expense_type,sponsored,approved_by,notes")
+            .eq("event_id", eventId),
           supabase.from("tasks").select("id,task,owner_name,priority,due_date,status").eq("event_id", eventId),
+          supabase
+            .from("event_schedule")
+            .select("id,day,activity_date,activity,start_time,end_time,location,expected_attendance,owner_name,status,notes")
+            .eq("event_id", eventId),
         ]);
 
       const queryError =
@@ -170,7 +226,8 @@ export function useEventData() {
         sponsorsResult.error ??
         budgetsResult.error ??
         expensesResult.error ??
-        tasksResult.error;
+        tasksResult.error ??
+        scheduleResult.error;
 
       if (queryError) {
         console.warn("Falling back to demo data:", queryError.message);
@@ -242,6 +299,34 @@ export function useEventData() {
         status: row.status ?? "Not Started",
       }));
 
+      const expenses = (expensesResult.data ?? []).map((row) => ({
+        id: row.id,
+        date: row.expense_date ?? "-",
+        category: row.category ?? "-",
+        item: row.item ?? "-",
+        amount: Number(row.amount ?? 0),
+        paidBy: row.paid_by ?? "",
+        mode: row.payment_mode ?? "",
+        type: row.expense_type ?? "",
+        sponsored: Boolean(row.sponsored),
+        approvedBy: row.approved_by ?? "",
+        notes: row.notes ?? "",
+      }));
+
+      const eventPlan = (scheduleResult.data ?? []).map((row) => ({
+        id: row.id,
+        day: row.day ?? "",
+        date: row.activity_date ?? "-",
+        activity: row.activity ?? "-",
+        startTime: row.start_time ?? "",
+        endTime: row.end_time ?? "",
+        location: row.location ?? "",
+        attendance: Number(row.expected_attendance ?? 0),
+        owner: row.owner_name ?? "",
+        status: row.status ?? "Planned",
+        notes: row.notes ?? "",
+      }));
+
       const totalBudget = budgets.reduce((sum, row) => sum + row.qty * row.unitCost, 0);
       const actualExpenses = (expensesResult.data ?? []).reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
       const contributionExpected = contributions.reduce((sum, row) => sum + row.expected, 0);
@@ -269,6 +354,8 @@ export function useEventData() {
         sponsors,
         budgets,
         tasks,
+        expenses,
+        eventPlan,
       };
     },
   });
