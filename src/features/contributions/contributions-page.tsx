@@ -1,18 +1,114 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Download } from "lucide-react";
+import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getFirstEventId, useEventData } from "@/lib/event-data";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ContributionRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
+
+function todayDateInputValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+const contributionStatuses = ["Received", "Committed", "Returned"];
+
+function escapeHtml(value: string | number) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function exportContributionsToExcel(rows: ContributionRow[]) {
+  const headers = ["Flat", "Resident", "Type", "Expected", "Received", "Payment Date", "Mode", "Status", "Reference"];
+  const bodyRows = rows.map((row) => [
+    row.flat,
+    row.name,
+    row.type,
+    row.expected,
+    row.received,
+    row.paymentDate,
+    row.mode,
+    row.status,
+    row.reference,
+  ]);
+  const html = `
+    <html>
+      <head>
+        <meta charset="utf-8" />
+      </head>
+      <body>
+        <table>
+          <thead>
+            <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            ${bodyRows
+              .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
+              .join("")}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `contributions-${todayDateInputValue()}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function ContributionFields({ contribution }: { contribution?: ContributionRow }) {
+  return (
+    <>
+      <FormField label="Flat No" name="flat" defaultValue={contribution?.flat} required />
+      <FormField label="Resident Name" name="name" defaultValue={contribution?.name} required />
+      <FormField label="Owner/Tenant" name="type" defaultValue={contribution?.type ?? "Owner"} />
+      <FormField label="Expected Contribution" name="expected" type="number" defaultValue={contribution?.expected} required />
+      <FormField label="Received" name="received" type="number" defaultValue={contribution?.received ?? 0} />
+      <FormField
+        label="Payment Date"
+        name="paymentDate"
+        type="date"
+        defaultValue={contribution?.paymentDate && contribution.paymentDate !== "-" ? contribution.paymentDate : todayDateInputValue()}
+      />
+      <FormField label="Payment Mode" name="mode" defaultValue={contribution?.mode && contribution.mode !== "-" ? contribution.mode : "UPI"} />
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor={contribution ? `status-${contribution.id}` : "status"}>
+          Status
+        </label>
+        <select
+          id={contribution ? `status-${contribution.id}` : "status"}
+          name="status"
+          className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+          defaultValue={contribution?.status ?? "Received"}
+        >
+          {contributionStatuses.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+      </div>
+      <FormField label="Reference" name="reference" defaultValue={contribution?.reference} />
+    </>
+  );
+}
 
 export function ContributionsPage() {
   const { data } = useEventData();
@@ -21,6 +117,7 @@ export function ContributionsPage() {
   const contributionRows = data.contributions;
   const expected = contributionRows.reduce((sum, row) => sum + row.expected, 0);
   const received = contributionRows.reduce((sum, row) => sum + row.received, 0);
+  const additionalContribution = Math.max(received - expected, 0);
 
   return (
     <div className="space-y-5">
@@ -31,9 +128,9 @@ export function ContributionsPage() {
         </div>
         <div className="flex items-center gap-2">
           <DataSourceBadge source={data.source} reason={data.fallbackReason} />
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => exportContributionsToExcel(contributionRows)}>
             <Download className="h-4 w-4" />
-            Export CSV
+            Export Excel
           </Button>
         </div>
       </div>
@@ -41,19 +138,12 @@ export function ContributionsPage() {
         <StatCard title="Total Flats" value={String(contributionRows.length)} icon={Download} />
         <StatCard title="Expected" value={formatCurrency(expected)} icon={Download} />
         <StatCard title="Received" value={formatCurrency(received)} icon={Download} />
-        <StatCard title="Pending" value={formatCurrency(expected - received)} icon={Download} />
+        <StatCard title="Additional Contribution" value={formatCurrency(additionalContribution)} icon={Download} />
       </section>
       <PageTools
         action={
           access.canEdit ? <CrudDialog title="Add Contribution" triggerLabel="Add Contribution" onSubmit={addContribution}>
-            <FormField label="Flat No" name="flat" required />
-            <FormField label="Resident Name" name="name" required />
-            <FormField label="Owner/Tenant" name="type" defaultValue="Owner" />
-            <FormField label="Expected Contribution" name="expected" type="number" required />
-            <FormField label="Received" name="received" type="number" defaultValue={0} />
-            <FormField label="Payment Mode" name="mode" defaultValue="UPI" />
-            <FormField label="Status" name="status" defaultValue="Pending" />
-            <FormField label="Reference" name="reference" />
+            <ContributionFields />
           </CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
         }
       />
@@ -71,6 +161,8 @@ export function ContributionsPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <span>Expected {formatCurrency(row.expected)}</span>
                 <span>Received {formatCurrency(row.received)}</span>
+                <span>Payment date {row.paymentDate}</span>
+                <span>Mode {row.mode}</span>
               </div>
             </CardContent>
           </Card>
@@ -80,7 +172,7 @@ export function ContributionsPage() {
         <table className="w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
-              {["Flat", "Resident", "Type", "Expected", "Received", "Mode", "Status", ""].map((head) => (
+              {["Flat", "Resident", "Type", "Expected", "Received", "Payment Date", "Mode", "Status", ""].map((head) => (
                 <th key={head} className="px-4 py-3 font-medium">{head}</th>
               ))}
             </tr>
@@ -93,23 +185,12 @@ export function ContributionsPage() {
                 <td className="px-4 py-3">{row.type}</td>
                 <td className="px-4 py-3">{formatCurrency(row.expected)}</td>
                 <td className="px-4 py-3">{formatCurrency(row.received)}</td>
+                <td className="px-4 py-3">{row.paymentDate}</td>
                 <td className="px-4 py-3">{row.mode}</td>
                 <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
                 <td className="px-4 py-3">
                   {row.id && access.canEdit ? (
-                    <RowActions
-                      onEdit={async () => {
-                        const received = window.prompt("Received amount", String(row.received));
-                        if (received === null) return;
-                        await updateContribution(row.id!, Number(received));
-                        await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-                      }}
-                      onDelete={async () => {
-                        if (!window.confirm("Delete this contribution?")) return;
-                        await deleteContribution(row.id!);
-                        await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-                      }}
-                    />
+                    <ContributionActions contribution={row} />
                   ) : null}
                 </td>
               </tr>
@@ -118,6 +199,63 @@ export function ContributionsPage() {
         </table>
       </Card>
     </div>
+  );
+}
+
+function ContributionActions({ contribution }: { contribution: ContributionRow }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    try {
+      await updateContribution(contribution, new FormData(event.currentTarget));
+      await queryClient.invalidateQueries({ queryKey: ["event-data"] });
+      setOpen(false);
+    } catch (item) {
+      setError(item instanceof Error ? item.message : "Unable to update contribution");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <RowActions
+        onEdit={async () => setOpen(true)}
+        onDelete={async () => {
+          if (!window.confirm("Delete this contribution?")) return;
+          await deleteContribution(contribution.id!);
+          await queryClient.invalidateQueries({ queryKey: ["event-data"] });
+        }}
+      />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Contribution</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ContributionFields contribution={contribution} />
+            </div>
+            {error ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -144,17 +282,42 @@ async function addContribution(formData: FormData) {
     resident_id: resident.id,
     expected_amount: formNumber(formData, "expected"),
     received_amount: formNumber(formData, "received"),
+    received_date: formString(formData, "paymentDate", todayDateInputValue()),
     payment_mode: formString(formData, "mode", "UPI"),
-    status: formString(formData, "status", "Pending"),
+    status: formString(formData, "status", "Received"),
     reference: formString(formData, "reference"),
   });
 
   if (error) throw error;
 }
 
-async function updateContribution(id: string, receivedAmount: number) {
+async function updateContribution(contribution: ContributionRow, formData: FormData) {
   if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase.from("contributions").update({ received_amount: receivedAmount }).eq("id", id);
+
+  if (contribution.residentId) {
+    const { error: residentError } = await supabase
+      .from("residents")
+      .update({
+        flat_no: formString(formData, "flat"),
+        resident_name: formString(formData, "name"),
+        resident_type: formString(formData, "type", "Owner"),
+      })
+      .eq("id", contribution.residentId);
+
+    if (residentError) throw residentError;
+  }
+
+  const { error } = await supabase
+    .from("contributions")
+    .update({
+      expected_amount: formNumber(formData, "expected"),
+      received_amount: formNumber(formData, "received"),
+      received_date: formString(formData, "paymentDate", todayDateInputValue()),
+      payment_mode: formString(formData, "mode", "UPI"),
+      status: formString(formData, "status", "Received"),
+      reference: formString(formData, "reference"),
+    })
+    .eq("id", contribution.id);
   if (error) throw error;
 }
 

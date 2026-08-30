@@ -12,21 +12,138 @@ const validAccessLevels = new Set(["none", "view", "edit"]);
 
 export default async function handler(req: any, res: any) {
   try {
-    if (req.method !== "POST") {
+    if (req.method !== "GET" && req.method !== "POST" && req.method !== "DELETE") {
       sendJson(res, 405, { error: "Method not allowed" });
       return;
     }
 
     const supabase = assertServiceSupabase();
     const { appUser } = await requireAppUser(req);
+
+    if (req.method === "GET") {
+      const eventId = String(req.query.eventId ?? "");
+      const role = String(req.query.role ?? "");
+      const userId = String(req.query.userId ?? "");
+
+      if (!eventId) {
+        sendJson(res, 400, { error: "eventId is required" });
+        return;
+      }
+
+      await requireEventAdmin(eventId, appUser.id);
+
+      if (userId) {
+        const [
+          { data: user, error: userError },
+          { data: member, error: memberError },
+          { data: permissions, error: permissionsError },
+        ] = await Promise.all([
+          supabase
+            .from("app_users")
+            .select("id,email,full_name,photo_url")
+            .eq("id", userId)
+            .single(),
+          supabase
+            .from("event_members")
+            .select("role")
+            .eq("event_id", eventId)
+            .eq("user_id", userId)
+            .maybeSingle(),
+          supabase
+            .from("event_page_permissions")
+            .select("page_key,access_level")
+            .eq("event_id", eventId)
+            .eq("user_id", userId),
+        ]);
+
+        if (userError) throw userError;
+        if (memberError) throw memberError;
+        if (permissionsError) throw permissionsError;
+
+        sendJson(res, 200, {
+          member: {
+            role: member?.role ?? null,
+            app_users: user,
+          },
+          permissions: permissions ?? [],
+        });
+        return;
+      }
+
+      const [{ data: users, error: usersError }, { data: memberships, error: membershipsError }] = await Promise.all([
+        supabase
+          .from("app_users")
+          .select("id,email,full_name,photo_url")
+          .order("email", { ascending: true }),
+        supabase
+          .from("event_members")
+          .select("user_id,role,created_at")
+          .eq("event_id", eventId),
+      ]);
+
+      if (usersError) throw usersError;
+      if (membershipsError) throw membershipsError;
+
+      const membershipsByUserId = new Map((memberships ?? []).map((member) => [member.user_id, member]));
+      const members = (users ?? [])
+        .map((user) => {
+          const membership = membershipsByUserId.get(user.id);
+          return {
+            role: membership?.role ?? null,
+            created_at: membership?.created_at ?? null,
+            app_users: user,
+          };
+        })
+        .filter((member) => {
+          if (!role || role === "all") return true;
+          if (role === "unassigned") return !member.role;
+          return member.role === role;
+        });
+
+      sendJson(res, 200, { members });
+      return;
+    }
+
+    if (req.method === "DELETE") {
+      const body = await getRequestBody(req);
+      const eventId = String(body.eventId ?? "");
+      const userId = String(body.userId ?? "");
+
+      if (!eventId || !userId) {
+        sendJson(res, 400, { error: "eventId and userId are required" });
+        return;
+      }
+
+      await requireEventAdmin(eventId, appUser.id);
+
+      const { error: permissionError } = await supabase
+        .from("event_page_permissions")
+        .delete()
+        .eq("event_id", eventId)
+        .eq("user_id", userId);
+
+      if (permissionError) throw permissionError;
+
+      const { error: memberError } = await supabase
+        .from("event_members")
+        .delete()
+        .eq("event_id", eventId)
+        .eq("user_id", userId);
+
+      if (memberError) throw memberError;
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
     const body = await getRequestBody(req);
     const eventId = String(body.eventId ?? "");
     const email = String(body.email ?? "").trim().toLowerCase();
+    const userId = String(body.userId ?? "");
     const role = String(body.role ?? "");
     const permissions = Array.isArray(body.permissions) ? body.permissions : [];
 
-    if (!eventId || !email || !validRoles.has(role)) {
-      sendJson(res, 400, { error: "eventId, email, and role are required" });
+    if (!eventId || (!email && !userId) || !validRoles.has(role)) {
+      sendJson(res, 400, { error: "eventId, user/email, and role are required" });
       return;
     }
 
@@ -39,11 +156,13 @@ export default async function handler(req: any, res: any) {
 
     await requireEventAdmin(eventId, appUser.id);
 
-    const { data: targetUser, error: targetUserError } = await supabase
+    const targetUserQuery = supabase
       .from("app_users")
-      .select("id,email")
-      .eq("email", email)
-      .maybeSingle();
+      .select("id,email");
+    const { data: targetUser, error: targetUserError } = await (userId
+      ? targetUserQuery.eq("id", userId)
+      : targetUserQuery.eq("email", email)
+    ).maybeSingle();
 
     if (targetUserError) throw targetUserError;
 

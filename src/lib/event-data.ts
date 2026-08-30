@@ -20,8 +20,10 @@ export type ContributionRow = {
   type: string;
   expected: number;
   received: number;
+  paymentDate: string;
   status: string;
   mode: string;
+  reference: string;
 };
 
 export type SponsorRow = {
@@ -146,7 +148,7 @@ export function useEventData() {
           supabase.from("residents").select("id,flat_no,resident_name,resident_type").eq("event_id", eventId),
           supabase
             .from("contributions")
-            .select("id,expected_amount,received_amount,payment_mode,status,resident_id")
+            .select("id,expected_amount,received_amount,received_date,payment_mode,status,resident_id,reference")
             .eq("event_id", eventId),
           supabase
             .from("sponsors")
@@ -197,8 +199,10 @@ export function useEventData() {
           type: resident?.type ?? "-",
           expected: Number(row.expected_amount ?? 0),
           received: Number(row.received_amount ?? 0),
+          paymentDate: row.received_date ?? "-",
           status: row.status ?? "Pending",
           mode: row.payment_mode ?? "-",
+          reference: row.reference ?? "",
         };
       });
 

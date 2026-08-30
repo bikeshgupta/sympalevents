@@ -20,8 +20,10 @@ export const contributionRows = [
     type: "Owner",
     expected: 1000,
     received: 1000,
+    paymentDate: "2026-09-14",
     status: "Received",
     mode: "UPI",
+    reference: "UPI-101",
   },
   {
     flat: "B-204",
@@ -29,8 +31,10 @@ export const contributionRows = [
     type: "Tenant",
     expected: 1000,
     received: 500,
-    status: "Partially Paid",
+    paymentDate: "2026-09-15",
+    status: "Committed",
     mode: "Cash",
+    reference: "",
   },
   {
     flat: "C-308",
@@ -38,8 +42,10 @@ export const contributionRows = [
     type: "Owner",
     expected: 1000,
     received: 0,
-    status: "Pending",
+    paymentDate: "-",
+    status: "Committed",
     mode: "-",
+    reference: "",
   },
 ];
 

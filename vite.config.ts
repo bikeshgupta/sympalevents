@@ -6,6 +6,7 @@ const localApiRoutes = new Map([
   ["/api/me", "/api/me.ts"],
   ["/api/page-access", "/api/page-access.ts"],
   ["/api/event-access", "/api/event-access.ts"],
+  ["/api/access-requests", "/api/access-requests.ts"],
   ["/api/events", "/api/events.ts"],
   ["/api/event-members", "/api/event-members.ts"],
 ]);

@@ -1,7 +1,9 @@
 import { Bell, ChevronsUpDown, Search } from "lucide-react";
+import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
@@ -24,6 +26,25 @@ export function AppLayout() {
   const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
   const visibleNavItems = navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
   const visibleMobileNavItems = mobileNavItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
+  const [requestMessage, setRequestMessage] = useState<string | null>(null);
+  const canRequestCommitteeAccess = Boolean(
+    session && selectedEventId && eventAccess.role !== "admin" && eventAccess.role !== "committee",
+  );
+
+  async function requestCommitteeAccess() {
+    if (!selectedEventId) return;
+    setRequestMessage("Sending request...");
+
+    try {
+      await apiFetch("/api/access-requests", {
+        method: "POST",
+        body: { eventId: selectedEventId },
+      });
+      setRequestMessage("Committee access requested.");
+    } catch (error) {
+      setRequestMessage(error instanceof Error ? error.message : "Unable to request access");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20 lg:pb-0">
@@ -85,6 +106,11 @@ export function AppLayout() {
           <Button variant="ghost" size="icon" aria-label="Notifications">
             <Bell className="h-4 w-4" />
           </Button>
+          {canRequestCommitteeAccess ? (
+            <Button variant="outline" size="sm" onClick={() => void requestCommitteeAccess()}>
+              Request access
+            </Button>
+          ) : null}
           {session ? (
             <div className="flex min-w-0 items-center gap-2">
               <div className="hidden min-w-0 text-right sm:block">
@@ -104,6 +130,9 @@ export function AppLayout() {
           )}
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-5 lg:px-6">
+          {requestMessage ? (
+            <div className="mb-4 rounded-md border bg-card px-4 py-3 text-sm text-muted-foreground">{requestMessage}</div>
+          ) : null}
           <Outlet />
         </main>
       </div>
