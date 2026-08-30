@@ -15,12 +15,32 @@ import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
+import {
+  ColumnFilter,
+  ColumnFilterPanel,
+  SortableHeader,
+  TableColumn,
+  TableToolbar,
+  useFilteredSortedRows,
+} from "@/features/shared/table-tools";
 
 function todayDateInputValue() {
   return new Date().toISOString().slice(0, 10);
 }
 
 const contributionStatuses = ["Received", "Committed", "Returned"];
+
+const contributionColumns: TableColumn<ContributionRow>[] = [
+  { key: "flat", label: "Flat", getValue: (row) => row.flat },
+  { key: "name", label: "Resident", getValue: (row) => row.name },
+  { key: "type", label: "Type", getValue: (row) => row.type },
+  { key: "expected", label: "Expected", getValue: (row) => row.expected },
+  { key: "received", label: "Received", getValue: (row) => row.received },
+  { key: "paymentDate", label: "Payment Date", getValue: (row) => row.paymentDate },
+  { key: "mode", label: "Mode", getValue: (row) => row.mode },
+  { key: "status", label: "Status", getValue: (row) => row.status },
+  { key: "reference", label: "Reference", getValue: (row) => row.reference },
+];
 
 function escapeHtml(value: string | number) {
   return String(value)
@@ -115,6 +135,7 @@ export function ContributionsPage() {
   const access = usePageAccess("contributions");
   const queryClient = useQueryClient();
   const contributionRows = data.contributions;
+  const contributionTable = useFilteredSortedRows(contributionRows, contributionColumns, "flat");
   const expected = contributionRows.reduce((sum, row) => sum + row.expected, 0);
   const received = contributionRows.reduce((sum, row) => sum + row.received, 0);
   const additionalContribution = Math.max(received - expected, 0);
@@ -128,7 +149,7 @@ export function ContributionsPage() {
         </div>
         <div className="flex items-center gap-2">
           <DataSourceBadge source={data.source} reason={data.fallbackReason} />
-          <Button variant="outline" onClick={() => exportContributionsToExcel(contributionRows)}>
+          <Button variant="outline" onClick={() => exportContributionsToExcel(contributionTable.rows)}>
             <Download className="h-4 w-4" />
             Export Excel
           </Button>
@@ -148,7 +169,21 @@ export function ContributionsPage() {
         }
       />
       <div className="grid gap-3 lg:hidden">
-        {contributionRows.map((row) => (
+        <TableToolbar
+          columns={contributionColumns}
+          sortKey={contributionTable.sortKey}
+          setSortKey={contributionTable.setSortKey}
+          sortDirection={contributionTable.sortDirection}
+          setSortDirection={contributionTable.setSortDirection}
+          resultCount={contributionTable.rows.length}
+          totalCount={contributionRows.length}
+        />
+        <ColumnFilterPanel
+          columns={contributionColumns}
+          filters={contributionTable.filters}
+          onFilterChange={contributionTable.setColumnFilter}
+        />
+        {contributionTable.rows.map((row) => (
           <Card key={row.flat}>
             <CardContent className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -169,16 +204,40 @@ export function ContributionsPage() {
         ))}
       </div>
       <Card className="hidden overflow-hidden lg:block">
-        <table className="w-full text-sm">
+        <TableToolbar
+          columns={contributionColumns}
+          sortKey={contributionTable.sortKey}
+          setSortKey={contributionTable.setSortKey}
+          sortDirection={contributionTable.sortDirection}
+          setSortDirection={contributionTable.setSortDirection}
+          resultCount={contributionTable.rows.length}
+          totalCount={contributionRows.length}
+        />
+        <table className="min-w-[980px] w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
-              {["Flat", "Resident", "Type", "Expected", "Received", "Payment Date", "Mode", "Status", ""].map((head) => (
-                <th key={head} className="px-4 py-3 font-medium">{head}</th>
+              {contributionColumns.slice(0, 8).map((column) => (
+                <th key={column.key} className="px-4 py-3 font-medium">
+                  <SortableHeader
+                    label={column.label}
+                    columnKey={column.key}
+                    sortKey={contributionTable.sortKey}
+                    sortDirection={contributionTable.sortDirection}
+                    onSort={contributionTable.toggleSort}
+                  />
+                  <ColumnFilter
+                    label={column.label}
+                    columnKey={column.key}
+                    filters={contributionTable.filters}
+                    onFilterChange={contributionTable.setColumnFilter}
+                  />
+                </th>
               ))}
+              <th className="px-4 py-3 font-medium" />
             </tr>
           </thead>
           <tbody>
-            {contributionRows.map((row) => (
+            {contributionTable.rows.map((row) => (
               <tr key={row.flat} className="border-t">
                 <td className="px-4 py-3">{row.flat}</td>
                 <td className="px-4 py-3 font-medium">{row.name}</td>

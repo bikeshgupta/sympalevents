@@ -47,6 +47,8 @@ export type BudgetRow = {
   unit: string;
   unitCost: number;
   actual: number;
+  fundingType: string;
+  status: string;
 };
 
 export type TaskRow = {
@@ -156,7 +158,7 @@ export function useEventData() {
             .eq("event_id", eventId),
           supabase
             .from("budgets")
-            .select("id,category,item,estimated_qty,unit,unit_cost,actual_cost")
+            .select("id,category,item,estimated_qty,unit,unit_cost,actual_cost,funding_type,status")
             .eq("event_id", eventId),
           supabase.from("expenses").select("amount").eq("event_id", eventId),
           supabase.from("tasks").select("id,task,owner_name,priority,due_date,status").eq("event_id", eventId),
@@ -227,6 +229,8 @@ export function useEventData() {
         unit: row.unit ?? "",
         unitCost: Number(row.unit_cost ?? 0),
         actual: Number(row.actual_cost ?? 0),
+        fundingType: row.funding_type ?? "",
+        status: row.status ?? "Planned",
       }));
 
       const tasks = (tasksResult.data ?? []).map((row) => ({

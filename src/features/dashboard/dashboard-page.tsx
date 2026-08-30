@@ -1,28 +1,22 @@
-import { AlertTriangle, CheckCircle2, ClipboardList, HandCoins, PackageCheck, ReceiptIndianRupee } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CheckCircle2, ClipboardList, HandCoins, HeartHandshake, Image, ReceiptIndianRupee } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEventData } from "@/lib/event-data";
 import { formatCurrency } from "@/lib/utils";
 
-const colors = ["#0f766e", "#2563eb", "#e11d48", "#059669"];
-
 export function DashboardPage() {
   const { data, isLoading } = useEventData();
   const financials = data!.financials;
   const tasks = data!.tasks;
+  const sponsors = data!.sponsors;
+  const contributions = data!.contributions;
   const remainingBudget = financials.totalBudget - financials.actualExpenses;
   const financeData = [
     { name: "Budget", value: financials.totalBudget },
     { name: "Expenses", value: financials.actualExpenses },
     { name: "Remaining", value: remainingBudget },
-  ];
-  const taskData = [
-    { name: "Not Started", value: tasks.filter((task) => task.status === "Not Started").length },
-    { name: "In Progress", value: tasks.filter((task) => task.status === "In Progress").length },
-    { name: "Blocked", value: tasks.filter((task) => task.status === "Blocked").length },
-    { name: "Completed", value: tasks.filter((task) => task.status === "Completed").length },
   ];
 
   return (
@@ -45,8 +39,8 @@ export function DashboardPage() {
         <StatCard title="Pending Tasks" value={String(tasks.filter((task) => task.status !== "Completed").length)} icon={ClipboardList} note={`${tasks.filter((task) => task.status === "Blocked").length} blocked`} />
         <StatCard title="Contribution Received" value={formatCurrency(financials.contributionReceived)} icon={HandCoins} />
         <StatCard title="Sponsorship Received" value={formatCurrency(financials.sponsorshipReceived)} icon={ReceiptIndianRupee} />
-        <StatCard title="Pending Procurement" value="5" icon={PackageCheck} />
-        <StatCard title="Critical Alerts" value="2" icon={AlertTriangle} />
+        <StatCard title="Sponsors" value={String(sponsors.length)} icon={HeartHandshake} />
+        <StatCard title="Contributions" value={String(contributions.length)} icon={HandCoins} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
@@ -69,36 +63,19 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Task Progress</CardTitle>
+            <CardTitle>Gallery</CardTitle>
           </CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={taskData} dataKey="value" nameKey="name" outerRadius={88} label>
-                  {taskData.map((_, index) => (
-                    <Cell key={colors[index]} fill={colors[index]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          <CardContent className="flex h-72 items-center justify-center">
+            <div className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                <Image className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="mt-3 text-sm font-medium">Event Images</p>
+              <p className="mt-1 text-sm text-muted-foreground">Gallery will appear here once images are added.</p>
+            </div>
           </CardContent>
         </Card>
       </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Alerts</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          {["Unpaid sound sponsorship", "Volunteer briefing is blocked", "Prasad menu confirmation due soon"].map((alert) => (
-            <button key={alert} className="rounded-md border bg-background p-4 text-left text-sm hover:bg-muted">
-              <AlertTriangle className="mb-3 h-4 w-4 text-amber-600" />
-              {alert}
-            </button>
-          ))}
-        </CardContent>
-      </Card>
     </div>
   );
 }

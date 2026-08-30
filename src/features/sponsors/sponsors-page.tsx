@@ -15,11 +15,31 @@ import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
+import {
+  ColumnFilter,
+  ColumnFilterPanel,
+  SortableHeader,
+  TableColumn,
+  TableToolbar,
+  useFilteredSortedRows,
+} from "@/features/shared/table-tools";
+
+const sponsorColumns: TableColumn<SponsorRow>[] = [
+  { key: "name", label: "Sponsor", getValue: (row) => row.name },
+  { key: "flat", label: "Flat", getValue: (row) => row.flat },
+  { key: "category", label: "Category", getValue: (row) => row.category },
+  { key: "item", label: "Item/Slot", getValue: (row) => row.item },
+  { key: "committed", label: "Committed", getValue: (row) => row.committed },
+  { key: "received", label: "Received", getValue: (row) => row.received },
+  { key: "inKind", label: "In-kind", getValue: (row) => row.inKind },
+  { key: "status", label: "Status", getValue: (row) => row.status },
+];
 
 export function SponsorsPage() {
   const { data } = useEventData();
   const access = usePageAccess("sponsors");
   const sponsorRows = data.sponsors;
+  const sponsorTable = useFilteredSortedRows(sponsorRows, sponsorColumns, "name");
   const committed = sponsorRows.reduce((sum, row) => sum + row.committed, 0);
   const received = sponsorRows.reduce((sum, row) => sum + row.received, 0);
 
@@ -55,8 +75,22 @@ export function SponsorsPage() {
         }
       />
       <Card className="overflow-hidden">
+        <TableToolbar
+          columns={sponsorColumns}
+          sortKey={sponsorTable.sortKey}
+          setSortKey={sponsorTable.setSortKey}
+          sortDirection={sponsorTable.sortDirection}
+          setSortDirection={sponsorTable.setSortDirection}
+          resultCount={sponsorTable.rows.length}
+          totalCount={sponsorRows.length}
+        />
+        <ColumnFilterPanel
+          columns={sponsorColumns}
+          filters={sponsorTable.filters}
+          onFilterChange={sponsorTable.setColumnFilter}
+        />
         <div className="grid gap-3 p-3 lg:hidden">
-          {sponsorRows.map((row) => (
+          {sponsorTable.rows.map((row) => (
             <div key={row.name} className="rounded-md border p-4">
               <div className="flex justify-between gap-3">
                 <div>
@@ -69,16 +103,31 @@ export function SponsorsPage() {
             </div>
           ))}
         </div>
-        <table className="hidden w-full text-sm lg:table">
+        <table className="hidden min-w-[900px] w-full text-sm lg:table">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
-              {["Sponsor", "Category", "Committed", "Received", "In-kind", "Status", ""].map((head) => (
-                <th key={head} className="px-4 py-3 font-medium">{head}</th>
+              {sponsorColumns.filter((column) => column.key !== "flat" && column.key !== "item").map((column) => (
+                <th key={column.key} className="px-4 py-3 font-medium">
+                  <SortableHeader
+                    label={column.label}
+                    columnKey={column.key}
+                    sortKey={sponsorTable.sortKey}
+                    sortDirection={sponsorTable.sortDirection}
+                    onSort={sponsorTable.toggleSort}
+                  />
+                  <ColumnFilter
+                    label={column.label}
+                    columnKey={column.key}
+                    filters={sponsorTable.filters}
+                    onFilterChange={sponsorTable.setColumnFilter}
+                  />
+                </th>
               ))}
+              <th className="px-4 py-3 font-medium" />
             </tr>
           </thead>
           <tbody>
-            {sponsorRows.map((row) => (
+            {sponsorTable.rows.map((row) => (
               <tr key={row.name} className="border-t">
                 <td className="px-4 py-3 font-medium">{row.name}</td>
                 <td className="px-4 py-3">{row.category}</td>

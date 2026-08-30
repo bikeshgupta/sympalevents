@@ -86,9 +86,36 @@ export const sponsorRows = [
 ];
 
 export const budgetRows = [
-  { category: "Idol", item: "Idol booking", qty: 1, unit: "lot", unitCost: 15000, actual: 5000 },
-  { category: "Decoration", item: "Mandap and flowers", qty: 1, unit: "lot", unitCost: 34000, actual: 0 },
-  { category: "Prasad", item: "Daily prasad", qty: 3, unit: "day", unitCost: 10000, actual: 6500 },
+  {
+    category: "Idol",
+    item: "Idol booking",
+    qty: 1,
+    unit: "lot",
+    unitCost: 15000,
+    actual: 5000,
+    fundingType: "Common Fund",
+    status: "Booked",
+  },
+  {
+    category: "Decoration",
+    item: "Mandap and flowers",
+    qty: 1,
+    unit: "lot",
+    unitCost: 34000,
+    actual: 0,
+    fundingType: "Sponsor",
+    status: "Planned",
+  },
+  {
+    category: "Prasad",
+    item: "Daily prasad",
+    qty: 3,
+    unit: "day",
+    unitCost: 10000,
+    actual: 6500,
+    fundingType: "Common Fund",
+    status: "In Progress",
+  },
 ];
 
 export const taskRows = [

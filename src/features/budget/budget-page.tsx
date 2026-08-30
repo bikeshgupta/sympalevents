@@ -1,22 +1,62 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Calculator } from "lucide-react";
+import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
 import { StatCard } from "@/components/shared/stat-card";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getFirstEventId, useEventData } from "@/lib/event-data";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BudgetRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
+import {
+  ColumnFilter,
+  ColumnFilterPanel,
+  SortableHeader,
+  TableColumn,
+  TableToolbar,
+  useFilteredSortedRows,
+} from "@/features/shared/table-tools";
+
+const budgetColumns: TableColumn<BudgetRow>[] = [
+  { key: "category", label: "Category", getValue: (row) => row.category },
+  { key: "item", label: "Item", getValue: (row) => row.item },
+  { key: "qty", label: "Qty", getValue: (row) => row.qty },
+  { key: "unit", label: "Unit", getValue: (row) => row.unit },
+  { key: "unitCost", label: "Unit Cost", getValue: (row) => row.unitCost },
+  { key: "estimated", label: "Estimated", getValue: (row) => row.qty * row.unitCost },
+  { key: "actual", label: "Actual", getValue: (row) => row.actual },
+  { key: "variance", label: "Variance", getValue: (row) => row.qty * row.unitCost - row.actual },
+  { key: "fundingType", label: "Funding Type", getValue: (row) => row.fundingType },
+  { key: "status", label: "Status", getValue: (row) => row.status },
+];
+
+function BudgetFields({ budget }: { budget?: BudgetRow }) {
+  return (
+    <>
+      <FormField label="Category" name="category" defaultValue={budget?.category} required />
+      <FormField label="Item" name="item" defaultValue={budget?.item} required />
+      <FormField label="Quantity" name="qty" type="number" defaultValue={budget?.qty ?? 1} />
+      <FormField label="Unit" name="unit" defaultValue={budget?.unit ?? "lot"} />
+      <FormField label="Unit Cost" name="unitCost" type="number" defaultValue={budget?.unitCost ?? 0} />
+      <FormField label="Actual Cost" name="actual" type="number" defaultValue={budget?.actual ?? 0} />
+      <FormField label="Funding Type" name="fundingType" defaultValue={budget?.fundingType ?? "Common Fund"} />
+      <FormField label="Status" name="status" defaultValue={budget?.status ?? "Planned"} />
+    </>
+  );
+}
 
 export function BudgetPage() {
   const { data } = useEventData();
   const access = usePageAccess("budget");
-  const queryClient = useQueryClient();
   const budgetRows = data.budgets;
+  const budgetTable = useFilteredSortedRows(budgetRows, budgetColumns, "category");
   const estimated = budgetRows.reduce((sum, row) => sum + row.qty * row.unitCost, 0);
   const actual = budgetRows.reduce((sum, row) => sum + row.actual, 0);
 
@@ -39,28 +79,50 @@ export function BudgetPage() {
       <PageTools
         action={
           access.canEdit ? <CrudDialog title="Add Budget Item" triggerLabel="Add Budget Item" onSubmit={addBudgetItem}>
-            <FormField label="Category" name="category" required />
-            <FormField label="Item" name="item" required />
-            <FormField label="Quantity" name="qty" type="number" defaultValue={1} />
-            <FormField label="Unit" name="unit" defaultValue="lot" />
-            <FormField label="Unit Cost" name="unitCost" type="number" defaultValue={0} />
-            <FormField label="Actual Cost" name="actual" type="number" defaultValue={0} />
-            <FormField label="Funding Type" name="fundingType" defaultValue="Common Fund" />
-            <FormField label="Status" name="status" defaultValue="Planned" />
+            <BudgetFields />
           </CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
         }
       />
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
+        <TableToolbar
+          columns={budgetColumns}
+          sortKey={budgetTable.sortKey}
+          setSortKey={budgetTable.setSortKey}
+          sortDirection={budgetTable.sortDirection}
+          setSortDirection={budgetTable.setSortDirection}
+          resultCount={budgetTable.rows.length}
+          totalCount={budgetRows.length}
+        />
+        <ColumnFilterPanel
+          columns={budgetColumns}
+          filters={budgetTable.filters}
+          onFilterChange={budgetTable.setColumnFilter}
+        />
+        <table className="min-w-[1100px] w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
-              {["Category", "Item", "Qty", "Unit Cost", "Estimated", "Actual", "Variance", ""].map((head) => (
-                <th key={head} className="px-4 py-3 font-medium">{head}</th>
+              {budgetColumns.filter((column) => column.key !== "unit").map((column) => (
+                <th key={column.key} className="px-4 py-3 font-medium">
+                  <SortableHeader
+                    label={column.label}
+                    columnKey={column.key}
+                    sortKey={budgetTable.sortKey}
+                    sortDirection={budgetTable.sortDirection}
+                    onSort={budgetTable.toggleSort}
+                  />
+                  <ColumnFilter
+                    label={column.label}
+                    columnKey={column.key}
+                    filters={budgetTable.filters}
+                    onFilterChange={budgetTable.setColumnFilter}
+                  />
+                </th>
               ))}
+              <th className="px-4 py-3 font-medium" />
             </tr>
           </thead>
           <tbody>
-            {budgetRows.map((row) => {
+            {budgetTable.rows.map((row) => {
               const est = row.qty * row.unitCost;
               return (
                 <tr key={row.item} className="border-t">
@@ -71,21 +133,11 @@ export function BudgetPage() {
                   <td className="px-4 py-3">{formatCurrency(est)}</td>
                   <td className="px-4 py-3">{formatCurrency(row.actual)}</td>
                   <td className="px-4 py-3">{formatCurrency(est - row.actual)}</td>
+                  <td className="px-4 py-3">{row.fundingType}</td>
+                  <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
                   <td className="px-4 py-3">
                     {row.id && access.canEdit ? (
-                      <RowActions
-                        onEdit={async () => {
-                          const actual = window.prompt("Actual cost", String(row.actual));
-                          if (actual === null) return;
-                          await updateBudget(row.id!, Number(actual));
-                          await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-                        }}
-                        onDelete={async () => {
-                          if (!window.confirm("Delete this budget item?")) return;
-                          await deleteBudget(row.id!);
-                          await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-                        }}
-                      />
+                      <BudgetActions budget={row} />
                     ) : null}
                   </td>
                 </tr>
@@ -95,6 +147,63 @@ export function BudgetPage() {
         </table>
       </Card>
     </div>
+  );
+}
+
+function BudgetActions({ budget }: { budget: BudgetRow }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    try {
+      await updateBudget(budget.id!, new FormData(event.currentTarget));
+      await queryClient.invalidateQueries({ queryKey: ["event-data"] });
+      setOpen(false);
+    } catch (item) {
+      setError(item instanceof Error ? item.message : "Unable to update budget item");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <RowActions
+        onEdit={() => setOpen(true)}
+        onDelete={async () => {
+          if (!window.confirm("Delete this budget item?")) return;
+          await deleteBudget(budget.id!);
+          await queryClient.invalidateQueries({ queryKey: ["event-data"] });
+        }}
+      />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Budget Item</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <BudgetFields budget={budget} />
+            </div>
+            {error ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -116,9 +225,21 @@ async function addBudgetItem(formData: FormData) {
   if (error) throw error;
 }
 
-async function updateBudget(id: string, actualCost: number) {
+async function updateBudget(id: string, formData: FormData) {
   if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase.from("budgets").update({ actual_cost: actualCost }).eq("id", id);
+  const { error } = await supabase
+    .from("budgets")
+    .update({
+      category: formString(formData, "category"),
+      item: formString(formData, "item"),
+      estimated_qty: formNumber(formData, "qty"),
+      unit: formString(formData, "unit"),
+      unit_cost: formNumber(formData, "unitCost"),
+      actual_cost: formNumber(formData, "actual"),
+      funding_type: formString(formData, "fundingType"),
+      status: formString(formData, "status", "Planned"),
+    })
+    .eq("id", id);
   if (error) throw error;
 }
 
