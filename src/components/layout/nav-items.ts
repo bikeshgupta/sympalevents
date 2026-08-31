@@ -27,7 +27,7 @@ export const navItems = [
   { label: "Prasad", href: "/prasad", icon: Utensils },
   { label: "Tasks", href: "/tasks", icon: ListChecks },
   { label: "Volunteers", href: "/volunteers", icon: Users },
-  { label: "Event Plan", href: "/event-plan", icon: CalendarDays },
+  { label: "Events", href: "/event-plan", icon: CalendarDays },
   { label: "Run Sheet", href: "/run-sheet", icon: ClipboardCheck },
   { label: "Inventory", href: "/inventory", icon: Boxes },
   { label: "Vendors", href: "/vendors", icon: Store },

@@ -16,7 +16,7 @@ export const pageLabels: Record<string, string> = {
   prasad: "Prasad",
   tasks: "Tasks",
   volunteers: "Volunteers",
-  "event-plan": "Event Plan",
+  "event-plan": "Events",
   "run-sheet": "Run Sheet",
   inventory: "Inventory",
   vendors: "Vendors",
@@ -26,7 +26,8 @@ export const pageLabels: Record<string, string> = {
 };
 
 export function pageKeyFromPath(pathname: string) {
-  return pathname.split("/").filter(Boolean)[0] || "dashboard";
+  const pageKey = pathname.split("/").filter(Boolean)[0] || "dashboard";
+  return pageKey === "events" ? "event-plan" : pageKey;
 }
 
 export function useCurrentPageAccess() {

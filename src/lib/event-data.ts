@@ -9,6 +9,7 @@ import {
   sponsorRows,
   taskRows,
 } from "@/data/demo";
+import { apiFetch } from "@/lib/api";
 import { useEventContext } from "@/lib/event-context";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
@@ -93,6 +94,7 @@ export type EventPlanRow = {
   day: string;
   date: string;
   activity: string;
+  subEvents: string;
   startTime: string;
   endTime: string;
   location: string;
@@ -100,6 +102,21 @@ export type EventPlanRow = {
   owner: string;
   status: string;
   notes: string;
+};
+
+type EventScheduleRecord = {
+  id?: string;
+  day?: string | null;
+  activity_date?: string | null;
+  activity?: string | null;
+  sub_events?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  location?: string | null;
+  expected_attendance?: number | string | null;
+  owner_name?: string | null;
+  status?: string | null;
+  notes?: string | null;
 };
 
 type EventData = {
@@ -160,6 +177,35 @@ function dateRange(startDate: string, endDate: string) {
 
   if (startDate === endDate) return formatter.format(start);
   return `${formatter.format(start)} - ${formatter.format(end)}`;
+}
+
+async function fetchEventSchedule(eventId: string) {
+  if (!supabase) return { data: [], error: null };
+
+  try {
+    const { schedule } = await apiFetch<{ schedule: EventScheduleRecord[] }>(
+      `/api/event-schedule?eventId=${encodeURIComponent(eventId)}`,
+      { requireAuth: false },
+    );
+    return { data: schedule, error: null };
+  } catch (error) {
+    console.warn("Falling back to browser Supabase schedule read:", error);
+  }
+
+  const scheduleColumns =
+    "id,day,activity_date,activity,sub_events,start_time,end_time,location,expected_attendance,owner_name,status,notes";
+  const scheduleColumnsWithoutSubEvents =
+    "id,day,activity_date,activity,start_time,end_time,location,expected_attendance,owner_name,status,notes";
+
+  const result = await supabase.from("event_schedule").select(scheduleColumns).eq("event_id", eventId);
+
+  if (!result.error || !["42703", "PGRST204"].includes(result.error.code ?? "")) {
+    return result as { data: EventScheduleRecord[] | null; error: typeof result.error };
+  }
+
+  console.warn("event_schedule.sub_events is missing. Run migration 007_event_schedule_sub_events.sql to enable sub-events.");
+  const retryResult = await supabase.from("event_schedule").select(scheduleColumnsWithoutSubEvents).eq("event_id", eventId);
+  return retryResult as { data: EventScheduleRecord[] | null; error: typeof retryResult.error };
 }
 
 export function useEventData(options: UseEventDataOptions = {}) {
@@ -230,10 +276,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
           includeTasks
             ? supabase.from("tasks").select("id,task,owner_name,priority,due_date,status").eq("event_id", eventId)
             : Promise.resolve({ data: [], error: null }),
-          supabase
-            .from("event_schedule")
-            .select("id,day,activity_date,activity,start_time,end_time,location,expected_attendance,owner_name,status,notes")
-            .eq("event_id", eventId),
+          fetchEventSchedule(eventId),
         ]);
 
       const queryError =
@@ -334,6 +377,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
         day: row.day ?? "",
         date: row.activity_date ?? "-",
         activity: row.activity ?? "-",
+        subEvents: row.sub_events ?? "",
         startTime: row.start_time ?? "",
         endTime: row.end_time ?? "",
         location: row.location ?? "",

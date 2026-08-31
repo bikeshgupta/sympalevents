@@ -278,7 +278,7 @@ function EventSchedule({
           <div>
             <CardTitle>Event Schedule</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              {phase === "during" ? "Today's flow from the Event Plan." : "Day-wise plan synced from Event Plan."}
+              {phase === "during" ? "Today's timeline from Events." : "Day-wise timeline synced from Events."}
             </p>
           </div>
           <Clock3 className="h-5 w-5 text-primary" />
@@ -325,6 +325,8 @@ function EventSchedule({
 }
 
 function UpcomingEvent({ item, label, tone = "default" }: { item: EventPlanRow; label: string; tone?: "default" | "live" }) {
+  const subEvents = splitSubEvents(item.subEvents);
+
   return (
     <div className={`rounded-md border p-3 ${tone === "live" ? "border-primary/30 bg-primary/5" : "bg-muted/60"}`}>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">{label}</p>
@@ -333,11 +335,14 @@ function UpcomingEvent({ item, label, tone = "default" }: { item: EventPlanRow; 
         <span>{formatEventTime(item.startTime)}</span>
         {item.location ? <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{item.location}</span> : null}
       </p>
+      {subEvents.length ? <SubEventList items={subEvents} className="mt-2" /> : null}
     </div>
   );
 }
 
 function HeroUpcomingEvent({ item, label }: { item: EventPlanRow; label: string }) {
+  const subEvents = splitSubEvents(item.subEvents);
+
   return (
     <div className="rounded-md border border-white/15 bg-white/10 p-3">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{label}</p>
@@ -346,6 +351,7 @@ function HeroUpcomingEvent({ item, label }: { item: EventPlanRow; label: string 
         <span>{formatEventTime(item.startTime)}</span>
         {item.location ? <span>{item.location}</span> : null}
       </p>
+      {subEvents.length ? <SubEventList items={subEvents} className="mt-2 text-white/80" /> : null}
     </div>
   );
 }
@@ -353,6 +359,7 @@ function HeroUpcomingEvent({ item, label }: { item: EventPlanRow; label: string 
 function TimelineItem({ item, status, isLast }: { item: EventPlanRow; status: TimelineStatus; isLast: boolean }) {
   const isCurrent = status === "current";
   const isCompleted = status === "completed";
+  const subEvents = splitSubEvents(item.subEvents);
 
   return (
     <div className="grid grid-cols-[4.25rem_1rem_1fr] gap-3">
@@ -370,8 +377,28 @@ function TimelineItem({ item, status, isLast }: { item: EventPlanRow; status: Ti
           {item.endTime ? <span>{formatEventTime(item.startTime)} - {formatEventTime(item.endTime)}</span> : null}
           {item.location ? <span>{item.location}</span> : null}
         </p>
+        {subEvents.length ? <SubEventList items={subEvents} className="mt-2" /> : null}
         {item.notes ? <p className="mt-1 text-sm text-muted-foreground">{item.notes}</p> : null}
       </div>
+    </div>
+  );
+}
+
+function splitSubEvents(value: string) {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function SubEventList({ items, className = "text-muted-foreground" }: { items: string[]; className?: string }) {
+  return (
+    <div className={`flex flex-wrap gap-1.5 ${className}`}>
+      {items.map((item) => (
+        <span key={item} className="rounded-md border border-current/10 bg-background/60 px-2 py-1 text-xs text-current">
+          {item}
+        </span>
+      ))}
     </div>
   );
 }

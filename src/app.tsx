@@ -7,6 +7,7 @@ import { BudgetPage } from "@/features/budget/budget-page";
 import { ContributionsPage } from "@/features/contributions/contributions-page";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
 import { ExpensesPage } from "@/features/expenses/expenses-page";
+import { EventPlanPage } from "@/features/event-plan/event-plan-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { SponsorsPage } from "@/features/sponsors/sponsors-page";
@@ -29,7 +30,8 @@ export function App() {
           <Route path="/procurement" element={<PlaceholderPage title="Procurement" />} />
           <Route path="/prasad" element={<PlaceholderPage title="Prasad Tracker" />} />
           <Route path="/volunteers" element={<PlaceholderPage title="Volunteers" />} />
-          <Route path="/event-plan" element={<PlaceholderPage title="Event Plan" />} />
+          <Route path="/events" element={<Navigate to="/event-plan" replace />} />
+          <Route path="/event-plan" element={<EventPlanPage />} />
           <Route path="/run-sheet" element={<PlaceholderPage title="Run Sheet" />} />
           <Route path="/inventory" element={<PlaceholderPage title="Inventory" />} />
           <Route path="/vendors" element={<PlaceholderPage title="Vendors" />} />
