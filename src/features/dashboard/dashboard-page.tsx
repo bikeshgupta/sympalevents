@@ -137,7 +137,7 @@ function EventHero({
 
   return (
     <section
-      className="relative min-h-[320px] overflow-hidden rounded-lg bg-card p-5 text-white shadow-lg sm:min-h-[360px] sm:p-6"
+      className="relative min-h-[320px] overflow-hidden rounded-lg bg-card p-5 text-white shadow-lg sm:min-h-[360px]"
       style={{
         ...fallbackHeroStyle,
         backgroundImage: `linear-gradient(90deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.72) 42%, rgba(0,0,0,0.24) 62%, rgba(0,0,0,0.04) 100%), url("${heroImageUrl}")`,
@@ -149,16 +149,18 @@ function EventHero({
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 to-transparent" />
       <div className="relative z-10 grid min-h-[280px] gap-6 sm:min-h-[312px] md:grid-cols-[minmax(0,0.48fr)_minmax(0,0.52fr)]">
         <div className="flex flex-col justify-between gap-6">
-          <div className="flex justify-end md:hidden">
-            <DataSourceBadge source={isLoading ? undefined : source} reason={fallbackReason} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold  tracking-wide text-white/80 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">{event.location}</p>
-            <h1 className="mt-2 text-3xl font-semibold leading-tight drop-shadow-[0_3px_12px_rgba(0,0,0,0.95)] sm:text-4xl">{event.name}</h1>
-            <p className="mt-3 flex items-center gap-2 text-sm text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-              <CalendarDays className="h-4 w-4" />
-              {event.dates}
-            </p>
+          <div className="relative">
+            <div className="absolute right-0 top-0 flex justify-end md:hidden">
+              <DataSourceBadge source={isLoading ? undefined : source} reason={fallbackReason} />
+            </div>
+            <div className="pr-24 md:pr-0">
+              <p className="text-sm  tracking-wide text-white/80 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">{event.location}</p>
+              <h1 className="mt-2 text-[18px] font-semibold leading-tight drop-shadow-[0_3px_12px_rgba(0,0,0,0.95)] sm:text-4xl">{event.name}</h1>
+              <p className="mt-3 flex items-center gap-1 text-[9px] text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+                <CalendarDays className="h-2 w-2" />
+                {event.dates}
+              </p>
+            </div>
           </div>
           <HeroCountdown event={event} timeline={timeline} now={now} phase={phase} />
         </div>
