@@ -1,6 +1,6 @@
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
-const publicPageKeys = new Set(["dashboard"]);
+const publicPageKeys = new Set(["dashboard", "budget"]);
 
 export default async function handler(req: any, res: any) {
   try {
@@ -17,7 +17,9 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    if (publicPageKeys.has(pageKey)) {
+    const authHeader = String(req.headers.authorization ?? "");
+
+    if (publicPageKeys.has(pageKey) && !authHeader.startsWith("Bearer ")) {
       sendJson(res, 200, {
         canView: true,
         canEdit: false,

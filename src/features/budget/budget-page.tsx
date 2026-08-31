@@ -79,7 +79,7 @@ export function BudgetPage() {
         action={
           access.canEdit ? <CrudDialog title="Add Budget Item" triggerLabel="Add Budget Item" onSubmit={addBudgetItem}>
             <BudgetFields />
-          </CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
+          </CrudDialog> : <span className="text-sm text-muted-foreground"></span>
         }
       />
       <Card className="overflow-x-auto">

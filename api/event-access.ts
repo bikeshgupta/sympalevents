@@ -1,6 +1,6 @@
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
-const publicPageKeys = ["dashboard"];
+const publicPageKeys = ["dashboard", "budget"];
 const eventPageKeys = [
   "dashboard",
   "contributions",

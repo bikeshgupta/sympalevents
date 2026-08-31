@@ -4,7 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 
-export const publicPageKeys = new Set(["dashboard"]);
+export const publicPageKeys = new Set(["dashboard", "budget"]);
 
 export const pageLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -43,7 +43,7 @@ export function usePageAccess(pageKey: string) {
 
   const { data, isLoading } = useQuery({
     queryKey: ["page-access", selectedEventId, session?.user.appUserId, pageKey],
-    enabled: Boolean(selectedEventId && session && !isPublicPage),
+    enabled: Boolean(selectedEventId && session),
     queryFn: () =>
       apiFetch<{
         canView: boolean;
@@ -53,8 +53,18 @@ export function usePageAccess(pageKey: string) {
       }>(`/api/page-access?eventId=${selectedEventId}&pageKey=${pageKey}`),
   });
 
-  if (isPublicPage) {
+  if (isPublicPage && !session) {
     return { canView: true, canEdit: false, requiresLogin: false, isLoading: false, role: null };
+  }
+
+  if (isPublicPage) {
+    return {
+      canView: true,
+      canEdit: data?.canEdit ?? false,
+      requiresLogin: false,
+      isLoading: isSessionLoading || isLoading,
+      role: data?.role ?? null,
+    };
   }
 
   if (pageKey === "settings" && session && !selectedEventId) {

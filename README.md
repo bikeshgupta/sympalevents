@@ -107,7 +107,7 @@ In Google Cloud OAuth setup, add:
 
 Access model:
 
-- `/dashboard` and `/expenses` are public read pages.
+- `/dashboard`, `/budget`, and `/expenses` are public read pages.
 - Other pages require Google login.
 - Event creator becomes the event admin automatically.
 - Settings lets an admin grant admin, committee, or read-only access to members for each event.
