@@ -235,10 +235,10 @@ function HeroCountdown({
         <div className="flex items-baseline justify-between gap-1 text-[#b8ffe4] drop-shadow-[0_0_8px_rgba(184,255,228,0.42)]">
           {units.map((unit, index) => (
             <div key={unit.label} className="contents">
-              <span className="font-digital text-4xl font-semibold leading-none tabular-nums sm:text-5xl">
+              <span className="font-digital text-4xl leading-none text-[#c8ffef] sm:text-5xl">
                 {String(unit.value).padStart(2, "0")}
               </span>
-              {index < units.length - 1 ? <span className="font-digital text-3xl leading-none text-[#b8ffe4]/75 sm:text-4xl">:</span> : null}
+              {index < units.length - 1 ? <span className="font-digital text-3xl leading-none text-[#c8ffef]/70 sm:text-4xl">:</span> : null}
             </div>
           ))}
         </div>

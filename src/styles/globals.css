@@ -3,12 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  @font-face {
-    font-family: "EventDigital";
-    src: url("/fonts/event-digital.woff2") format("woff2");
-    font-display: swap;
-  }
-
   :root {
     --background: 42 31% 97%;
     --foreground: 218 23% 15%;
@@ -40,6 +34,15 @@
   }
 
   .font-digital {
-    font-family: "EventDigital", "Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: "OCR A Std", "Lucida Console", Consolas, "Courier New", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    text-shadow:
+      0 0 4px rgba(184, 255, 228, 0.78),
+      0 0 14px rgba(34, 211, 238, 0.5),
+      0 0 28px rgba(20, 184, 166, 0.35);
+    -webkit-text-stroke: 0.35px rgba(184, 255, 228, 0.72);
   }
 }
