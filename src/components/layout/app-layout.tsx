@@ -1,7 +1,8 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Bell, ChevronsUpDown, LogOut } from "lucide-react";
+import { ChevronsUpDown, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
+import { AnnouncementsBell } from "@/components/layout/announcements-bell";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
@@ -98,9 +99,7 @@ export function AppLayout() {
               {event ? `${event.dates} · ${event.location}` : "Loading event"}
             </p>
           </div>
-          <Button variant="ghost" size="icon" aria-label="Notifications">
-            <Bell className="h-4 w-4" />
-          </Button>
+          <AnnouncementsBell event={event} />
           {canRequestCommitteeAccess ? (
             <Button variant="outline" size="sm" onClick={() => void requestCommitteeAccess()}>
               Request access

@@ -8,6 +8,8 @@
     --foreground: 218 23% 15%;
     --card: 0 0% 100%;
     --card-foreground: 218 23% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 218 23% 15%;
     --primary: 182 53% 24%;
     --primary-foreground: 0 0% 100%;
     --secondary: 36 44% 90%;
@@ -33,16 +35,98 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
-  .font-digital {
-    font-family: "OCR A Std", "Lucida Console", Consolas, "Courier New", ui-monospace, monospace;
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum";
-    font-weight: 400;
-    letter-spacing: 0.04em;
-    text-shadow:
-      0 0 4px rgba(184, 255, 228, 0.78),
-      0 0 14px rgba(34, 211, 238, 0.5),
-      0 0 28px rgba(20, 184, 166, 0.35);
-    -webkit-text-stroke: 0.35px rgba(184, 255, 228, 0.72);
+  /*
+   * Staggered entrance for the direct children of a stacked page section.
+   * Applied via CSS rather than a wrapper element so a child that renders
+   * nothing leaves no empty box behind (which `space-y` would still space).
+   */
+  @keyframes reveal-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .reveal-stack > * {
+    animation: reveal-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .reveal-stack > *:nth-child(2) {
+    animation-delay: 70ms;
+  }
+
+  .reveal-stack > *:nth-child(3) {
+    animation-delay: 140ms;
+  }
+
+  .reveal-stack > *:nth-child(4) {
+    animation-delay: 210ms;
+  }
+
+  .reveal-stack > *:nth-child(5) {
+    animation-delay: 280ms;
+  }
+
+  .reveal-stack > *:nth-child(n + 6) {
+    animation-delay: 350ms;
+  }
+
+  /*
+   * Anyone who has asked their OS to reduce motion gets the finished state
+   * instantly instead of the animation. Animations use `both` fill mode, so
+   * collapsing the duration still leaves every element at its final opacity.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /*
+   * Countdown numerals. Playfair Display is loaded in index.html; the serif
+   * fallbacks keep the same character if it fails to load. Tabular figures stop
+   * the digits shifting as they tick.
+   */
+  .font-countdown {
+    font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum", "lnum";
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  /* Each unit flips down into place when its value changes. */
+  .flip-unit {
+    perspective: 320px;
+  }
+
+  .flip-face {
+    animation: flip-down 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: 50% 0%;
+    backface-visibility: hidden;
+  }
+
+  @keyframes flip-down {
+    0% {
+      transform: rotateX(-88deg);
+      opacity: 0;
+    }
+    55% {
+      transform: rotateX(12deg);
+      opacity: 1;
+    }
+    100% {
+      transform: rotateX(0deg);
+      opacity: 1;
+    }
   }
 }
