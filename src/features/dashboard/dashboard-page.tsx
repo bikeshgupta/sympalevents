@@ -18,6 +18,7 @@ import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from
 import { AnimatedNumber } from "@/components/shared/animated-number";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ContributeButton } from "@/features/contributions/contribute-dialog";
 import { AnnouncementsCard } from "@/features/dashboard/announcements-card";
 import { DashboardAuctions } from "@/features/dashboard/dashboard-auctions";
 import {
@@ -36,10 +37,12 @@ import {
   type TimelineStatus,
 } from "@/features/dashboard/dashboard-utils";
 import { apiFetch } from "@/lib/api";
+import { commonExpectedAmount } from "@/lib/contribution-payments";
 import type { AppEvent, ContributionRow, EventPlanRow, SponsorRow, TaskRow } from "@/lib/event-data";
 import { useEventData } from "@/lib/event-data";
 import { useSession } from "@/lib/auth";
 import { useCountUp } from "@/lib/motion";
+import { isUpiConfigured } from "@/lib/upi";
 import { formatCurrency } from "@/lib/utils";
 import staticHeroImageUrl from "./bg-image.jpeg";
 
@@ -125,6 +128,8 @@ export function DashboardPage() {
           contributors={data.contributions.length}
         />
         <FundingProgress
+          eventId={event.id}
+          eventName={event.name}
           totalBudget={financials.totalBudget}
           fundsReceived={fundsReceived}
           contributionReceived={financials.contributionReceived}
@@ -793,6 +798,8 @@ function TileGrid({ visible, overflowCount }: { visible: TileEntry[]; overflowCo
 }
 
 function FundingProgress({
+  eventId,
+  eventName,
   totalBudget,
   fundsReceived,
   contributionReceived,
@@ -800,6 +807,8 @@ function FundingProgress({
   contributions,
   sponsors,
 }: {
+  eventId?: string;
+  eventName: string;
   totalBudget: number;
   fundsReceived: number;
   contributionReceived: number;
@@ -813,6 +822,8 @@ function FundingProgress({
   const animatedProgress = useCountUp(progress, { duration: 1400 });
   const aboveExpected = contributions.filter((row) => row.received > row.expected).length;
   const [activeTab, setActiveTab] = useState<"contributions" | "sponsors">("contributions");
+
+  const expectedPerFlat = useMemo(() => commonExpectedAmount(contributions), [contributions]);
 
   const contributorTiles = useTopEntries(contributions, receivedAmount, contributionToTile);
   const sponsorTiles = useTopEntries(sponsors, receivedAmount, sponsorToTile);
@@ -909,6 +920,11 @@ function FundingProgress({
           ) : null}
         </div>
 
+        {/* The dashboard is a public page, so this is the one place a resident
+            without an account can reach the UPI flow. Renders nothing until a
+            UPI id is configured. */}
+        <ContributeCallout eventId={eventId} eventName={eventName} expectedPerFlat={expectedPerFlat} />
+
         <div className="mt-4 border-t pt-4">
           {/* Same bordered-tab treatment as the day selector in Event Schedule -
               solid primary fill for the active tab, not a separate "segmented
@@ -948,6 +964,39 @@ function FundingProgress({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * "Contribute now" inside Funding Progress. Pays for its row by being the only
+ * self-serve way to give: the button opens the resident's own UPI app, and the
+ * copy is careful not to promise the payment is recorded - the committee still
+ * confirms it against the account before it lands in Contributions.
+ */
+function ContributeCallout({
+  eventId,
+  eventName,
+  expectedPerFlat,
+}: {
+  eventId?: string;
+  eventName: string;
+  expectedPerFlat: number;
+}) {
+  if (!isUpiConfigured || !eventId) return null;
+
+  return (
+    <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3.5">
+      <p className="text-sm font-medium">Want to contribute?</p>
+      <p className="mt-0.5 text-sm text-muted-foreground">
+        Pay from PhonePe, Google Pay or any UPI app. The committee confirms it before it appears in the list.
+      </p>
+      <ContributeButton
+        eventId={eventId}
+        eventName={eventName}
+        expectedPerFlat={expectedPerFlat}
+        className="mt-3 w-full sm:w-auto"
+      />
+    </div>
   );
 }
 

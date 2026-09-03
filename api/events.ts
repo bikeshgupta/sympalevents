@@ -1,3 +1,4 @@
+import { handleContributionPayments } from "./_lib/contribution-payments.js";
 import {
   assertServiceSupabase,
   getRequestBody,
@@ -6,7 +7,23 @@ import {
   sendJson,
 } from "./_lib/server.js";
 
+/**
+ * Event creation, plus the self-service contribution payments that hang off an
+ * event, dispatched on `?resource=`.
+ *
+ * Folding a second resource in here is a deployment constraint, not a style
+ * choice: Vercel turns every file directly under `api/` into its own
+ * serverless function and this project is already at the plan's cap, so a
+ * `api/contribution-payments.ts` route would fail the deploy (see CLAUDE.md).
+ * The handler lives in `api/_lib/`, which is never routed and so costs
+ * nothing. Dispatch reads only the query string - the handler still consumes
+ * its own body normally.
+ */
 export default async function handler(req: any, res: any) {
+  if (String(req.query?.resource ?? "") === "contribution-payments") {
+    return handleContributionPayments(req, res);
+  }
+
   try {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: "Method not allowed" });

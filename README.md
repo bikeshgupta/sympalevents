@@ -43,6 +43,23 @@ Run the migration in `supabase/migrations/001_initial_schema.sql`, then optional
 
 Run `supabase/migrations/002_access_control.sql` after the initial schema to add access control, event creation helpers, and page-level permissions.
 
+Later migrations are numbered and applied in order. `supabase/migrations/014_contribution_payments.sql` is required for the UPI contribution flow below; without it the "Contribute now" button errors when a resident submits.
+
+## UPI contributions
+
+Residents can pay the committee directly from their own UPI app (PhonePe, Google Pay, Paytm or any other). There is **no payment gateway and no merchant account** — the money moves peer to peer, so nothing tells the site whether a payment succeeded. Every attempt is therefore recorded as pending, and a committee member confirms it on the Contributions page before it counts.
+
+Add the committee's UPI id to `.env`:
+
+```bash
+VITE_UPI_ID=committee@bankhandle
+VITE_UPI_PAYEE_NAME=Your Society Committee
+```
+
+In Vercel, add both as **Config** values — a UPI id is public information (it is what a payment QR code encodes), not a secret.
+
+Leave `VITE_UPI_ID` empty and the feature stays completely hidden: no button on the dashboard or Contributions page, and no review panel.
+
 ## Firebase
 
 Create a Firebase project, enable Authentication > Sign-in method > Google, and add your local/dev domain to the authorized domains list.

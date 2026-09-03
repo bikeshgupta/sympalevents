@@ -411,6 +411,109 @@ an auction-only detail.
   built, decide its permission model explicitly** rather than assuming every member can
   upload just because auctions required committee.
 
+## Self-service UPI contributions
+
+A resident can pay the committee from their own phone: **Contribute now** →
+capture their details → their UPI app (PhonePe / Google Pay / anything) opens
+with the amount pre-filled → the committee confirms the payment against the
+account, and only then does it become a row in Contributions.
+
+**There is no payment gateway and no merchant account here, and the whole design
+follows from that.** A `upi://pay` intent link hands control to another app and
+never reports back to the browser, so the app *cannot* know whether the transfer
+succeeded. Anything that claimed otherwise would be putting made-up money on the
+dashboard. So every attempt is recorded before the hand-off, the payer is asked
+afterwards how it went, and a committee member makes the call.
+
+### Setup
+
+`VITE_UPI_ID` (and optionally `VITE_UPI_PAYEE_NAME`) in the environment - see
+`.env.example`. **Until `VITE_UPI_ID` is set, every entry point renders
+nothing**: `isUpiConfigured` in [src/lib/upi.ts](src/lib/upi.ts) gates the
+button on both screens and the review panel, so a deploy without it behaves
+exactly as before this feature existed. The VPA is public config (it is the
+string printed on a payment QR code), not a secret - hence a `VITE_` value.
+
+Migration [014_contribution_payments.sql](supabase/migrations/014_contribution_payments.sql)
+adds the table. **It has not been run** - like every migration here, the user
+applies it by hand (README → Supabase). Until then, starting a payment fails
+with a Supabase error; nothing else on the app is affected.
+
+### Statuses, and what each one means for the numbers
+
+| status | meaning | in `contributions`? |
+|---|---|---|
+| `initiated` | link opened, we never heard back | no |
+| `awaiting_confirmation` | the payer says they paid - still just a claim | no |
+| `confirmed` | committee matched it against the account | **yes** |
+| `rejected` | reviewed, not accepted | no |
+| `cancelled` | the payer told us they did not complete it | no |
+
+`initiated` rows stay in the queue on purpose: someone who pays and then closes
+the tab would otherwise vanish, and the committee would find money in the
+account with nothing to attach it to.
+
+### Where it writes
+
+`applyConfirmedPayment()` in
+[api/_lib/contribution-payments.ts](api/_lib/contribution-payments.ts) is the
+**only** place this feature touches `contributions`, and it runs on confirm
+only. A flat that already has a contribution row gets topped up (`received`
+goes up, `expected` is left exactly as the committee set it, mode `UPI`,
+status `Received`, the reference appended). A flat new to the list gets a
+`residents` row and a `contributions` row created with **`expected` set equal
+to what they paid** - there is no other figure to go on, and inventing a
+per-flat default server-side would bake one society's convention into a
+multi-tenant app. Flat matching is `ilike`, so "a-101" does not become a second
+resident next to "A-101".
+
+### API
+
+**`/api/events?resource=contribution-payments`** - folded into the events route
+for the same reason auctions has three resources in one function: Vercel counts
+every file under `api/` as a serverless function and this project is at the
+plan's cap. The handler is in `api/_lib/`, which is never routed.
+
+- `POST` is **deliberately unauthenticated** - the dashboard is a public page
+  and a resident should not need an account to contribute. It only records an
+  unverified claim; a signed-in payer gets `app_user_id` attached as a bonus.
+- `PATCH` with `action: "reported" | "cancelled"` is the payer's own answer,
+  authorized by `paymentId` **and** the server-generated `reference` - that
+  pair is the capability token, which is what stops one resident closing out
+  another's payment. It is refused once the committee has reviewed the row.
+- `PATCH` with `action: "confirm" | "reject"` and `GET` require admin/committee
+  via `requireEventCommittee`. The queue holds residents' phone numbers, so
+  that check is server-side, not a hidden button.
+
+### Client
+
+- [src/lib/upi.ts](src/lib/upi.ts) - config + `buildUpiUrl()`. Every parameter
+  is percent-encoded through `URLSearchParams`; a raw `&` in a payee name would
+  silently truncate the amount. `upi://` is the link that always works - the
+  PhonePe/GPay/Paytm schemes are there because residents ask for those apps by
+  name, not because they do anything different.
+- [src/lib/contribution-payments.ts](src/lib/contribution-payments.ts) - the
+  hooks, plus `commonExpectedAmount()`, which reads the quick-pick chip amounts
+  off the event's own rows (the most common `expected`, not the average) rather
+  than hardcoding ₹501/₹1100-style presets.
+- [contribute-dialog.tsx](src/features/contributions/contribute-dialog.tsx) -
+  the three-step payer flow. Step 2 is the hand-off, and its copy never says
+  the contribution is recorded, only that it is pending confirmation. On
+  desktop it shows the VPA to copy instead of app buttons that would do nothing.
+- [pending-payments-panel.tsx](src/features/contributions/pending-payments-panel.tsx)
+  - the committee queue on `/contributions`, rendered only for `canEdit`.
+- Entry points: the Contributions page header, and a callout inside the
+  dashboard's Funding Progress card - the dashboard being public is the only
+  reason a resident without an account can reach any of this. Both hide
+  themselves without a `VITE_UPI_ID` **or** without a selected event id, which
+  is also why demo mode shows no button (`demoEvent` has no id, and there would
+  be nothing to attribute a payment to).
+
+**Known gap:** confirming twice in two tabs would apply the amount twice - the
+read-then-write in `applyConfirmedPayment` is not atomic, the same tradeoff
+already documented for auction bids. The status guard makes it a narrow window
+and the volume here is a few payments a day.
+
 ## Motion
 
 - `useCountUp(target)` and `usePrefersReducedMotion()` live in
