@@ -48,6 +48,8 @@ export type Announcement = {
   location?: string;
   art?: AnnouncementArt;
   auction?: AnnouncementAuction;
+  /** Shown as a highlighted "What you'll get" line on the auction's detail view. */
+  prize?: string;
   /** Optional: limit a notice to one event. Leave undefined to show for all. */
   eventId?: string;
 };
@@ -60,6 +62,7 @@ export const announcements: Announcement[] = [
     body: "Bidding for Bappa's laddoo happens online, right here. Bid generously - every rupee raised goes straight into the event fund.",
     tone: "spotlight",
     art: "laddoo-auction",
+    prize: "You'll get the Bappa laddoo, a pure silver Ganesha idol, and lots of blessings.",
     auction: {
       opensDay: "Day 1",
       opensTime: "08:30",

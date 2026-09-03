@@ -339,37 +339,29 @@ function HeroCountdown({
   }
 
   return (
-    <div className="rounded-xl border border-white/20 bg-black/45 px-4 py-3.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-md">
+    <div className="rounded-xl border border-white/20 bg-black/45 px-3.5 py-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-md">
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Starts in</p>
       <p className="sr-only">{countdownSummary(units)}</p>
 
-      <div className="mt-2 flex items-stretch" aria-hidden="true">
+      <div className="mt-1.5 flex items-stretch" aria-hidden="true">
         {units.map((unit, index) => (
           <div key={unit.label} className="contents">
-            {index > 0 ? <span className="my-1 w-px shrink-0 bg-white/15" /> : null}
+            {index > 0 ? <span className="my-0.5 w-px shrink-0 bg-white/15" /> : null}
             <div className="flip-unit flex-1 px-1 text-center">
               {/* Keying on the value remounts the face, replaying the flip each tick. */}
               <span
                 key={unit.value}
-                className="flip-face font-countdown block text-[2rem] leading-none text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] sm:text-4xl"
+                className="flip-face font-countdown block text-[26px] leading-none text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] sm:text-[32px]"
               >
                 {String(unit.value).padStart(2, "0")}
               </span>
-              <span className="mt-1.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                 {unit.label}
               </span>
             </div>
           </div>
         ))}
       </div>
-
-      {nextEvent ? (
-        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-white/10 pt-2.5 text-xs text-white/75 sm:text-sm">
-          <span className="font-semibold uppercase tracking-wide text-white/50">First up</span>
-          <span className="font-medium text-white/95">{nextEvent.activity}</span>
-          <span className="tabular-nums text-white/70">{formatEventTime(nextEvent.startTime)}</span>
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -1,8 +1,10 @@
-import { Bell, ChevronLeft, ChevronRight, Clock3, Gavel, MapPin, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Bell, Check, ChevronLeft, ChevronRight, Clock3, Gavel, LogIn, MapPin, Sparkles, TrendingUp, Users } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import auctionImage from "@/features/dashboard/auction.png";
+import { AuctionRegisterDialog } from "@/features/dashboard/auction-register-dialog";
 import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
 import type { AnnouncementArt } from "@/data/announcements";
 import {
@@ -12,10 +14,19 @@ import {
   resolveAnnouncements,
   type ResolvedAnnouncement,
 } from "@/lib/announcements";
+import { useAuctionRegistration } from "@/lib/auction-registration";
+import { signInWithGoogle, useSession } from "@/lib/auth";
 import type { AppEvent } from "@/lib/event-data";
 import { usePrefersReducedMotion } from "@/lib/motion";
 
 const ROTATE_MS = 8000;
+
+// Recharts pulls in a real amount of weight (d3 internals) and this dialog is
+// opened by a minority of visitors, so it is only fetched on first open -
+// not paid for by everyone who loads the public dashboard.
+const AuctionDetailDialog = lazy(() =>
+  import("@/features/dashboard/auction-detail-dialog").then((mod) => ({ default: mod.AuctionDetailDialog })),
+);
 
 /** Maps an announcement's `art` key to its illustration. Add an entry here
  *  alongside a new `AnnouncementArt` value to give another notice artwork. */
@@ -157,7 +168,9 @@ export function AnnouncementsCard({ event, now }: { event: AppEvent; now: Date }
             ) : null}
           </div>
 
-          {active.auctionWindow ? <AuctionPanel announcement={active} now={now} /> : null}
+          {active.auctionWindow ? (
+            <AuctionPanel announcement={active} now={now} eventId={event.id} />
+          ) : null}
         </div>
 
         {items.length > 1 ? (
@@ -207,16 +220,61 @@ export function AnnouncementsCard({ event, now }: { event: AppEvent; now: Date }
 }
 
 /**
- * Placeholder for the online laddoo auction. Shows the bidding window and its
- * status; the bid control is intentionally inert until real bidding is built.
+ * The auction panel. Bidding itself is not built yet, so the live action here
+ * is registration: a signed-in resident registers interest, which is what a
+ * future "place a bid" flow will check against. Everything below - the
+ * table, the API route, this component - is written so wiring in real
+ * bidding later means adding a bid flow on top of an already-real
+ * registrant list, not building the list too.
  */
-function AuctionPanel({ announcement, now }: { announcement: ResolvedAnnouncement; now: Date }) {
-  const window = announcement.auctionWindow;
-  if (!window) return null;
+function AuctionPanel({
+  announcement,
+  now,
+  eventId,
+}: {
+  announcement: ResolvedAnnouncement;
+  now: Date;
+  eventId?: string;
+}) {
+  const auctionWindow = announcement.auctionWindow;
+  const { data: session } = useSession();
+  const signedIn = Boolean(session?.user);
+  const queryClient = useQueryClient();
+  const { registration, count, isLoading, isError, register, cancel } = useAuctionRegistration({
+    eventId,
+    auctionId: announcement.id,
+    signedIn,
+  });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
+
+  if (!auctionWindow) return null;
 
   const status = auctionStatus(announcement, now);
   const closesIn = closesInLabel(announcement, now);
   const isLive = status === "live";
+  const isClosed = status === "closed";
+
+  async function handleSignInAndRegister() {
+    setSignInError(null);
+    setSigningIn(true);
+    try {
+      await signInWithGoogle();
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      setDialogOpen(true);
+    } catch (item) {
+      setSignInError(item instanceof Error ? item.message : "Sign-in failed");
+    } finally {
+      setSigningIn(false);
+    }
+  }
+
+  async function handleCancelRegistration() {
+    if (!window.confirm("Cancel your registration for this auction?")) return;
+    await cancel.mutateAsync();
+  }
 
   return (
     <div className="relative mt-2.5 rounded-lg border border-primary/20 bg-background/70 p-3 backdrop-blur-sm">
@@ -225,14 +283,17 @@ function AuctionPanel({ announcement, now }: { announcement: ResolvedAnnouncemen
           <Gavel className="h-3.5 w-3.5" aria-hidden="true" />
           Online auction
         </span>
-        {isLive ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-            <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-emerald-600" aria-hidden="true" />
-            Bidding open
+        {isClosed ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+            Closed
           </span>
         ) : (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-            {status === "closed" ? "Bidding closed" : "Not open yet"}
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800 shadow-sm ring-1 ring-emerald-300">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-emerald-500" aria-hidden="true" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-600" aria-hidden="true" />
+            </span>
+            Registration open
           </span>
         )}
       </div>
@@ -241,27 +302,117 @@ function AuctionPanel({ announcement, now }: { announcement: ResolvedAnnouncemen
           included, since this is exactly the information a bidder needs. */}
       <div className="mt-2.5 grid grid-cols-2 gap-3 text-xs">
         <div>
-          <p className="text-muted-foreground">Opens</p>
-          <p className="mt-0.5 font-medium tabular-nums text-foreground">{formatEventDate(window.opensDate)}</p>
-          <p className="tabular-nums text-muted-foreground">{formatEventTime(window.opensTime)}</p>
+          <p className="text-muted-foreground">Bidding opens</p>
+          <p className="mt-0.5 font-medium tabular-nums text-foreground">{formatEventDate(auctionWindow.opensDate)}</p>
+          <p className="tabular-nums text-muted-foreground">{formatEventTime(auctionWindow.opensTime)}</p>
         </div>
         <div>
-          <p className="text-muted-foreground">Closes</p>
-          <p className="mt-0.5 font-medium tabular-nums text-foreground">{formatEventDate(window.closesDate)}</p>
-          <p className="tabular-nums text-muted-foreground">{formatEventTime(window.closesTime)}</p>
+          <p className="text-muted-foreground">Bidding closes</p>
+          <p className="mt-0.5 font-medium tabular-nums text-foreground">{formatEventDate(auctionWindow.closesDate)}</p>
+          <p className="tabular-nums text-muted-foreground">{formatEventTime(auctionWindow.closesTime)}</p>
         </div>
       </div>
 
       {isLive && closesIn ? (
-        <p className="mt-2 text-xs font-medium text-emerald-700">Closes in {closesIn}</p>
+        <p className="mt-2 text-xs font-medium text-emerald-700">Bidding window closes in {closesIn}</p>
       ) : null}
 
-      {/* Full width on a phone so the button's weight matches the panel
-          instead of sitting as a small pill in a mostly-empty row. */}
-      <Button disabled title="Online bidding is not available yet - coming soon" className="mt-3 w-full sm:w-auto">
-        <Gavel className="h-4 w-4" aria-hidden="true" />
-        Place a bid - coming soon
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-2.5 w-full sm:w-auto"
+        onClick={() => setDetailOpen(true)}
+      >
+        <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
+        {isLive ? "View live bidding" : isClosed ? "View final results" : "Preview auction details"}
       </Button>
+
+      <div className="mt-3 border-t pt-3">
+        {isClosed ? (
+          <p className="text-xs text-muted-foreground">Registration is closed. This auction has ended.</p>
+        ) : !signedIn ? (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Register yourself to be part of this auction. Bidding isn&apos;t open yet - sign in now and you&apos;ll
+              be ready.
+            </p>
+            <Button className="w-full sm:w-auto" onClick={() => void handleSignInAndRegister()} disabled={signingIn}>
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+              {signingIn ? "Opening Google..." : "Sign in to register"}
+            </Button>
+            {signInError ? <p className="text-xs text-destructive">{signInError}</p> : null}
+          </div>
+        ) : isLoading ? (
+          <div className="h-16 animate-pulse rounded-md bg-muted" aria-hidden="true" />
+        ) : isError ? (
+          <p className="text-xs text-destructive">Couldn&apos;t load your registration status. Try refreshing.</p>
+        ) : registration ? (
+          <div className="space-y-1.5">
+            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+              <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+              You&apos;re registered
+              {registration.flat_no ? ` · ${registration.flat_no}` : ""}
+            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {count > 0 ? (
+                <span className="inline-flex items-center gap-1">
+                  <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {count} resident{count > 1 ? "s" : ""} registered
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className="font-medium text-muted-foreground underline-offset-2 hover:text-destructive hover:underline disabled:opacity-50"
+                onClick={() => void handleCancelRegistration()}
+                disabled={cancel.isPending}
+              >
+                {cancel.isPending ? "Cancelling..." : "Cancel registration"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Register yourself to be part of this auction. Bidding isn&apos;t open yet - you&apos;ll be notified when
+              it starts.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button className="w-full sm:w-auto" onClick={() => setDialogOpen(true)}>
+                <Gavel className="h-4 w-4" aria-hidden="true" />
+                Register yourself
+              </Button>
+              {count > 0 ? (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {count} resident{count > 1 ? "s" : ""} already registered
+                </span>
+              ) : null}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <AuctionRegisterDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        auctionTitle={announcement.title}
+        defaultName={session?.user.name ?? ""}
+        register={register}
+      />
+      {detailOpen ? (
+        <Suspense fallback={null}>
+          <AuctionDetailDialog
+            open={detailOpen}
+            onOpenChange={setDetailOpen}
+            announcement={announcement}
+            eventId={eventId}
+            status={status}
+            signedIn={signedIn}
+            registration={registration}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

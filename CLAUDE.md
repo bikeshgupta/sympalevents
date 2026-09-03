@@ -125,6 +125,76 @@ database table.** To post a notice, add an entry and deploy.
 - More than one entry turns the dashboard card into an auto-rotating carousel
   (8s, pauses on hover/focus, dots + arrows). One entry renders as a static card.
 
+### Auction registration
+
+An announcement can carry `auction: AnnouncementAuction` (an opens/closes window) and
+`art: "laddoo-auction"` (an illustration, mapped in `ART_IMAGES` in
+[announcements-card.tsx](src/features/dashboard/announcements-card.tsx)). When present,
+`<AuctionPanel>` renders below the notice with a **real, working registration flow** —
+bidding itself is a placeholder ("coming soon"); registration is not.
+
+- **Data model:** [supabase/migrations/009_auction_registrations.sql](supabase/migrations/009_auction_registrations.sql)
+  adds `auction_registrations`, keyed by `(event_id, auction_id, user_id)`. `auction_id`
+  is an announcement's `id` string — the auction is defined in the data file, not a DB
+  row, so there is no FK to it.
+  **This migration has not necessarily been run against the live Supabase project** —
+  check before assuming the feature works end-to-end; run it in the Supabase SQL editor
+  the same way as any other file under `supabase/migrations/`.
+- **RLS is enabled with zero policies, deliberately.** This app authenticates through
+  Firebase, not Supabase Auth — the browser's Supabase client never holds a session, so
+  `auth.uid()` never resolves for it. A policy written against `auth.uid()` here would
+  be dead code. All access goes through `/api/auction-registrations`
+  ([api/auction-registrations.ts](api/auction-registrations.ts)), which verifies the
+  Firebase ID token via `requireAppUser()` and writes with the service-role client
+  (bypasses RLS by design). **Do not add anon/authenticated policies to this table**
+  expecting a direct browser `supabase.from("auction_registrations")` call to work —
+  it won't, and it shouldn't; that would remove the only enforcement this table has.
+- New local API routes must be added to `localApiRoutes` in `vite.config.ts` or the dev
+  server 404s them silently via `next()`.
+- `useAuctionRegistration({ eventId, auctionId, signedIn })`
+  ([src/lib/auction-registration.ts](src/lib/auction-registration.ts)) wraps the GET
+  (status + registrant count) and the register/cancel mutations. The query is `enabled`
+  only when signed in, matching the `MyResponsibilities` pattern — signed-out visitors
+  never call the endpoint.
+- **Bidding is now real too**, built on top of registration exactly as noted above:
+  [supabase/migrations/010_auction_bids.sql](supabase/migrations/010_auction_bids.sql)
+  adds an append-only `auction_bids` ledger (never updated or deleted — the history
+  *is* the record); [api/auction-bids.ts](api/auction-bids.ts) is the only way to
+  write to it. Same RLS-with-zero-policies stance as `auction_registrations`, same
+  reasoning — do not add client policies to this table either.
+  - **Rules are enforced server-side, not just in the UI**: first bid ≥ ₹5,000
+    (`STARTING_BID`), every bid after ≥ previous highest + ₹100 (`MIN_INCREMENT`);
+    the bidder must have an active `auction_registrations` row for that
+    event+auction; and the bid must fall inside the bidding window.
+  - **The bidding window is checked against the real `events.start_date`**, not
+    trusted from the client. `AUCTION_WINDOWS` in `api/auction-bids.ts` mirrors the
+    day-offset/time pair from that auction's entry in `src/data/announcements.ts`
+    (e.g. `laddoo-auction-day-3`: opens day-offset 0 at 08:30, closes day-offset 2 at
+    10:00) — **the two must be kept in sync by hand**; there is no single source of
+    truth for it today. `eventZoneTimestamp`/`addDays` in that file are a deliberate
+    mirror of `toEventZoneTimestamp`/`getEventDays` in
+    [dashboard-utils.ts](src/features/dashboard/dashboard-utils.ts) — verified to
+    produce identical timestamps for the current event, but re-verify if the event's
+    day-count logic ever changes.
+  - **Known gap:** reading the current highest bid and validating a new one against
+    it is not atomic (no DB-level lock or unique-amount constraint) — two people
+    bidding within the same instant could both pass validation. Low-stakes for a
+    community auction's bid volume; a real fix would move the check-and-insert into
+    a Postgres function.
+  - `useAuctionBids({ eventId, auctionId, signedIn, live })`
+    ([src/lib/auction-bids.ts](src/lib/auction-bids.ts)) polls every 3s while `live`
+    is true (bidding actually open) and off otherwise — there is no realtime
+    subscription, because the same RLS lockdown that protects this table from direct
+    writes also blocks the anon client from subscribing to Realtime changes on it.
+  - The bid graph/history live in
+    [auction-detail-dialog.tsx](src/features/dashboard/auction-detail-dialog.tsx),
+    which also holds the "How it works" view (image is reused across both, content
+    swaps). **This file is lazy-loaded** (`React.lazy` in `announcements-card.tsx`) —
+    it pulls in `recharts`, ~385KB, and there is no reason to ship that to every
+    dashboard visitor who never opens the dialog. Keep any future chart-heavy
+    addition here, or in another lazy boundary — don't let a static import drag
+    `recharts` back into the main bundle.
+
 ## Motion
 
 - `useCountUp(target)` and `usePrefersReducedMotion()` live in
@@ -147,8 +217,14 @@ database table.** To post a notice, add an entry and deploy.
 
 ## Working agreement (production app)
 
-1. **No database changes** unless explicitly asked. No migrations, no column renames,
-   no schema edits, no changes to what a query selects.
+1. **No database changes** unless the user has asked for something that genuinely
+   requires one (a new feature needing its own storage, not an existing screen's
+   numbers). No migrations, no column renames, no schema edits, no changes to what an
+   *existing* query selects, without that explicit ask. When a change does add a
+   migration, say so plainly and tell the user it needs to be run — files under
+   `supabase/migrations/` are never applied automatically; the user runs them by hand,
+   same as every migration before it (see README → Supabase). Never touch the live DB
+   directly.
 2. **No major layout changes.** Users know these screens. Refine within the existing
    structure: spacing, type scale, contrast, states, affordances, accessibility,
    correctness of the numbers shown. Do not reorder major sections, swap navigation
