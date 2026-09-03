@@ -262,18 +262,18 @@ yet" or "pull this off the homepage for now."
   is the one filter both of those surfaces share.
 - **Dashboard**: `DashboardAuctions` ([src/features/dashboard/dashboard-auctions.tsx](src/features/dashboard/dashboard-auctions.tsx))
   sits directly below `EventHero` in `DashboardPage` — the slot the single hardcoded
-  Laddoo auction used to occupy before this became a multi-tenant feature. Shows **one
-  auction at a time** (`AuctionCard` with `canManage={false}` — view/register/bid
-  only), not a grid — the card is already a bordered `Card` on its own, so stacking
-  it inside another `Card`/grid wrapper would double up the border the same way the
-  auctions page itself was fixed to avoid. With more than one published auction, big
-  round prev/next buttons (44px, `ChevronLeft`/`ChevronRight`) plus an "Auction X of
-  N" count sit below the card — manual only, deliberately **no auto-rotate** like the
-  announcements carousel has, since auto-advancing out from under someone mid-bid
-  would blow away a half-typed amount. No "View all" link to `/auctions` — the
-  sidebar/bottom-nav already has an Auctions entry, so this doesn't need its own.
-  Renders nothing at all when there are no published auctions — no empty-state card
-  competing for space on a page that already has one.
+  Laddoo auction used to occupy before this became a multi-tenant feature. It is the
+  same card chrome the production announcements card uses (pulse-dot + `CardTitle` +
+  a `Gavel` in the header), wrapping **one `AuctionCard` at a time** with `spotlight`
+  on and `canManage={false}` — view/register/bid only; editing, cancelling,
+  publishing and the registrant list stay on `/auctions`. With more than one published
+  auction, the production dots-left / arrows-right row appears underneath (arrows at
+  40px rather than production's 32px, to clear the tap-target floor). Manual only —
+  deliberately **no auto-rotate** like the announcements carousel has, since
+  auto-advancing out from under someone mid-bid would blow away a half-typed amount.
+  No "View all" link to `/auctions` — the sidebar/bottom-nav already has an Auctions
+  entry. Renders nothing at all when there are no published auctions — no empty-state
+  card competing for space on a page that already has one.
 - **Header bell**: `AnnouncementsBell` ([src/components/layout/announcements-bell.tsx](src/components/layout/announcements-bell.tsx))
   fetches the same `useAuctions(event?.id)` and lists `publishedAuctions(...)` in a
   second "Auctions" section under "News & Announcements," each row linking to
@@ -309,12 +309,28 @@ volume; a real fix would move the check-and-insert into a Postgres function.
   `AuctionCard` in the grid — not one timer per card.
 - `AuctionCard` ([auction-card.tsx](src/features/auctions/auction-card.tsx)) is what
   `AuctionPanel` used to be, generalized to take an `Auction` row instead of an
-  announcement: registration section, plus a collapsible "auction details" accordion
-  (toggle button as header, expanded content as body, one shared border — not two
-  independently-boxed pieces). Auto-expands the moment status becomes `"live"` and can
-  still be collapsed manually afterward. `onEdit`/`onCancel`/`onTogglePublish` are all
-  optional — only `AuctionsPage` (the management view) wires them; the dashboard's
-  read-only instance passes `canManage={false}` and none of the three.
+  announcement. **It deliberately keeps the exact visual treatment that shipped to
+  production** in `aeb02bd` (the last commit before this became multi-event) — that
+  design was reviewed and released, and an earlier attempt to "simplify" it here was
+  rejected outright. Diff against `git show origin/master:src/features/dashboard/announcements-card.tsx`
+  before changing any of it:
+  - the panel is a `rounded-lg border p-2.5` block — **not** a `Card`, since both
+    callers frame it themselves and a `Card` inside a `Card` doubles the border;
+  - a fixed `grid-cols-[3fr_2fr]` split, copy left and the auction's image right at
+    `max-h-36 object-contain` (full width when there is no image — no placeholder art);
+  - solid-primary tag pill with a `animate-pulse-soft` `Sparkles`, then a "Live now" /
+    "in 2 days" pill;
+  - under a `border-t border-primary/20` rule: the "Online auction" eyebrow, the
+    emerald pulse-ring status pill, the two-column Bidding opens/closes grid, the
+    "closes in …" line, the full-width `justify-between` outline toggle, and the
+    registration block.
+  - `spotlight` adds the `animate-gradient-pan` background and `animate-sheen` sweep.
+    Only `DashboardAuctions` passes it — one focal looping element per screen, so the
+    `/auctions` grid stays plain.
+  Auto-expands the details section the moment status becomes `"live"` and can still be
+  collapsed manually afterward. `onEdit`/`onCancel`/`onTogglePublish` are all optional
+  — only `AuctionsPage` (the management view) wires them; the dashboard's read-only
+  instance passes `canManage={false}` and none of the three.
 - `AuctionDetailsPanel` ([auction-details-panel.tsx](src/features/auctions/auction-details-panel.tsx))
   holds the chart, bid history, place-bid form, and the committee registrant callout.
   **Lazy-loaded** (`React.lazy` in `auction-card.tsx`) — it pulls in `recharts`,

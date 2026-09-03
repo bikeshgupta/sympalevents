@@ -124,3 +124,12 @@ export function closesInLabel(auction: Auction, now: Date) {
   if (diffMs <= 0) return null;
   return gapLabel(diffMs);
 }
+
+/** "in 2 days 4 hr" until bidding opens, null once it has - the auction's
+ *  equivalent of `leadTimeLabel` on a notice, which is what filled this pill
+ *  when the auction was still a hardcoded announcement. */
+export function opensInLabel(auction: Auction, now: Date) {
+  const diffMs = new Date(auction.opens_at).getTime() - now.getTime();
+  if (diffMs <= 0) return null;
+  return `in ${gapLabel(diffMs)}`;
+}
