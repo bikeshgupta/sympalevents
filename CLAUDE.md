@@ -109,6 +109,26 @@ against Google's public keys and map the user into Supabase `app_users`.
   Add a screen's columns as a `TableColumn<T>[]` const at module scope.
 - CRUD dialogs use `CrudDialog` + `FormField` + the `formString` / `formNumber` helpers.
 
+## Link previews (Open Graph)
+
+[index.html](index.html) carries static `og:*` / `twitter:*` meta tags so sharing a link
+(WhatsApp, Telegram, Slack, iMessage…) shows a title, description, and image.
+
+- **These are static, not per-page.** This is a client-rendered SPA with no SSR —
+  a link-preview crawler reads the raw HTML response and never runs React, so every
+  route (`/dashboard`, `/contributions`, …) serves the *same* tags via the
+  `vercel.json` catch-all rewrite. Don't expect the preview to reflect a specific
+  event's name or dates without adding server-rendering for it.
+- **`og:image` points at `public/og-image.jpg`**, not the hero image imported in
+  `dashboard-page.tsx` (`bg-image.jpeg`, same photo) — files under `public/` are
+  served byte-for-byte at a fixed path, unlike a Vite-imported asset, which gets a
+  new hashed filename every build. A meta tag needs a URL that doesn't move.
+- **`og:image` and `og:url` are absolute** (`https://sympalevents.vercel.app/...`),
+  which link-preview crawlers require. **If the production domain ever changes,
+  these two tags must be updated by hand** — nothing derives them automatically.
+- To change the preview image: replace `public/og-image.jpg` and update the
+  `og:image:width` / `og:image:height` tags to match its real dimensions.
+
 ## Announcements (News section)
 
 Dashboard notices and the header bell are driven by
