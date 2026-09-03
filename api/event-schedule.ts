@@ -85,12 +85,19 @@ async function fetchSchedule(supabase: ReturnType<typeof assertServiceSupabase>,
   const columnsWithoutSubEvents =
     "id,day,activity_date,activity,start_time,end_time,location,expected_attendance,owner_name,status,notes";
 
-  let { data, error } = await supabase
+  // The two selects return different row shapes (the retry has no
+  // `sub_events`), so `data` is widened to cover both - otherwise assigning
+  // the fallback result below is a type error. The rows are passed straight
+  // back out as JSON, so nothing downstream needs the narrower type.
+  const primary = await supabase
     .from("event_schedule")
     .select(columns)
     .eq("event_id", eventId)
     .order("activity_date", { ascending: true })
     .order("start_time", { ascending: true });
+
+  let data: Record<string, unknown>[] | null = primary.data;
+  let error = primary.error;
 
   if (isMissingSubEventsColumn(error)) {
     const retryResult = await supabase

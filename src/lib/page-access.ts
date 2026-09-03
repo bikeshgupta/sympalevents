@@ -4,7 +4,10 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 
-export const publicPageKeys = new Set(["dashboard", "budget"]);
+// "auctions" is public alongside dashboard/budget: browsing auctions and
+// watching a bid's chart/history needs no sign-in, matching /api/auctions and
+// /api/auction-bids GET. Only creating an auction or placing a bid does.
+export const publicPageKeys = new Set(["dashboard", "budget", "auctions"]);
 
 export const pageLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -12,16 +15,12 @@ export const pageLabels: Record<string, string> = {
   sponsors: "Sponsors",
   budget: "Budget",
   expenses: "Expense Ledger",
-  procurement: "Procurement",
+  auctions: "Auctions",
   prasad: "Prasad",
   tasks: "Tasks",
   volunteers: "Volunteers",
   "event-plan": "Events",
-  "run-sheet": "Run Sheet",
-  inventory: "Inventory",
-  vendors: "Vendors",
   contacts: "Contacts",
-  risks: "Safety / Risks",
   settings: "Settings",
 };
 

@@ -1,7 +1,8 @@
-import { Check } from "lucide-react";
+import { Check, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import auctionImage from "@/features/dashboard/auction.png";
+import type { Auction } from "@/lib/auctions";
+import { formatCurrency } from "@/lib/utils";
 
 /**
  * A standalone popup - not a second view inside the auction details panel.
@@ -11,16 +12,16 @@ import auctionImage from "@/features/dashboard/auction.png";
 export function AuctionHowItWorksDialog({
   open,
   onOpenChange,
-  prize,
+  auction,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  prize?: string;
+  auction: Auction;
 }) {
   const steps = [
     {
       title: "Register",
-      body: "Sign in and register your interest. Registration is free and just tells us you want to take part.",
+      body: "Sign in and register your interest. Registration is free and just tells the committee you want to take part.",
     },
     {
       title: "Wait for bidding to open",
@@ -28,7 +29,7 @@ export function AuctionHowItWorksDialog({
     },
     {
       title: "Place your bid",
-      body: "The first bid must be at least ₹5,000. After that, every new bid must beat the current highest by at least ₹100.",
+      body: `The first bid must be at least ${formatCurrency(auction.starting_bid)}. After that, every new bid must beat the current highest by at least ${formatCurrency(auction.min_increment)}.`,
     },
     {
       title: "Watch it live",
@@ -36,9 +37,9 @@ export function AuctionHowItWorksDialog({
     },
     {
       title: "Highest bid wins",
-      body: prize
-        ? `When the bidding window closes, whoever holds the highest bid wins. ${prize} Proceeds go straight into the event fund.`
-        : "When the bidding window closes, whoever holds the highest bid wins. Proceeds go straight into the event fund.",
+      body: auction.prize
+        ? `When the bidding window closes, whoever holds the highest bid wins. ${auction.prize}`
+        : "When the bidding window closes, whoever holds the highest bid wins.",
     },
   ];
 
@@ -46,15 +47,15 @@ export function AuctionHowItWorksDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>How the auction works</DialogTitle>
+          <DialogTitle>How {auction.title} works</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <img src={auctionImage} alt="" aria-hidden="true" className="h-20 w-20 shrink-0 object-contain" />
-            <p className="text-sm text-muted-foreground">
-              A quick walkthrough of how the online laddoo auction works, start to finish.
+          {auction.prize ? (
+            <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900">
+              <Gift className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+              {auction.prize}
             </p>
-          </div>
+          ) : null}
 
           <ol className="space-y-3">
             {steps.map((step, index) => (

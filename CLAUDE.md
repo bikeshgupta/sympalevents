@@ -152,75 +152,264 @@ database table.** To post a notice, add an entry and deploy.
 - More than one entry turns the dashboard card into an auto-rotating carousel
   (8s, pauses on hover/focus, dots + arrows). One entry renders as a static card.
 
-### Auction registration
+## Auctions
 
-An announcement can carry `auction: AnnouncementAuction` (an opens/closes window) and
-`art: "laddoo-auction"` (an illustration, mapped in `ART_IMAGES` in
-[announcements-card.tsx](src/features/dashboard/announcements-card.tsx)). When present,
-`<AuctionPanel>` renders below the notice with a **real, working registration flow** —
-bidding itself is a placeholder ("coming soon"); registration is not.
+Its own page at `/auctions` ([src/features/auctions/](src/features/auctions/)),
+**not** part of the dashboard notice card anymore. This is a real, multi-tenant
+feature: an event admin/committee member creates one or more auctions themselves —
+title, description, prize, starting bid, minimum increment, opens/closes time, an
+optional image URL. **There is no static/hardcoded auction and no default content**
+— every field is entered by the person creating it, on purpose, because this app is
+not built for one specific event; any event created later gets its own empty auction
+list.
 
-- **Data model:** [supabase/migrations/009_auction_registrations.sql](supabase/migrations/009_auction_registrations.sql)
-  adds `auction_registrations`, keyed by `(event_id, auction_id, user_id)`. `auction_id`
-  is an announcement's `id` string — the auction is defined in the data file, not a DB
-  row, so there is no FK to it.
-  **This migration has not necessarily been run against the live Supabase project** —
-  check before assuming the feature works end-to-end; run it in the Supabase SQL editor
-  the same way as any other file under `supabase/migrations/`.
-- **RLS is enabled with zero policies, deliberately.** This app authenticates through
-  Firebase, not Supabase Auth — the browser's Supabase client never holds a session, so
-  `auth.uid()` never resolves for it. A policy written against `auth.uid()` here would
-  be dead code. All access goes through `/api/auction-registrations`
-  ([api/auction-registrations.ts](api/auction-registrations.ts)), which verifies the
-  Firebase ID token via `requireAppUser()` and writes with the service-role client
-  (bypasses RLS by design). **Do not add anon/authenticated policies to this table**
-  expecting a direct browser `supabase.from("auction_registrations")` call to work —
-  it won't, and it shouldn't; that would remove the only enforcement this table has.
-- New local API routes must be added to `localApiRoutes` in `vite.config.ts` or the dev
-  server 404s them silently via `next()`.
-- `useAuctionRegistration({ eventId, auctionId, signedIn })`
-  ([src/lib/auction-registration.ts](src/lib/auction-registration.ts)) wraps the GET
-  (status + registrant count) and the register/cancel mutations. The query is `enabled`
-  only when signed in, matching the `MyResponsibilities` pattern — signed-out visitors
-  never call the endpoint.
-- **Bidding is now real too**, built on top of registration exactly as noted above:
-  [supabase/migrations/010_auction_bids.sql](supabase/migrations/010_auction_bids.sql)
-  adds an append-only `auction_bids` ledger (never updated or deleted — the history
-  *is* the record); [api/auction-bids.ts](api/auction-bids.ts) is the only way to
-  write to it. Same RLS-with-zero-policies stance as `auction_registrations`, same
-  reasoning — do not add client policies to this table either.
-  - **Rules are enforced server-side, not just in the UI**: first bid ≥ ₹5,000
-    (`STARTING_BID`), every bid after ≥ previous highest + ₹100 (`MIN_INCREMENT`);
-    the bidder must have an active `auction_registrations` row for that
-    event+auction; and the bid must fall inside the bidding window.
-  - **The bidding window is checked against the real `events.start_date`**, not
-    trusted from the client. `AUCTION_WINDOWS` in `api/auction-bids.ts` mirrors the
-    day-offset/time pair from that auction's entry in `src/data/announcements.ts`
-    (e.g. `laddoo-auction-day-3`: opens day-offset 0 at 08:30, closes day-offset 2 at
-    10:00) — **the two must be kept in sync by hand**; there is no single source of
-    truth for it today. `eventZoneTimestamp`/`addDays` in that file are a deliberate
-    mirror of `toEventZoneTimestamp`/`getEventDays` in
-    [dashboard-utils.ts](src/features/dashboard/dashboard-utils.ts) — verified to
-    produce identical timestamps for the current event, but re-verify if the event's
-    day-count logic ever changes.
-  - **Known gap:** reading the current highest bid and validating a new one against
-    it is not atomic (no DB-level lock or unique-amount constraint) — two people
-    bidding within the same instant could both pass validation. Low-stakes for a
-    community auction's bid volume; a real fix would move the check-and-insert into
-    a Postgres function.
-  - `useAuctionBids({ eventId, auctionId, signedIn, live })`
-    ([src/lib/auction-bids.ts](src/lib/auction-bids.ts)) polls every 3s while `live`
-    is true (bidding actually open) and off otherwise — there is no realtime
-    subscription, because the same RLS lockdown that protects this table from direct
-    writes also blocks the anon client from subscribing to Realtime changes on it.
-  - The bid graph/history live in
-    [auction-detail-dialog.tsx](src/features/dashboard/auction-detail-dialog.tsx),
-    which also holds the "How it works" view (image is reused across both, content
-    swaps). **This file is lazy-loaded** (`React.lazy` in `announcements-card.tsx`) —
-    it pulls in `recharts`, ~385KB, and there is no reason to ship that to every
-    dashboard visitor who never opens the dialog. Keep any future chart-heavy
-    addition here, or in another lazy boundary — don't let a static import drag
-    `recharts` back into the main bundle.
+(Earlier versions of this feature lived inside the dashboard's News & Announcements
+card, driven by a hardcoded "laddoo auction" entry in `src/data/announcements.ts`.
+That entry, and the announcement fields that only existed to support it
+(`art`, `auction`, `prize`), are gone. `announcements.ts` is plain text notices again.)
+
+### Data model
+
+Three tables, in dependency order:
+
+1. **`auctions`** ([009_auctions.sql](supabase/migrations/009_auctions.sql)) — the
+   auction itself: `title`, `tag`, `description`, `prize`, `image_url` (all
+   user-entered), `starting_bid`, `min_increment`, `opens_at`/`closes_at`
+   (`timestamptz`, absolute — not day-offsets from the event start; that hack existed
+   only because the old system derived a window from a hardcoded notice, and is gone
+   now that an admin picks the actual date/time), `status` (`active`/`cancelled`),
+   `created_by`, and `is_published` (added by
+   [013_auction_publish_status.sql](supabase/migrations/013_auction_publish_status.sql)
+   — see "Publish / unpublish" below).
+2. **`auction_registrations`** ([010_auction_registrations.sql](supabase/migrations/010_auction_registrations.sql))
+   — `auction_id` is now a real `uuid references public.auctions(id)`, not a free-text
+   string matching an announcement's id like it used to be.
+3. **`auction_bids`** ([011_auction_bids.sql](supabase/migrations/011_auction_bids.sql))
+   — same FK fix. Append-only; bids are never updated or deleted, the history *is* the
+   record.
+
+**Migrations 009–011 and 013 are confirmed applied to the live Supabase project**
+(verified directly against it — `is_published` is present and populated on the real
+auction in production). 012 (the storage bucket) was verified live earlier the same
+way. Still worth a spot-check with the same technique before assuming any *new*
+migration in this file has been run — none of them run automatically.
+
+**RLS is enabled on all three with zero policies, deliberately**, the same reasoning
+repeated in each migration's comments: this app authenticates through Firebase, not
+Supabase Auth, so the browser's Supabase client never holds a session and `auth.uid()`
+never resolves for it — a policy written against it would be dead code. All access
+goes through `/api/auctions` (see "One function, three resources" below), which
+uses the service-role client (bypasses RLS by design). **Do not add anon/authenticated
+policies to any of the three** expecting a direct browser `supabase.from(...)` call to
+work — it won't, and it shouldn't; that would remove the only enforcement these tables
+have.
+
+### One function, three resources
+
+Auctions, bids and registrations are all served by **`api/auctions.ts`**, dispatched
+on a `?resource=` query param: nothing (auction CRUD), `bids`, or `registrations`.
+The bid and registration handlers live in
+[api/_lib/auction-bids.ts](api/_lib/auction-bids.ts) and
+[api/_lib/auction-registrations.ts](api/_lib/auction-registrations.ts) as named
+exports.
+
+**This is a deployment constraint, not a style preference.** Vercel turns every file
+directly under `api/` into its own serverless function, and the plan caps how many one
+deployment may have — this project sits right at that ceiling, and adding these as two
+more top-level routes made the deploy fail at `Deploying outputs...` with a clean
+build and no error in the build log. Anything under `api/_lib/` is underscore-prefixed
+and therefore never routed, so it costs nothing.
+
+So: **before adding a file under `api/`, count what is already there.** If the count is
+at the cap, fold the new handler into a related route the same way instead of adding a
+function. Dispatch reads only the query string, never the body, so each handler still
+consumes its own body normally.
+
+New local API routes must be added to `localApiRoutes` in `vite.config.ts` or the dev
+server 404s them silently via `next()`.
+
+### Permissions
+
+- **Browsing auctions, and watching one (chart, bid history, current bid) is public** —
+  `auctions` is in `publicPageKeys` ([page-access.ts](src/lib/page-access.ts)) and
+  `GET /api/auctions` and `GET /api/auctions?resource=bids` need no token. `useAuctionBids`'s query
+  has no `signedIn` gate and passes `{ requireAuth: false }` to `apiFetch` for that
+  reason — without it, `apiFetch`'s own default refuses to even attempt the request
+  without a token, which would silently defeat the point.
+- **Registering, and placing a bid, need a signed-in user** — enforced server-side
+  (`requireAppUser` inside the relevant branches) and by `apiFetch`'s default
+  `requireAuth` behavior on those mutations.
+- **Creating, editing, and cancelling an auction need `event_members.role` of `admin`
+  or `committee`** — `requireCommittee()` in [api/auctions.ts](api/auctions.ts) checks
+  this server-side on every `POST`/`PATCH`, not just via a hidden button client-side.
+  `AuctionsPage` reads the same role via `useEventAccess()` purely to decide whether to
+  show the "Create Auction" button and each card's edit/cancel icons — the actual
+  authorization is the server check, the UI gate is only for not showing controls that
+  would just fail.
+- **The committee-only registrant list works the same way**: `GET
+  /api/auctions?resource=registrations` checks the requester's role and includes `registrants`
+  (full list, with phone numbers, for coordinating with bidders) only for admin/
+  committee; everyone else gets `registrants: null`. This surfaces as a callout inside
+  `AuctionDetailsPanel`. Do not add a client-side-only gate around registrant data —
+  the server decides who gets it.
+
+### Publish / unpublish
+
+`is_published` (boolean, default `true`) is separate from `status`
+(`active`/`cancelled`) and controls a different thing: **cancelling ends an auction
+for good; unpublishing just pulls it off the dashboard and the header bell while
+leaving it fully intact** — still on `/auctions`, still manageable, still
+bookmarkable, registrations/bids untouched. Use it for "not ready to announce this
+yet" or "pull this off the homepage for now."
+
+- **`PATCH /api/auctions` with `action: "publish"` / `"unpublish"`**
+  ([api/auctions.ts](api/auctions.ts)) — same `requireEventCommittee` check as every
+  other write on this table, flips `is_published`, returns the updated row.
+- **`AuctionCard`**'s manage-icon row (visible when `canManage`) gets a third icon
+  (Eye/EyeOff) alongside Edit/Cancel, wired to `useAuctions().setPublished`. An
+  unpublished auction also gets an amber "Unpublished" badge next to its tag —
+  **only shown to `canManage` viewers**; a resident with no management rights simply
+  never sees it (and never sees the auction at all, once it's off the dashboard/bell —
+  it stays reachable at `/auctions` for committee, not for everyone).
+- **`canManage` also gates the committee-only registrant list** inside
+  `AuctionDetailsPanel` (names + phone numbers) — it used to derive that from
+  `useEventAccess()` itself, now it takes `canManage` as a prop from `AuctionCard` so
+  the same switch that hides Edit/Cancel/Publish on the dashboard also hides the
+  registrant list there, even for a committee member. That list stays visible only on
+  `/auctions`, never on the dashboard — a deliberate ask, not an oversight.
+- **`/auctions` itself always shows every auction, published or not** — it's the
+  management view; publishing/unpublishing only affects the two *curated* surfaces
+  below. `publishedAuctions(auctions)` ([src/lib/auctions.ts](src/lib/auctions.ts))
+  is the one filter both of those surfaces share.
+- **Dashboard**: `DashboardAuctions` ([src/features/dashboard/dashboard-auctions.tsx](src/features/dashboard/dashboard-auctions.tsx))
+  sits directly below `EventHero` in `DashboardPage` — the slot the single hardcoded
+  Laddoo auction used to occupy before this became a multi-tenant feature. It is the
+  same card chrome the production announcements card uses (pulse-dot + `CardTitle` +
+  a `Gavel` in the header), wrapping **one `AuctionCard` at a time** with `spotlight`
+  on and `canManage={false}` — view/register/bid only; editing, cancelling,
+  publishing and the registrant list stay on `/auctions`. With more than one published
+  auction, the production dots-left / arrows-right row appears underneath (arrows at
+  40px rather than production's 32px, to clear the tap-target floor). Manual only —
+  deliberately **no auto-rotate** like the announcements carousel has, since
+  auto-advancing out from under someone mid-bid would blow away a half-typed amount.
+  No "View all" link to `/auctions` — the sidebar/bottom-nav already has an Auctions
+  entry. Renders nothing at all when there are no published auctions — no empty-state
+  card competing for space on a page that already has one.
+- **Header bell**: `AnnouncementsBell` ([src/components/layout/announcements-bell.tsx](src/components/layout/announcements-bell.tsx))
+  fetches the same `useAuctions(event?.id)` and lists `publishedAuctions(...)` in a
+  second "Auctions" section under "News & Announcements," each row linking to
+  `/auctions`. The unread pulse-dot count now includes non-closed published auctions
+  alongside active announcements, so a live/upcoming auction contributes to the badge
+  the same way a notice does.
+
+### Bid rules, per auction
+
+First bid ≥ that auction's `starting_bid`; every bid after ≥ previous highest +
+that auction's `min_increment` — both read from the `auctions` row in
+`api/_lib/auction-bids.ts`, not global constants (an earlier version hardcoded
+₹2,501/₹100 for everyone; every auction now sets its own). The bidder must have an
+active `auction_registrations` row for that auction, and the bid must fall inside
+`opens_at`/`closes_at` — compared directly against those columns, no more
+day-offset/timezone mirror math to keep in sync with a client-side file.
+
+**Known gap:** reading the current highest bid and validating a new one against it is
+not atomic (no DB-level lock or unique-amount constraint) — two people bidding within
+the same instant could both pass validation. Low-stakes for a community auction's bid
+volume; a real fix would move the check-and-insert into a Postgres function.
+
+### Client structure
+
+- `useAuctions(eventId)` ([src/lib/auctions.ts](src/lib/auctions.ts)) — list +
+  create/update/cancel/`setPublished` mutations. `auctionRuntimeStatus(auction, now)`
+  derives `"upcoming" | "live" | "closed"` from `opens_at`/`closes_at` — this replaced
+  the old `auctionStatus()` that lived in `src/lib/announcements.ts` (deleted along
+  with the rest of the announcement-driven auction code). `publishedAuctions(auctions)`
+  is the shared filter the dashboard and bell both use (see "Publish / unpublish").
+- `AuctionsPage` ([auctions-page.tsx](src/features/auctions/auctions-page.tsx)) owns a
+  single ticking `now` (1s while any auction is live, 30s otherwise) shared by every
+  `AuctionCard` in the grid — not one timer per card.
+- `AuctionCard` ([auction-card.tsx](src/features/auctions/auction-card.tsx)) is what
+  `AuctionPanel` used to be, generalized to take an `Auction` row instead of an
+  announcement. **It deliberately keeps the exact visual treatment that shipped to
+  production** in `aeb02bd` (the last commit before this became multi-event) — that
+  design was reviewed and released, and an earlier attempt to "simplify" it here was
+  rejected outright. Diff against `git show origin/master:src/features/dashboard/announcements-card.tsx`
+  before changing any of it:
+  - the panel is a `rounded-lg border p-2.5` block — **not** a `Card`, since both
+    callers frame it themselves and a `Card` inside a `Card` doubles the border;
+  - a fixed `grid-cols-[3fr_2fr]` split, copy left and the auction's image right at
+    `max-h-36 object-contain` (full width when there is no image — no placeholder art);
+  - solid-primary tag pill with a `animate-pulse-soft` `Sparkles`, then a "Live now" /
+    "in 2 days" pill;
+  - under a `border-t border-primary/20` rule: the "Online auction" eyebrow, the
+    emerald pulse-ring status pill, the two-column Bidding opens/closes grid, the
+    "closes in …" line, the full-width `justify-between` outline toggle, and the
+    registration block.
+  - `spotlight` adds the `animate-gradient-pan` background and `animate-sheen` sweep.
+    Only `DashboardAuctions` passes it — one focal looping element per screen, so the
+    `/auctions` grid stays plain.
+  Auto-expands the details section the moment status becomes `"live"` and can still be
+  collapsed manually afterward. `onEdit`/`onCancel`/`onTogglePublish` are all optional
+  — only `AuctionsPage` (the management view) wires them; the dashboard's read-only
+  instance passes `canManage={false}` and none of the three.
+- `AuctionDetailsPanel` ([auction-details-panel.tsx](src/features/auctions/auction-details-panel.tsx))
+  holds the chart, bid history, place-bid form, and the committee registrant callout.
+  **Lazy-loaded** (`React.lazy` in `auction-card.tsx`) — it pulls in `recharts`,
+  ~385KB, and there is no reason to ship that to every visitor browsing the list who
+  never expands a card. Fully self-contained (calls `useSession`, `useEventAccess`,
+  `useAuctionRegistration`, `useAuctionBids` itself) rather than taking those as props
+  — keep any future chart-heavy addition inside this lazy boundary, don't let a static
+  import drag `recharts` back into the main bundle.
+- `AuctionHowItWorksDialog` ([auction-how-it-works-dialog.tsx](src/features/auctions/auction-how-it-works-dialog.tsx))
+  is a **separate, ordinary (eagerly-loaded) dialog**, deliberately not a second view
+  bundled inside the details panel, so opening it never pulls in `recharts`. Its copy
+  is generated from the specific `auction` passed in (starting bid, increment, prize)
+  — nothing hardcoded.
+- `AuctionFormDialog` ([auction-form-dialog.tsx](src/features/auctions/auction-form-dialog.tsx))
+  is create **and** edit — pass an `auction` prop to edit, omit it to create. Only
+  rendered for admin/committee (`AuctionsPage` conditionally mounts it). Its image field
+  is upload **or** paste — see below. A committee member with neither gets a generic
+  icon fallback in `AuctionCard`, never a hardcoded illustration.
+
+### Image uploads
+
+Real Supabase Storage, not a URL-only field — built generically on purpose (the ask
+that produced it was explicitly "later we will also need this for event photographs
+too"), so treat `/api/uploads` and `useImageUpload()` as shared infrastructure, not
+an auction-only detail.
+
+- **Bucket:** [012_uploads_bucket.sql](supabase/migrations/012_uploads_bucket.sql)
+  creates a single public bucket named `uploads` (`insert into storage.buckets`, not a
+  table migration — same "check whether this has actually been run" caveat as every
+  other migration here). Objects are organized by folder prefix:
+  `auctions/<uuid>.<ext>` today. Reads are public because the bucket itself is marked
+  `public: true` — no `storage.objects` RLS policy needed or present. **All writes go
+  through `/api/uploads`** ([api/uploads.ts](api/uploads.ts)) using the service-role
+  client, the same bypass-RLS pattern as every table in this app; do not add
+  anon/authenticated storage policies expecting a direct browser
+  `supabase.storage.from("uploads").upload(...)` call to work.
+- **Base64-in-JSON, not multipart.** The client reads the file with `FileReader` into a
+  data URL and posts it as a normal JSON field (`useImageUpload()` in
+  [src/lib/uploads.ts](src/lib/uploads.ts)); the server decodes it back to a `Buffer`.
+  This was a deliberate simplicity choice — every other API route in this app is
+  already plain JSON (`getRequestBody` just does `JSON.parse`), and adding multipart
+  parsing for one feature would mean a new dependency and a second body-handling path.
+  **The tradeoff is a hard 4MB file cap** (`MAX_BYTES`, enforced both client- and
+  server-side) — base64 inflates a file by ~1/3 inside the JSON body, and serverless
+  functions have body-size limits to stay under. Fine for a single photo; if this grows
+  into a real photo-gallery feature with many/large images, switch to true multipart or
+  a signed direct-to-storage upload instead of raising this cap.
+- **Folder allowlist, not a free-text path.** `ALLOWED_FOLDERS` in `api/uploads.ts` is
+  checked server-side — the client cannot write to an arbitrary storage path. Add a new
+  entry there (and decide its own permission check, see next point) before wiring up a
+  second upload surface.
+- **Permission:** every folder currently requires `event_members.role` of `admin` or
+  `committee`, via the same `requireEventCommittee()` now shared in
+  [api/_lib/server.ts](api/_lib/server.ts) (also used by `api/auctions.ts` — it used to
+  be a local copy there; promoted to the shared file when uploads needed the identical
+  check, to avoid a second copy drifting out of sync). **When event-photo upload is
+  built, decide its permission model explicitly** rather than assuming every member can
+  upload just because auctions required committee.
 
 ## Motion
 

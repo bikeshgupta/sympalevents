@@ -1,11 +1,10 @@
--- Registration for online auctions run from the dashboard (e.g. the laddoo
--- auction). The auction itself is defined in the app's announcements data
--- file, not a database row, so registrations are keyed by a stable
--- `auction_id` string (an announcement's `id`) rather than a foreign key.
+-- Registration for online auctions (see 009_auctions.sql for the auction
+-- table this depends on - auctions are user-created rows now, so
+-- registrations key against a real auction id rather than a free-text one).
 create table if not exists public.auction_registrations (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,
-  auction_id text not null,
+  auction_id uuid not null references public.auctions(id) on delete cascade,
   user_id uuid not null references public.app_users(id) on delete cascade,
   display_name text not null,
   flat_no text,

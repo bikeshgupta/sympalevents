@@ -1,13 +1,27 @@
-import { Check, Gavel, Gift, HelpCircle, TrendingUp, Users } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Check, Gavel, Gift, HelpCircle, LogIn, ShieldCheck, TrendingUp, Users } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
-import auctionImage from "@/features/dashboard/auction.png";
-import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
-import type { AuctionRegistration } from "@/lib/auction-registration";
 import { useAuctionBids, type AuctionBid } from "@/lib/auction-bids";
-import type { AuctionStatus, ResolvedAnnouncement } from "@/lib/announcements";
+import { useAuctionRegistration } from "@/lib/auction-registration";
+import type { Auction, AuctionStatus } from "@/lib/auctions";
+import { signInWithGoogle, useSession } from "@/lib/auth";
 import { formatCurrency } from "@/lib/utils";
+
+function formatDateTime(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
+}
 
 function formatBidTime(value: string) {
   const parsed = new Date(value);
@@ -90,35 +104,53 @@ function BidChart({ bids }: { bids: AuctionBid[] }) {
 }
 
 /**
- * The live bid chart, history, and place-bid form. Rendered inline (inside a
- * collapsible section in AuctionPanel), not as a dialog - "How does this
- * work?" opens a separate, lighter AuctionHowItWorksDialog instead of being a
+ * The live bid chart, history, and place-bid form for one auction. Rendered
+ * inline inside a collapsible section on the Auctions page, not as a dialog -
+ * "How does this work?" opens a separate, lighter dialog instead of being a
  * second view bundled in here, so that dialog never pulls in recharts.
+ *
+ * Fully self-contained: derives sign-in and registration itself rather than
+ * taking them as props, since it is lazy-loaded on its own and both are
+ * cheap (react-query dedupes against whatever the parent card already
+ * fetched). `canManage` is the exception - it comes from the parent
+ * `AuctionCard` (which the dashboard and /auctions set differently) rather
+ * than being re-derived here, so the committee-only registrant list follows
+ * the same on/off switch as the card's Edit/Cancel/Publish controls: shown
+ * on /auctions, never on the dashboard, even for a committee member.
  */
 export function AuctionDetailsPanel({
-  announcement,
-  eventId,
+  auction,
   status,
-  signedIn,
-  registration,
+  canManage,
   onShowHowItWorks,
 }: {
-  announcement: ResolvedAnnouncement;
-  eventId?: string;
-  status: AuctionStatus | null;
-  signedIn: boolean;
-  registration: AuctionRegistration | null;
+  auction: Auction;
+  status: AuctionStatus;
+  canManage: boolean;
   onShowHowItWorks: () => void;
 }) {
   const isLive = status === "live";
+  const { data: session } = useSession();
+  const signedIn = Boolean(session?.user);
+  const queryClient = useQueryClient();
+
+  // Viewing is public - anyone can watch the chart and history without
+  // signing in. Only placing a bid needs an identity.
   const { bids, highest, minNextBid, bidderCount, isLoading, isError, placeBid } = useAuctionBids({
-    eventId,
-    auctionId: announcement.id,
-    signedIn,
+    eventId: auction.event_id,
+    auctionId: auction.id,
     live: isLive,
   });
+  const { registration, registrants, isLoading: isRegistrationLoading } = useAuctionRegistration({
+    eventId: auction.event_id,
+    auctionId: auction.id,
+    signedIn,
+  });
+
   const [amount, setAmount] = useState(minNextBid);
   const [error, setError] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   // Keeps the field at least at the true minimum once it is known, and bumps
   // it up again if someone else's bid raises the floor while this is open -
@@ -132,38 +164,65 @@ export function AuctionDetailsPanel({
     setError(null);
     try {
       await placeBid.mutateAsync(amount);
-      setAmount(minNextBid + 100);
+      setAmount(minNextBid + auction.min_increment);
     } catch (item) {
       setError(item instanceof Error ? item.message : "Unable to place bid");
     }
   }
 
+  async function handleSignIn() {
+    setSignInError(null);
+    setSigningIn(true);
+    try {
+      await signInWithGoogle();
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+    } catch (item) {
+      setSignInError(item instanceof Error ? item.message : "Sign-in failed");
+    } finally {
+      setSigningIn(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-4">
-        <img src={auctionImage} alt="" aria-hidden="true" className="h-20 w-20 shrink-0 object-contain" />
-        <div className="min-w-0">
-          <p className="text-sm text-muted-foreground">{announcement.body}</p>
-          {announcement.auctionWindow ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Bidding {formatEventDate(announcement.auctionWindow.opensDate)} –{" "}
-              {formatEventDate(announcement.auctionWindow.closesDate)}, {formatEventTime(announcement.auctionWindow.opensTime)}{" "}
-              to {formatEventTime(announcement.auctionWindow.closesTime)}
-            </p>
-          ) : null}
-        </div>
-      </div>
+      {auction.description ? <p className="text-sm text-muted-foreground">{auction.description}</p> : null}
+      <p className="text-xs text-muted-foreground">
+        Bidding {formatDateTime(auction.opens_at)} to {formatDateTime(auction.closes_at)}
+      </p>
 
-      {announcement.prize ? (
+      {auction.prize ? (
         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900">
           <Gift className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
-          {announcement.prize}
+          {auction.prize}
         </p>
       ) : null}
 
-      {!signedIn ? (
-        <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Sign in to see live bidding details.</p>
-      ) : isLoading ? (
+      {canManage ? (
+        <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {isRegistrationLoading ? "Checking registrations…" : `${registrants?.length ?? 0} residents registered`}
+            </p>
+            <p className="text-xs text-muted-foreground">Visible to committee only.</p>
+            {registrants?.length ? (
+              <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                {registrants.map((entry) => (
+                  <li key={entry.id} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="truncate">
+                      {entry.display_name}
+                      {entry.flat_no ? ` · ${entry.flat_no}` : ""}
+                    </span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">{entry.phone}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {isLoading ? (
         <div className="h-40 animate-pulse rounded-md bg-muted" aria-hidden="true" />
       ) : isError ? (
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -191,36 +250,43 @@ export function AuctionDetailsPanel({
 
           <BidChart bids={bids} />
 
-          {isLive ? (
-            registration ? (
-              <form className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3" onSubmit={handleSubmit}>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor="bid-amount">
-                    Your bid (min {formatCurrency(minNextBid)})
-                  </label>
-                  <input
-                    id="bid-amount"
-                    type="number"
-                    min={minNextBid}
-                    step={100}
-                    value={amount}
-                    onChange={(event) => setAmount(Number(event.target.value))}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-                <Button type="submit" disabled={placeBid.isPending}>
-                  <Gavel className="h-4 w-4" aria-hidden="true" />
-                  {placeBid.isPending ? "Placing bid..." : "Place bid"}
-                </Button>
-              </form>
-            ) : (
-              <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-                Register for this auction to place a bid.
-              </p>
-            )
-          ) : (
+          {!isLive ? (
             <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
               {status === "upcoming" ? "Bidding hasn't opened yet." : "Bidding has closed for this auction."}
+            </p>
+          ) : !signedIn ? (
+            <div className="space-y-2 rounded-md border bg-muted/40 p-3">
+              <p className="text-sm text-muted-foreground">Sign in to place a bid.</p>
+              <Button size="sm" onClick={() => void handleSignIn()} disabled={signingIn}>
+                <LogIn className="h-4 w-4" aria-hidden="true" />
+                {signingIn ? "Opening Google..." : "Sign in to bid"}
+              </Button>
+              {signInError ? <p className="text-xs text-destructive">{signInError}</p> : null}
+            </div>
+          ) : registration ? (
+            <form className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3" onSubmit={handleSubmit}>
+              <div className="min-w-0 flex-1 space-y-1">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor={`bid-amount-${auction.id}`}>
+                  Your bid (min {formatCurrency(minNextBid)})
+                </label>
+                <input
+                  id={`bid-amount-${auction.id}`}
+                  type="number"
+                  min={minNextBid}
+                  step={auction.min_increment}
+                  value={amount}
+                  onChange={(event) => setAmount(Number(event.target.value))}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+              <Button type="submit" disabled={placeBid.isPending}>
+                <Gavel className="h-4 w-4" aria-hidden="true" />
+                {placeBid.isPending ? "Placing bid..." : "Place bid"}
+              </Button>
+            </form>
+          ) : (
+            <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+              Register for this auction to place a bid.
             </p>
           )}
           {error ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
