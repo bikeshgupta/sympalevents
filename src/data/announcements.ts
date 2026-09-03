@@ -14,27 +14,13 @@
  * - `time`  : optional "HH:mm" in event time (Asia/Kolkata).
  * - `tone`  : "spotlight" is the highlighted hero treatment - use it sparingly,
  *             for the one thing you most want people to see.
+ *
+ * Auctions used to be a notice field here (`art`/`auction`/`prize`) but are
+ * now their own user-created data - see src/features/auctions and the
+ * `auctions` database table. This file is for plain text notices only.
  */
 
 export type AnnouncementTone = "spotlight" | "info" | "alert";
-
-/** Optional illustration rendered beside a notice. Add a case here and in
- *  announcements-card.tsx to introduce another scene. */
-export type AnnouncementArt = "laddoo-auction";
-
-/**
- * An online bidding window. Days are resolved against the event, same as a
- * notice's own `day`, so the window follows if the event dates move. Give a
- * `date` ("yyyy-mm-dd") instead to pin it to a fixed calendar day.
- */
-export type AnnouncementAuction = {
-  opensDay?: string;
-  opensDate?: string;
-  opensTime: string;
-  closesDay?: string;
-  closesDate?: string;
-  closesTime: string;
-};
 
 export type Announcement = {
   id: string;
@@ -46,28 +32,8 @@ export type Announcement = {
   date?: string;
   time?: string;
   location?: string;
-  art?: AnnouncementArt;
-  auction?: AnnouncementAuction;
-  /** Shown as a highlighted "What you'll get" line on the auction's detail view. */
-  prize?: string;
   /** Optional: limit a notice to one event. Leave undefined to show for all. */
   eventId?: string;
 };
 
-export const announcements: Announcement[] = [
-  {
-    id: "laddoo-auction-day-3",
-    tag: "Laddoo Auction",
-    title: "Laddoo Auction on Day 3",
-    body: "Bidding for Bappa's laddoo happens online, right here. Bid generously - every rupee raised goes straight into the event fund.",
-    tone: "spotlight",
-    art: "laddoo-auction",
-    prize: "You'll get the Bappa laddoo, a pure silver Ganesha idol, and lots of blessings.",
-    auction: {
-      opensDay: "Day 1",
-      opensTime: "08:30",
-      closesDay: "Day 3",
-      closesTime: "10:00",
-    },
-  },
-];
+export const announcements: Announcement[] = [];

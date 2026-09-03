@@ -129,6 +129,26 @@ export async function requireEventAdmin(eventId: string, userId: string) {
   }
 }
 
+/** Admin OR committee - the bar for auction management and (so far) uploads.
+ *  Shared so every caller checks the same role set the same way. */
+export async function requireEventCommittee(eventId: string, userId: string) {
+  const supabase = assertServiceSupabase();
+  const { data, error } = await supabase
+    .from("event_members")
+    .select("role")
+    .eq("event_id", eventId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (data?.role !== "admin" && data?.role !== "committee") {
+    const denied = new Error("Only event admins or committee members can perform this action");
+    Object.assign(denied, { statusCode: 403 });
+    throw denied;
+  }
+}
+
 export function handleApiError(res: any, error: unknown) {
   const item = error as { message?: string; statusCode?: number; code?: string };
   console.error("API error", item);

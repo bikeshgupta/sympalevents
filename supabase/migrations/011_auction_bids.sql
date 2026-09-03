@@ -1,10 +1,10 @@
--- Append-only bid ledger for online auctions (see 009_auction_registrations.sql
--- for the registration table this depends on). Bids are never updated or
--- deleted - the history is the record.
+-- Append-only bid ledger for online auctions (see 009_auctions.sql and
+-- 010_auction_registrations.sql for the tables this depends on). Bids are
+-- never updated or deleted - the history is the record.
 create table if not exists public.auction_bids (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,
-  auction_id text not null,
+  auction_id uuid not null references public.auctions(id) on delete cascade,
   user_id uuid not null references public.app_users(id) on delete cascade,
   display_name text not null,
   flat_no text,

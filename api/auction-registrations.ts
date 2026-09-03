@@ -33,7 +33,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return;
       }
 
-      const [mineResult, countResult] = await Promise.all([
+      const [mineResult, countResult, memberResult] = await Promise.all([
         supabase
           .from("auction_registrations")
           .select("id,display_name,flat_no,phone,status,created_at")
@@ -47,15 +47,45 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           .eq("event_id", eventId)
           .eq("auction_id", auctionId)
           .eq("status", "registered"),
+        supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", appUser.id).maybeSingle(),
       ]);
 
       if (mineResult.error) throw mineResult.error;
       if (countResult.error) throw countResult.error;
+      if (memberResult.error) throw memberResult.error;
 
       const mine = mineResult.data;
+      const role = memberResult.data?.role ?? null;
+      const isCommittee = role === "admin" || role === "committee";
+
+      // Full registrant details (including phone, for coordinating with
+      // bidders) are only ever included for admins/committee - checked here,
+      // server-side, not just hidden in the UI for everyone else.
+      let registrants: Array<{
+        id: string;
+        display_name: string;
+        flat_no: string | null;
+        phone: string;
+        created_at: string;
+      }> | null = null;
+
+      if (isCommittee) {
+        const { data: allRegistrants, error: registrantsError } = await supabase
+          .from("auction_registrations")
+          .select("id,display_name,flat_no,phone,created_at")
+          .eq("event_id", eventId)
+          .eq("auction_id", auctionId)
+          .eq("status", "registered")
+          .order("created_at", { ascending: true });
+
+        if (registrantsError) throw registrantsError;
+        registrants = allRegistrants ?? [];
+      }
+
       sendJson(res, 200, {
         registration: mine && mine.status === "registered" ? mine : null,
         count: countResult.count ?? 0,
+        registrants,
       });
       return;
     }

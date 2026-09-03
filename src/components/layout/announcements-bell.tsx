@@ -1,19 +1,39 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Bell, Sparkles } from "lucide-react";
+import { Bell, Gavel, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
 import { activeAnnouncements, leadTimeLabel, resolveAnnouncements } from "@/lib/announcements";
+import { auctionRuntimeStatus, publishedAuctions, useAuctions } from "@/lib/auctions";
 import type { AppEvent } from "@/lib/event-data";
 
+function formatAuctionWindow(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
+}
+
 /**
- * The header bell. Counts notices that have not finished yet and lists them.
+ * The header bell. Counts notices that have not finished yet and lists them,
+ * plus published auctions (mirrors the dashboard's Auctions section).
  * Opening it re-reads the clock so lead times ("in 2 days") stay honest.
  */
 export function AnnouncementsBell({ event }: { event?: AppEvent }) {
   const [now, setNow] = useState(() => new Date());
   const items = useMemo(() => resolveAnnouncements(event), [event]);
   const active = activeAnnouncements(items, now);
+  const { auctions } = useAuctions(event?.id);
+  const auctionItems = useMemo(() => publishedAuctions(auctions), [auctions]);
+  const activeAuctions = auctionItems.filter((auction) => auctionRuntimeStatus(auction, now) !== "closed");
+  const unreadCount = active.length + activeAuctions.length;
 
   return (
     <DropdownMenu.Root onOpenChange={(open) => open && setNow(new Date())}>
@@ -22,10 +42,10 @@ export function AnnouncementsBell({ event }: { event?: AppEvent }) {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label={active.length ? `Notifications, ${active.length} unread` : "Notifications"}
+          aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
         >
           <Bell className="h-4 w-4" aria-hidden="true" />
-          {active.length ? (
+          {unreadCount ? (
             <span className="absolute right-1.5 top-1.5 flex h-2.5 w-2.5" aria-hidden="true">
               <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-primary" />
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
@@ -83,6 +103,49 @@ export function AnnouncementsBell({ event }: { event?: AppEvent }) {
           ) : (
             <p className="px-2 py-4 text-sm text-muted-foreground">No announcements right now.</p>
           )}
+
+          {auctionItems.length ? (
+            <>
+              <p className="mt-2 px-2 py-2 text-sm font-semibold">Auctions</p>
+              <DropdownMenu.Separator className="my-1 h-px bg-border" />
+              <div className="max-h-80 space-y-1 overflow-y-auto">
+                {auctionItems.map((auction) => {
+                  const status = auctionRuntimeStatus(auction, now);
+                  const isLive = status === "live";
+                  const isClosed = status === "closed";
+
+                  return (
+                    <DropdownMenu.Item key={auction.id} asChild>
+                      <Link
+                        to="/auctions"
+                        className={`block rounded-sm px-2 py-2 outline-none hover:bg-muted focus-visible:bg-muted ${isClosed ? "opacity-60" : ""}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Gavel
+                            className={`h-3.5 w-3.5 shrink-0 ${isClosed ? "text-muted-foreground" : "text-primary"}`}
+                            aria-hidden="true"
+                          />
+                          <span className="text-xs font-semibold uppercase tracking-wide text-primary">{auction.tag}</span>
+                          {isLive ? (
+                            <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                              Live
+                            </span>
+                          ) : isClosed ? (
+                            <span className="ml-auto text-xs text-muted-foreground">Closed</span>
+                          ) : (
+                            <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                              Opens {formatAuctionWindow(auction.opens_at)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm font-medium leading-snug">{auction.title}</p>
+                      </Link>
+                    </DropdownMenu.Item>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

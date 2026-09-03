@@ -19,6 +19,7 @@ import { AnimatedNumber } from "@/components/shared/animated-number";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AnnouncementsCard } from "@/features/dashboard/announcements-card";
+import { DashboardAuctions } from "@/features/dashboard/dashboard-auctions";
 import {
   calculateFundingProgress,
   formatCurrencyCompact,
@@ -112,6 +113,7 @@ export function DashboardPage() {
         source={data.source}
         fallbackReason={data.fallbackReason}
       />
+      <DashboardAuctions eventId={event.id} />
       <AnnouncementsCard event={event} now={now} />
       <section className="grid gap-4 lg:grid-cols-[1fr_0.85fr]">
         <FinancialSummary

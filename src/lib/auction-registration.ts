@@ -10,7 +10,21 @@ export type AuctionRegistration = {
   created_at: string;
 };
 
-type RegistrationResponse = { registration: AuctionRegistration | null; count: number };
+export type Registrant = {
+  id: string;
+  display_name: string;
+  flat_no: string | null;
+  phone: string;
+  created_at: string;
+};
+
+type RegistrationResponse = {
+  registration: AuctionRegistration | null;
+  count: number;
+  /** Full registrant list with phone numbers - the server only ever includes
+   *  this for an admin/committee member of the event, null for everyone else. */
+  registrants: Registrant[] | null;
+};
 
 /**
  * Registration state for one auction (an announcement's `id`) within one
@@ -61,6 +75,8 @@ export function useAuctionRegistration({
   return {
     registration: query.data?.registration ?? null,
     count: query.data?.count ?? 0,
+    /** Non-null only for an admin/committee member - see the API. */
+    registrants: query.data?.registrants ?? null,
     isLoading: signedIn && Boolean(eventId) && query.isLoading,
     isError: query.isError,
     register,

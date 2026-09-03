@@ -19,44 +19,13 @@ type ApiResponse = {
   };
 };
 
-const STARTING_BID = 5000;
-const MIN_INCREMENT = 100;
-const KOLKATA_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-
-/**
- * Bidding windows, keyed by auction id (an announcement's `id`).
- *
- * The auction's schedule lives client-side in src/data/announcements.ts (see
- * the `auction` field on the matching entry) because announcements are a
- * plain data file, not a database table. This is a deliberate, minimal mirror
- * of just the two day-offsets and times needed to enforce "no bidding outside
- * the window" server-side - update BOTH places if the window ever changes.
- */
-const AUCTION_WINDOWS: Record<
-  string,
-  { opensDayOffset: number; opensTime: string; closesDayOffset: number; closesTime: string }
-> = {
-  "laddoo-auction-day-3": { opensDayOffset: 0, opensTime: "08:30", closesDayOffset: 2, closesTime: "10:00" },
-};
-
-/** Mirrors dashboard-utils.ts's toEventZoneTimestamp - event days are anchored to Asia/Kolkata. */
-function eventZoneTimestamp(dateStr: string, time: string) {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const [hours = 0, minutes = 0] = time.split(":").map(Number);
-  return Date.UTC(year, month - 1, day, hours, minutes, 0) - KOLKATA_OFFSET_MS;
-}
-
-function addDays(dateStr: string, days: number) {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const shifted = new Date(Date.UTC(year, month - 1, day + days));
-  return shifted.toISOString().slice(0, 10);
-}
-
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     const supabase = assertServiceSupabase();
-    const { appUser } = await requireAppUser(req);
 
+    // Reading bid history is public - anyone watching the auction can see the
+    // chart and who is bidding without signing in. Only placing a bid (below)
+    // needs a verified identity, so requireAppUser runs there instead of here.
     if (req.method === "GET") {
       const eventId = String(req.query?.eventId ?? "");
       const auctionId = String(req.query?.auctionId ?? "");
@@ -66,17 +35,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("auction_bids")
-        .select("id,display_name,flat_no,amount,created_at,user_id")
-        .eq("event_id", eventId)
-        .eq("auction_id", auctionId)
-        .order("created_at", { ascending: true });
+      const [bidsResult, auctionResult] = await Promise.all([
+        supabase
+          .from("auction_bids")
+          .select("id,display_name,flat_no,amount,created_at,user_id")
+          .eq("event_id", eventId)
+          .eq("auction_id", auctionId)
+          .order("created_at", { ascending: true }),
+        supabase.from("auctions").select("starting_bid,min_increment").eq("id", auctionId).maybeSingle(),
+      ]);
 
-      if (error) throw error;
+      if (bidsResult.error) throw bidsResult.error;
+      if (auctionResult.error) throw auctionResult.error;
+      if (!auctionResult.data) {
+        sendJson(res, 404, { error: "Auction not found" });
+        return;
+      }
 
-      const bidderCount = new Set((data ?? []).map((row) => row.user_id)).size;
-      const bids = (data ?? []).map((row) => ({
+      const startingBid = Number(auctionResult.data.starting_bid);
+      const minIncrement = Number(auctionResult.data.min_increment);
+
+      const bidderCount = new Set((bidsResult.data ?? []).map((row) => row.user_id)).size;
+      const bids = (bidsResult.data ?? []).map((row) => ({
         id: row.id,
         display_name: row.display_name,
         flat_no: row.flat_no,
@@ -88,13 +68,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       sendJson(res, 200, {
         bids,
         highest,
-        minNextBid: highest ? highest + MIN_INCREMENT : STARTING_BID,
+        minNextBid: highest ? highest + minIncrement : startingBid,
         bidderCount,
       });
       return;
     }
 
     if (req.method === "POST") {
+      const { appUser } = await requireAppUser(req);
       const body = (await getRequestBody(req)) as { eventId?: string; auctionId?: string; amount?: number };
       const eventId = String(body.eventId ?? "");
       const auctionId = String(body.auctionId ?? "");
@@ -109,23 +90,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return;
       }
 
-      const window = AUCTION_WINDOWS[auctionId];
-      if (!window) {
-        sendJson(res, 400, { error: "Bidding is not configured for this auction" });
+      const { data: auction, error: auctionError } = await supabase
+        .from("auctions")
+        .select("starting_bid,min_increment,opens_at,closes_at,status")
+        .eq("id", auctionId)
+        .eq("event_id", eventId)
+        .maybeSingle();
+
+      if (auctionError) throw auctionError;
+      if (!auction) {
+        sendJson(res, 404, { error: "Auction not found" });
+        return;
+      }
+      if (auction.status !== "active") {
+        sendJson(res, 400, { error: "This auction has been cancelled" });
         return;
       }
 
-      const { data: event, error: eventError } = await supabase
-        .from("events")
-        .select("start_date")
-        .eq("id", eventId)
-        .single();
-
-      if (eventError) throw eventError;
-
-      const opensAt = eventZoneTimestamp(addDays(event.start_date, window.opensDayOffset), window.opensTime);
-      const closesAt = eventZoneTimestamp(addDays(event.start_date, window.closesDayOffset), window.closesTime);
       const now = Date.now();
+      const opensAt = new Date(auction.opens_at).getTime();
+      const closesAt = new Date(auction.closes_at).getTime();
 
       if (now < opensAt) {
         sendJson(res, 400, { error: "Bidding hasn't opened yet" });
@@ -162,8 +146,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
       if (topBidError) throw topBidError;
 
+      const startingBid = Number(auction.starting_bid);
+      const minIncrement = Number(auction.min_increment);
       const highest = topBid ? Number(topBid.amount) : null;
-      const minNextBid = highest ? highest + MIN_INCREMENT : STARTING_BID;
+      const minNextBid = highest ? highest + minIncrement : startingBid;
 
       if (amount < minNextBid) {
         sendJson(res, 400, { error: `Minimum bid is ₹${minNextBid.toLocaleString("en-IN")}` });
@@ -185,7 +171,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
       if (insertError) throw insertError;
 
-      sendJson(res, 200, { bid: { ...bid, amount: Number(bid.amount) }, minNextBid: amount + MIN_INCREMENT });
+      sendJson(res, 200, { bid: { ...bid, amount: Number(bid.amount) }, minNextBid: amount + minIncrement });
       return;
     }
 
