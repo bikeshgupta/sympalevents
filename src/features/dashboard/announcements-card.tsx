@@ -1,9 +1,23 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, ChevronLeft, ChevronRight, Clock3, Gavel, LogIn, MapPin, Sparkles, TrendingUp, Users } from "lucide-react";
+import {
+  Bell,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Gavel,
+  LogIn,
+  MapPin,
+  Sparkles,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import auctionImage from "@/features/dashboard/auction.png";
+import { AuctionHowItWorksDialog } from "@/features/dashboard/auction-how-it-works-dialog";
 import { AuctionRegisterDialog } from "@/features/dashboard/auction-register-dialog";
 import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
 import type { AnnouncementArt } from "@/data/announcements";
@@ -21,11 +35,12 @@ import { usePrefersReducedMotion } from "@/lib/motion";
 
 const ROTATE_MS = 8000;
 
-// Recharts pulls in a real amount of weight (d3 internals) and this dialog is
-// opened by a minority of visitors, so it is only fetched on first open -
-// not paid for by everyone who loads the public dashboard.
-const AuctionDetailDialog = lazy(() =>
-  import("@/features/dashboard/auction-detail-dialog").then((mod) => ({ default: mod.AuctionDetailDialog })),
+// Recharts pulls in a real amount of weight (d3 internals). This panel is the
+// only thing that imports it, and it is only mounted once someone expands the
+// details section (or once bidding goes live, when it auto-expands) - not
+// paid for by every visitor who loads the public dashboard.
+const AuctionDetailsPanel = lazy(() =>
+  import("@/features/dashboard/auction-details-panel").then((mod) => ({ default: mod.AuctionDetailsPanel })),
 );
 
 /** Maps an announcement's `art` key to its illustration. Add an entry here
@@ -237,6 +252,14 @@ function AuctionPanel({
   eventId?: string;
 }) {
   const auctionWindow = announcement.auctionWindow;
+  // auctionStatus/closesInLabel handle a missing window internally (return
+  // null), so these are safe to compute before the early-return below and
+  // before any hooks that want to read isLive on first render.
+  const status = auctionStatus(announcement, now);
+  const closesIn = closesInLabel(announcement, now);
+  const isLive = status === "live";
+  const isClosed = status === "closed";
+
   const { data: session } = useSession();
   const signedIn = Boolean(session?.user);
   const queryClient = useQueryClient();
@@ -246,16 +269,19 @@ function AuctionPanel({
     signedIn,
   });
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailsExpanded, setDetailsExpanded] = useState(isLive);
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
 
-  if (!auctionWindow) return null;
+  // Once bidding goes live, the details panel (chart, current bid, place-bid
+  // form) opens itself - that is the moment people actually need it visible,
+  // not one more thing to click. It can still be collapsed manually afterward.
+  useEffect(() => {
+    if (isLive) setDetailsExpanded(true);
+  }, [isLive]);
 
-  const status = auctionStatus(announcement, now);
-  const closesIn = closesInLabel(announcement, now);
-  const isLive = status === "live";
-  const isClosed = status === "closed";
+  if (!auctionWindow) return null;
 
   async function handleSignInAndRegister() {
     setSignInError(null);
@@ -276,8 +302,11 @@ function AuctionPanel({
     await cancel.mutateAsync();
   }
 
+  // No border/side-padding on this wrapper - the notice card around it already
+  // has its own, and stacking a second inset just narrows the auction content
+  // for no benefit. A top rule + vertical spacing is enough separation.
   return (
-    <div className="relative mt-2.5 rounded-lg border border-primary/20 bg-background/70 p-3 backdrop-blur-sm">
+    <div className="relative mt-2.5 border-t border-primary/20 pt-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
           <Gavel className="h-3.5 w-3.5" aria-hidden="true" />
@@ -317,16 +346,44 @@ function AuctionPanel({
         <p className="mt-2 text-xs font-medium text-emerald-700">Bidding window closes in {closesIn}</p>
       ) : null}
 
+      {/* Collapsible, not a popup - open by default once bidding is live
+          (see the effect above), otherwise the visitor opts in. Full width at
+          every breakpoint (no sm:w-auto) so this bar spans the same width as
+          the title/image row above it, instead of shrinking to its label and
+          leaving the rest of the row empty on anything wider than a phone. */}
       <Button
         type="button"
         variant="outline"
         size="sm"
-        className="mt-2.5 w-full sm:w-auto"
-        onClick={() => setDetailOpen(true)}
+        className="mt-2.5 w-full justify-between"
+        onClick={() => setDetailsExpanded((current) => !current)}
+        aria-expanded={detailsExpanded}
+        aria-controls="auction-details-panel"
       >
-        <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
-        {isLive ? "View live bidding" : isClosed ? "View final results" : "Preview auction details"}
+        <span className="inline-flex items-center gap-1.5">
+          <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
+          {isLive ? "Live bidding details" : isClosed ? "Final results" : "Preview auction details"}
+        </span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 transition-transform ${detailsExpanded ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
       </Button>
+
+      {detailsExpanded ? (
+        <div id="auction-details-panel" className="mt-3 animate-fade-up border-t pt-3">
+          <Suspense fallback={<div className="h-40 animate-pulse rounded-md bg-muted" aria-hidden="true" />}>
+            <AuctionDetailsPanel
+              announcement={announcement}
+              eventId={eventId}
+              status={status}
+              signedIn={signedIn}
+              registration={registration}
+              onShowHowItWorks={() => setHowItWorksOpen(true)}
+            />
+          </Suspense>
+        </div>
+      ) : null}
 
       <div className="mt-3 border-t pt-3">
         {isClosed ? (
@@ -400,19 +457,7 @@ function AuctionPanel({
         defaultName={session?.user.name ?? ""}
         register={register}
       />
-      {detailOpen ? (
-        <Suspense fallback={null}>
-          <AuctionDetailDialog
-            open={detailOpen}
-            onOpenChange={setDetailOpen}
-            announcement={announcement}
-            eventId={eventId}
-            status={status}
-            signedIn={signedIn}
-            registration={registration}
-          />
-        </Suspense>
-      ) : null}
+      <AuctionHowItWorksDialog open={howItWorksOpen} onOpenChange={setHowItWorksOpen} prize={announcement.prize} />
     </div>
   );
 }

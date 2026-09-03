@@ -88,14 +88,16 @@ Every data surface implements four states, not one:
 `publicPageKeys` in [src/lib/page-access.ts](src/lib/page-access.ts) — currently
 `dashboard` and `budget` — render **without a session**. Anyone with the link sees them.
 
-**Standing decision:** the committee has chosen to show contributor names and flat
-numbers in the dashboard's Contributors tiles. That is deliberate — recognising
-contributors publicly is the point of the list. Do not "fix" it back to anonymous.
+**Standing decision:** the committee has chosen to show contributor and sponsor names
+and flat numbers in the dashboard's tabbed Contributions/Sponsors tiles (inside Funding
+Progress). That is deliberate — recognising them publicly is the point of the list. Do
+not "fix" it back to anonymous.
 
 What still applies:
 
-- Contact details and payment references are **not** for public pages. Names, flat
-  numbers, amounts, dates and status are cleared for the Contributors tiles only.
+- Contact details and payment references are **not** for public pages — a sponsor's
+  `contact` field is off-limits even though their name and amount are cleared. Names,
+  flat numbers, amounts, dates and status are cleared for those two tile tabs only.
 - Do not extend that clearance to other public surfaces by analogy. A new list of
   *who has not paid* is a different thing from a list of who gave most, and needs
   asking about first.

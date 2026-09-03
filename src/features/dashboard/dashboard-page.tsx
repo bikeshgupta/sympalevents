@@ -35,7 +35,7 @@ import {
   type TimelineStatus,
 } from "@/features/dashboard/dashboard-utils";
 import { apiFetch } from "@/lib/api";
-import type { AppEvent, ContributionRow, EventPlanRow, TaskRow } from "@/lib/event-data";
+import type { AppEvent, ContributionRow, EventPlanRow, SponsorRow, TaskRow } from "@/lib/event-data";
 import { useEventData } from "@/lib/event-data";
 import { useSession } from "@/lib/auth";
 import { useCountUp } from "@/lib/motion";
@@ -128,6 +128,7 @@ export function DashboardPage() {
           contributionReceived={financials.contributionReceived}
           sponsorshipReceived={financials.sponsorshipReceived}
           contributions={data.contributions}
+          sponsors={data.sponsors}
         />
       </section>
       <EventSchedule
@@ -713,32 +714,122 @@ function FinancialSummary({
   );
 }
 
+type TileEntry = { key: string; amount: number; who: string };
+
+/** Shared by both tabs - contributions and sponsors both carry a `received` field. */
+function receivedAmount(row: { received: number }) {
+  return row.received;
+}
+
+function contributionToTile(row: ContributionRow, index: number): TileEntry {
+  return {
+    key: row.id ?? `${row.flat}-${index}`,
+    amount: row.received,
+    who: row.flat && row.flat !== "-" ? `${row.flat} · ${row.name}` : row.name,
+  };
+}
+
+function sponsorToTile(row: SponsorRow, index: number): TileEntry {
+  return {
+    key: row.id ?? `${row.name}-${index}`,
+    amount: row.received,
+    who: row.flat && row.flat !== "-" ? `${row.flat} · ${row.name}` : row.name,
+  };
+}
+
+/**
+ * Largest-first, capped for the mosaic - the last slot becomes a "+N more"
+ * tile instead of a 9th entry once there are too many to fit.
+ *
+ * `getAmount`/`toTile` are expected to be stable module-level functions (see
+ * `receivedAmount`, `contributionToTile`, `sponsorToTile` above), not inline
+ * closures - that is what lets this memoize on `rows` alone.
+ */
+function useTopEntries<T>(rows: T[], getAmount: (row: T) => number, toTile: (row: T, index: number) => TileEntry) {
+  return useMemo(() => {
+    const ranked = rows
+      .filter((row) => getAmount(row) > 0)
+      .sort((left, right) => getAmount(right) - getAmount(left));
+    const overflowCount = Math.max(ranked.length - (MAX_TILES - 1), 0);
+    const visible = (overflowCount ? ranked.slice(0, MAX_TILES - 1) : ranked.slice(0, MAX_TILES)).map(toTile);
+    return { visible, overflowCount };
+  }, [rows, getAmount, toTile]);
+}
+
+function TileGrid({ visible, overflowCount }: { visible: TileEntry[]; overflowCount: number }) {
+  if (!visible.length) {
+    return <p className="mt-2 text-sm text-muted-foreground">Nothing recorded yet.</p>;
+  }
+
+  return (
+    <div className="mt-2 grid grid-cols-3 gap-1.5">
+      {visible.map((entry, index) => (
+        <div
+          key={entry.key}
+          title={`${formatCurrency(entry.amount)} from ${entry.who}`}
+          className={`animate-fade-up rounded-lg border px-2 py-1.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tileTints[index % tileTints.length]}`}
+          style={{ animationDelay: `${index * 45}ms` }}
+        >
+          <p className="text-[13px] font-semibold leading-tight tabular-nums text-foreground">
+            {formatCurrency(entry.amount)}
+          </p>
+          <p className="truncate text-[11px] leading-tight text-foreground/60">{entry.who}</p>
+        </div>
+      ))}
+
+      {overflowCount ? (
+        <div
+          className="flex animate-fade-up flex-col justify-center rounded-lg border border-dashed bg-muted/50 px-2 py-1.5 shadow-sm"
+          style={{ animationDelay: `${visible.length * 45}ms` }}
+        >
+          <p className="text-[13px] font-semibold leading-tight tabular-nums">+{overflowCount}</p>
+          <p className="truncate text-[11px] leading-tight text-muted-foreground">more</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function FundingProgress({
   totalBudget,
   fundsReceived,
   contributionReceived,
   sponsorshipReceived,
   contributions,
+  sponsors,
 }: {
   totalBudget: number;
   fundsReceived: number;
   contributionReceived: number;
   sponsorshipReceived: number;
   contributions: ContributionRow[];
+  sponsors: SponsorRow[];
 }) {
   const progress = calculateFundingProgress(fundsReceived, totalBudget);
   const rounded = Math.round(progress);
   // The bar and the percentage share one animation so they always agree.
   const animatedProgress = useCountUp(progress, { duration: 1400 });
   const aboveExpected = contributions.filter((row) => row.received > row.expected).length;
-  // Every contributor, largest first. If they do not all fit the mosaic, the
-  // final tile becomes a "+N more" tile instead of a ninth contributor.
-  const contributors = useMemo(
-    () => contributions.filter((row) => row.received > 0).sort((left, right) => right.received - left.received),
-    [contributions],
-  );
-  const overflowCount = Math.max(contributors.length - (MAX_TILES - 1), 0);
-  const visibleContributors = overflowCount ? contributors.slice(0, MAX_TILES - 1) : contributors.slice(0, MAX_TILES);
+  const [activeTab, setActiveTab] = useState<"contributions" | "sponsors">("contributions");
+
+  const contributorTiles = useTopEntries(contributions, receivedAmount, contributionToTile);
+  const sponsorTiles = useTopEntries(sponsors, receivedAmount, sponsorToTile);
+  const activeTiles = activeTab === "contributions" ? contributorTiles : sponsorTiles;
+  // Each tab is colored to match its own dot in the Sponsorship/Contribution
+  // legend just above, so the tab you pick and the bar segment it summarizes
+  // read as the same thing rather than an unrelated teal default.
+  const tileTabs = [
+    {
+      key: "contributions" as const,
+      label: "Contributions",
+      activeClassName: "border-amber-300 bg-amber-100 text-amber-900",
+    },
+    {
+      key: "sponsors" as const,
+      label: "Sponsors",
+      activeClassName: "border-primary bg-primary text-primary-foreground",
+    },
+  ];
 
   // Each source drawn as its own slice of the budget, so the split is readable
   // at a glance instead of only as two numbers underneath a single bar.
@@ -816,39 +907,43 @@ function FundingProgress({
           ) : null}
         </div>
 
-        {visibleContributors.length ? (
-          <div className="mt-4 border-t pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contributors</p>
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
-              {visibleContributors.map((row, index) => {
-                const who = row.flat && row.flat !== "-" ? `${row.flat} · ${row.name}` : row.name;
-                return (
-                  <div
-                    key={row.id ?? `${row.flat}-${index}`}
-                    title={`${formatCurrency(row.received)} from ${who}`}
-                    className={`animate-fade-up rounded-lg border px-2 py-1.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tileTints[index % tileTints.length]}`}
-                    style={{ animationDelay: `${index * 45}ms` }}
-                  >
-                    <p className="text-[13px] font-semibold leading-tight tabular-nums text-foreground">
-                      {formatCurrency(row.received)}
-                    </p>
-                    <p className="truncate text-[11px] leading-tight text-foreground/60">{who}</p>
-                  </div>
-                );
-              })}
-
-              {overflowCount ? (
-                <div
-                  className="flex animate-fade-up flex-col justify-center rounded-lg border border-dashed bg-muted/50 px-2 py-1.5 shadow-sm"
-                  style={{ animationDelay: `${visibleContributors.length * 45}ms` }}
+        <div className="mt-4 border-t pt-4">
+          {/* Same bordered-tab treatment as the day selector in Event Schedule -
+              solid primary fill for the active tab, not a separate "segmented
+              control" look. */}
+          <div className="flex gap-2" role="tablist" aria-label="Top contributors and sponsors">
+            {tileTabs.map((tab, index) => {
+              const active = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls="funding-tile-panel"
+                  tabIndex={active ? 0 : -1}
+                  onKeyDown={(event) => {
+                    const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+                    if (!offset) return;
+                    event.preventDefault();
+                    setActiveTab(tileTabs[(index + offset + tileTabs.length) % tileTabs.length].key);
+                  }}
+                  className={`flex-1 rounded-md border px-3 py-1.5 text-center text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                    active
+                      ? tab.activeClassName
+                      : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                  onClick={() => setActiveTab(tab.key)}
                 >
-                  <p className="text-[13px] font-semibold leading-tight tabular-nums">+{overflowCount}</p>
-                  <p className="truncate text-[11px] leading-tight text-muted-foreground">more</p>
-                </div>
-              ) : null}
-            </div>
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
-        ) : null}
+          <div id="funding-tile-panel" role="tabpanel">
+            <TileGrid key={activeTab} visible={activeTiles.visible} overflowCount={activeTiles.overflowCount} />
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

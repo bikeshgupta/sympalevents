@@ -82,10 +82,11 @@ against Google's public keys and map the user into Supabase `app_users`.
 - `usePageAccess(pageKey)` → `{ canView, canEdit, requiresLogin, isLoading, role }`.
 - Roles: `admin` | `committee` | `read_only`.
 - `publicPageKeys` (`dashboard`, `budget`) render read-only **without a session** —
-  anyone with the link sees them. The committee has cleared contributor names and flat
-  numbers for the dashboard's Contributors tiles; contact details and payment
-  references remain off public pages. See the Privacy section of the UI rules before
-  putting any new personal field on those screens.
+  anyone with the link sees them. The committee has cleared contributor and sponsor
+  names and flat numbers for the dashboard's Contributions/Sponsors tiles (inside
+  Funding Progress); contact details and payment references remain off public pages.
+  See the Privacy section of the UI rules before putting any new personal field on
+  those screens.
 - **Always gate mutating UI on `access.canEdit`**, and render a "View-only access"
   affordance rather than a disabled/hidden control with no explanation.
 
@@ -107,6 +108,12 @@ against Google's public keys and map the user into Supabase `app_users`.
 - Table screens compose `useFilteredSortedRows` + `SortableHeader` + `ColumnFilter` +
   `TableToolbar` from [src/features/shared/table-tools.tsx](src/features/shared/table-tools.tsx).
   Add a screen's columns as a `TableColumn<T>[]` const at module scope.
+- The dashboard's "largest first, capped mosaic" tile grid (Funding Progress →
+  Contributions/Sponsors tabs) is `useTopEntries` + `TileGrid` in `dashboard-page.tsx`.
+  `useTopEntries` takes `getAmount`/`toTile` as **module-level functions, not inline
+  closures** (`receivedAmount`, `contributionToTile`, `sponsorToTile`) — that is what
+  lets it memoize on `rows` alone without an `exhaustive-deps` fight. Follow that
+  pattern for a third tab rather than inlining a new closure.
 - CRUD dialogs use `CrudDialog` + `FormField` + the `formString` / `formNumber` helpers.
 
 ## Link previews (Open Graph)
