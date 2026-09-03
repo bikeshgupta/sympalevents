@@ -4,6 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SymPal Events</title>
+    <meta
+      name="description"
+      content="SymPal Events is a committee workspace for festival planning: contributions, sponsors, budget, tasks and the full event schedule, all in one place."
+    />
+    <meta name="theme-color" content="#1d4e4e" />
+
+    <!--
+      Link previews (WhatsApp, Telegram, Slack, iMessage, etc.) read these tags
+      from the raw HTML response - they do not run the app's JavaScript, so
+      these values are fixed for every route rather than describing whichever
+      event or page was actually shared. og:image points at public/og-image.jpg,
+      served as-is (unhashed) so this URL stays stable across deploys.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SymPal Events" />
+    <meta property="og:title" content="SymPal Events" />
+    <meta
+      property="og:description"
+      content="A committee workspace for festival planning: contributions, sponsors, budget, tasks and the full event schedule, all in one place."
+    />
+    <meta property="og:url" content="https://sympalevents.vercel.app/dashboard" />
+    <meta property="og:image" content="https://sympalevents.vercel.app/og-image.jpg" />
+    <meta property="og:image:width" content="1096" />
+    <meta property="og:image:height" content="844" />
+    <meta property="og:image:alt" content="Ganesh Chaturthi stage decor at Tru WindChimes" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SymPal Events" />
+    <meta
+      name="twitter:description"
+      content="A committee workspace for festival planning: contributions, sponsors, budget, tasks and the full event schedule, all in one place."
+    />
+    <meta name="twitter:image" content="https://sympalevents.vercel.app/og-image.jpg" />
+
+    <!-- Countdown numerals. Falls back to a system serif if this never loads. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>

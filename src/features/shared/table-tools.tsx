@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, ListFilter } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, ListFilter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -11,6 +11,9 @@ export type TableColumn<T> = {
   key: string;
   label: string;
   getValue: (row: T) => string | number | boolean | null | undefined;
+  /** Set false for machine-readable columns (timestamps, ids) that should not
+   *  produce false hits in the free-text search. Defaults to true. */
+  searchable?: boolean;
 };
 
 function normalize(value: string | number | boolean | null | undefined) {
@@ -30,17 +33,24 @@ function displayFilterValue(value: string | number | boolean | null | undefined)
   return text || "(Blank)";
 }
 
-export function useFilteredSortedRows<T>(rows: T[], columns: TableColumn<T>[], defaultSortKey: string) {
+export function useFilteredSortedRows<T>(
+  rows: T[],
+  columns: TableColumn<T>[],
+  defaultSortKey: string,
+  defaultSortDirection: SortDirection = "asc",
+) {
   const [filters, setFilters] = useState<ColumnFilters>({});
+  const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState(defaultSortKey);
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortDirection, setSortDirection] = useState<SortDirection>(defaultSortDirection);
 
   const sortedRows = useMemo(() => {
     const activeFilters = Object.entries(filters)
       .map(([key, values]) => [key, new Set(values)] as const)
       .filter(([, values]) => values.size);
     const activeColumn = columns.find((column) => column.key === sortKey) ?? columns[0];
-    const filtered = activeFilters.length
+    const query = search.trim().toLowerCase();
+    let filtered = activeFilters.length
       ? rows.filter((row) =>
           activeFilters.every(([key, selectedValues]) => {
             const column = columns.find((item) => item.key === key);
@@ -49,11 +59,23 @@ export function useFilteredSortedRows<T>(rows: T[], columns: TableColumn<T>[], d
         )
       : rows;
 
+    if (query) {
+      filtered = filtered.filter((row) =>
+        columns.some(
+          (column) =>
+            column.searchable !== false &&
+            String(column.getValue(row) ?? "").toLowerCase().includes(query),
+        ),
+      );
+    }
+
     return [...filtered].sort((left, right) => {
       const result = compareValues(normalize(activeColumn.getValue(left)), normalize(activeColumn.getValue(right)));
       return sortDirection === "asc" ? result : -result;
     });
-  }, [columns, filters, rows, sortDirection, sortKey]);
+  }, [columns, filters, rows, search, sortDirection, sortKey]);
+
+  const activeFilterCount = Object.values(filters).filter((values) => values.length).length;
 
   function setColumnFilter(columnKey: string, values: string[]) {
     setFilters((current) => ({
@@ -72,10 +94,24 @@ export function useFilteredSortedRows<T>(rows: T[], columns: TableColumn<T>[], d
     setSortDirection("asc");
   }
 
+  /** True while the table is still in the order it was given on load. */
+  const isDefaultSort = sortKey === defaultSortKey && sortDirection === defaultSortDirection;
+
+  function clearFilters() {
+    setFilters({});
+    setSearch("");
+  }
+
   return {
     rows: sortedRows,
     filters,
     setColumnFilter,
+    search,
+    setSearch,
+    activeFilterCount,
+    isDefaultSort,
+    hasActiveFilters: activeFilterCount > 0 || search.trim().length > 0,
+    clearFilters,
     sortKey,
     setSortKey,
     sortDirection,
@@ -84,17 +120,40 @@ export function useFilteredSortedRows<T>(rows: T[], columns: TableColumn<T>[], d
   };
 }
 
-export function TableToolbar<T>({
+export function TableToolbar({
   resultCount,
   totalCount,
+  label = "records",
+  hasActiveFilters = false,
+  onClearFilters,
+  sortNote,
 }: {
   resultCount: number;
   totalCount: number;
+  label?: string;
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
+  /** Explains a default order the column headers cannot show, e.g. "Newest first". */
+  sortNote?: string;
 }) {
+  const isFiltered = resultCount !== totalCount;
+
   return (
-    <div className="flex justify-end border-b p-3">
-      <span className="text-sm text-muted-foreground">
-        {resultCount} of {totalCount}
+    <div className="flex flex-wrap items-center justify-end gap-2 border-b p-3">
+      {sortNote ? (
+        <span className="mr-auto inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+          {sortNote}
+        </span>
+      ) : null}
+      {hasActiveFilters && onClearFilters ? (
+        <Button type="button" variant="ghost" size="sm" className="h-8" onClick={onClearFilters}>
+          <X className="h-3.5 w-3.5" />
+          Clear filters
+        </Button>
+      ) : null}
+      <span className="text-sm tabular-nums text-muted-foreground" aria-live="polite">
+        {isFiltered ? `${resultCount} of ${totalCount} ${label}` : `${totalCount} ${label}`}
       </span>
     </div>
   );
@@ -135,14 +194,14 @@ export function SortableHeader({
   );
 }
 
-export function ColumnFilter({
+export function ColumnFilter<T>({
   column,
   rows,
   filters,
   onFilterChange,
 }: {
-  column: TableColumn<any>;
-  rows: any[];
+  column: TableColumn<T>;
+  rows: T[];
   filters: ColumnFilters;
   onFilterChange: (columnKey: string, values: string[]) => void;
 }) {

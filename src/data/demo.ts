@@ -29,6 +29,7 @@ export const contributionRows = [
     status: "Received",
     mode: "UPI",
     reference: "UPI-101",
+    createdAt: "2026-09-01T09:15:00Z",
   },
   {
     flat: "B-204",
@@ -40,6 +41,7 @@ export const contributionRows = [
     status: "Committed",
     mode: "Cash",
     reference: "",
+    createdAt: "2026-09-02T11:40:00Z",
   },
   {
     flat: "C-308",
@@ -51,6 +53,7 @@ export const contributionRows = [
     status: "Committed",
     mode: "-",
     reference: "",
+    createdAt: "2026-09-03T08:05:00Z",
   },
 ];
 

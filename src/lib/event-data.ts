@@ -39,6 +39,8 @@ export type ContributionRow = {
   status: string;
   mode: string;
   reference: string;
+  /** Row creation timestamp, used to show the newest entries first. */
+  createdAt: string;
 };
 
 export type SponsorRow = {
@@ -259,7 +261,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
           supabase.from("residents").select("id,flat_no,resident_name,resident_type").eq("event_id", eventId),
           supabase
             .from("contributions")
-            .select("id,expected_amount,received_amount,received_date,payment_mode,status,resident_id,reference")
+            .select("id,expected_amount,received_amount,received_date,payment_mode,status,resident_id,reference,created_at")
             .eq("event_id", eventId),
           supabase
             .from("sponsors")
@@ -321,6 +323,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
           status: row.status ?? "Pending",
           mode: row.payment_mode ?? "-",
           reference: row.reference ?? "",
+          createdAt: row.created_at ?? "",
         };
       });
 

@@ -13,6 +13,8 @@ const localApiRoutes = new Map([
   ["/api/expenses", "/api/expenses.ts"],
   ["/api/my-responsibilities", "/api/my-responsibilities.ts"],
   ["/api/health", "/api/health.ts"],
+  ["/api/auction-registrations", "/api/auction-registrations.ts"],
+  ["/api/auction-bids", "/api/auction-bids.ts"],
 ]);
 
 async function readJsonBody(req: any) {
