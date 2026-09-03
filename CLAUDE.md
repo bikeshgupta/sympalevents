@@ -502,12 +502,14 @@ plan's cap. The handler is in `api/_lib/`, which is never routed.
   desktop it shows the VPA to copy instead of app buttons that would do nothing.
 - [pending-payments-panel.tsx](src/features/contributions/pending-payments-panel.tsx)
   - the committee queue on `/contributions`, rendered only for `canEdit`.
-- Entry points: the Contributions page header, and a callout inside the
-  dashboard's Funding Progress card - the dashboard being public is the only
-  reason a resident without an account can reach any of this. Both hide
-  themselves without a `VITE_UPI_ID` **or** without a selected event id, which
-  is also why demo mode shows no button (`demoEvent` has no id, and there would
-  be nothing to attribute a payment to).
+- **The one payer entry point is the dashboard** - a callout inside the Funding
+  Progress card. Deliberately *not* on `/contributions`: that page needs a
+  login, so a resident could never reach it, and Contributions is the
+  committee's ledger rather than a place anyone pays from. It hides itself
+  without a `VITE_UPI_ID` **or** without a selected event id, which is also why
+  demo mode shows no button (`demoEvent` has no id, so there would be nothing
+  to attribute a payment to). `/contributions` carries only the committee's
+  review queue.
 
 **Known gap:** confirming twice in two tabs would apply the amount twice - the
 read-then-write in `applyConfirmedPayment` is not atomic, the same tradeoff

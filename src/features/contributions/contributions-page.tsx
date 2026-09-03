@@ -8,13 +8,11 @@ import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { commonExpectedAmount } from "@/lib/contribution-payments";
 import { useEventContext } from "@/lib/event-context";
 import { ContributionRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/utils";
-import { ContributeButton } from "@/features/contributions/contribute-dialog";
 import { PendingPaymentsPanel } from "@/features/contributions/pending-payments-panel";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
@@ -167,8 +165,6 @@ export function ContributionsPage() {
   const paidCount = contributionRows.filter((row) => row.received > 0).length;
   const collectedPercent = expected > 0 ? Math.round((received / expected) * 100) : 0;
 
-  const expectedPerFlat = commonExpectedAmount(contributionRows);
-
   const visibleExpected = visibleRows.reduce((sum, row) => sum + row.expected, 0);
   const visibleReceived = visibleRows.reduce((sum, row) => sum + row.received, 0);
 
@@ -181,13 +177,8 @@ export function ContributionsPage() {
             Track resident interest, expected amount, collections, and payment mode.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <DataSourceBadge source={data.source} reason={data.fallbackReason} isLoading={isFetching} />
-          <ContributeButton
-            eventId={selectedEventId}
-            eventName={data.event.name}
-            expectedPerFlat={expectedPerFlat}
-          />
           <Button
             variant="outline"
             onClick={() => exportContributionsToCsv(visibleRows)}
@@ -242,6 +233,9 @@ export function ContributionsPage() {
         />
       </section>
 
+      {/* The committee's review queue only. Residents reach the payment flow
+          from the dashboard - it is the public page, so it is the one a
+          resident without an account can actually open. */}
       <PendingPaymentsPanel eventId={selectedEventId} canEdit={access.canEdit} />
 
       <PageTools
