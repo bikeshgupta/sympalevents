@@ -1,3 +1,5 @@
+import { handleAuctionBids } from "./_lib/auction-bids.js";
+import { handleAuctionRegistrations } from "./_lib/auction-registrations.js";
 import {
   assertServiceSupabase,
   getRequestBody,
@@ -11,6 +13,8 @@ type ApiRequest = {
   method?: string;
   query?: {
     eventId?: string | string[];
+    resource?: string | string[];
+    auctionId?: string | string[];
   };
   headers: {
     authorization?: string;
@@ -36,7 +40,22 @@ function toAuction(row: Record<string, unknown>) {
   };
 }
 
+/**
+ * All three auction resources share this one function.
+ *
+ * Not a style choice: Vercel counts every file under `api/` as its own
+ * serverless function and the plan caps how many a deployment may have, so
+ * bids and registrations live in `api/_lib/` (underscore-prefixed, therefore
+ * not routes) and are dispatched here instead of costing two more functions.
+ *
+ * Dispatch reads `?resource=` from the query on every method - never the
+ * body, which each handler still needs to consume itself.
+ */
 export default async function handler(req: ApiRequest, res: ApiResponse) {
+  const resource = String(req.query?.resource ?? "");
+  if (resource === "bids") return handleAuctionBids(req, res);
+  if (resource === "registrations") return handleAuctionRegistrations(req, res);
+
   try {
     const supabase = assertServiceSupabase();
 

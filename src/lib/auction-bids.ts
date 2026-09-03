@@ -21,7 +21,7 @@ type BidsResponse = {
  *
  * Reading (the GET here) is public - anyone can watch the chart and bid
  * history without signing in, matching the server, which no longer requires
- * a token for GET /api/auction-bids. Only `placeBid` needs a signed-in user;
+ * a token for GET /api/auctions?resource=bids. Only `placeBid` needs a signed-in user;
  * `apiFetch` already refuses to send it without a token (its default
  * `requireAuth`), so that gate does not need to be re-implemented here.
  *
@@ -47,7 +47,7 @@ export function useAuctionBids({
     enabled: Boolean(eventId),
     queryFn: () =>
       apiFetch<BidsResponse>(
-        `/api/auction-bids?eventId=${encodeURIComponent(eventId!)}&auctionId=${encodeURIComponent(auctionId)}`,
+        `/api/auctions?resource=bids&eventId=${encodeURIComponent(eventId!)}&auctionId=${encodeURIComponent(auctionId)}`,
         { requireAuth: false },
       ),
     refetchInterval: live ? 3000 : false,
@@ -56,7 +56,7 @@ export function useAuctionBids({
 
   const placeBid = useMutation({
     mutationFn: (amount: number) =>
-      apiFetch<{ bid: AuctionBid }>("/api/auction-bids", {
+      apiFetch<{ bid: AuctionBid }>("/api/auctions?resource=bids", {
         method: "POST",
         body: { eventId, auctionId, amount },
       }),

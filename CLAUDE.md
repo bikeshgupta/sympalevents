@@ -198,11 +198,32 @@ migration in this file has been run — none of them run automatically.
 repeated in each migration's comments: this app authenticates through Firebase, not
 Supabase Auth, so the browser's Supabase client never holds a session and `auth.uid()`
 never resolves for it — a policy written against it would be dead code. All access
-goes through `/api/auctions`, `/api/auction-registrations`, `/api/auction-bids`, which
-use the service-role client (bypasses RLS by design). **Do not add anon/authenticated
+goes through `/api/auctions` (see "One function, three resources" below), which
+uses the service-role client (bypasses RLS by design). **Do not add anon/authenticated
 policies to any of the three** expecting a direct browser `supabase.from(...)` call to
 work — it won't, and it shouldn't; that would remove the only enforcement these tables
 have.
+
+### One function, three resources
+
+Auctions, bids and registrations are all served by **`api/auctions.ts`**, dispatched
+on a `?resource=` query param: nothing (auction CRUD), `bids`, or `registrations`.
+The bid and registration handlers live in
+[api/_lib/auction-bids.ts](api/_lib/auction-bids.ts) and
+[api/_lib/auction-registrations.ts](api/_lib/auction-registrations.ts) as named
+exports.
+
+**This is a deployment constraint, not a style preference.** Vercel turns every file
+directly under `api/` into its own serverless function, and the plan caps how many one
+deployment may have — this project sits right at that ceiling, and adding these as two
+more top-level routes made the deploy fail at `Deploying outputs...` with a clean
+build and no error in the build log. Anything under `api/_lib/` is underscore-prefixed
+and therefore never routed, so it costs nothing.
+
+So: **before adding a file under `api/`, count what is already there.** If the count is
+at the cap, fold the new handler into a related route the same way instead of adding a
+function. Dispatch reads only the query string, never the body, so each handler still
+consumes its own body normally.
 
 New local API routes must be added to `localApiRoutes` in `vite.config.ts` or the dev
 server 404s them silently via `next()`.
@@ -211,7 +232,7 @@ server 404s them silently via `next()`.
 
 - **Browsing auctions, and watching one (chart, bid history, current bid) is public** —
   `auctions` is in `publicPageKeys` ([page-access.ts](src/lib/page-access.ts)) and
-  `GET /api/auctions` / `GET /api/auction-bids` need no token. `useAuctionBids`'s query
+  `GET /api/auctions` and `GET /api/auctions?resource=bids` need no token. `useAuctionBids`'s query
   has no `signedIn` gate and passes `{ requireAuth: false }` to `apiFetch` for that
   reason — without it, `apiFetch`'s own default refuses to even attempt the request
   without a token, which would silently defeat the point.
@@ -226,7 +247,7 @@ server 404s them silently via `next()`.
   authorization is the server check, the UI gate is only for not showing controls that
   would just fail.
 - **The committee-only registrant list works the same way**: `GET
-  /api/auction-registrations` checks the requester's role and includes `registrants`
+  /api/auctions?resource=registrations` checks the requester's role and includes `registrants`
   (full list, with phone numbers, for coordinating with bidders) only for admin/
   committee; everyone else gets `registrants: null`. This surfaces as a callout inside
   `AuctionDetailsPanel`. Do not add a client-side-only gate around registrant data —
@@ -285,7 +306,7 @@ yet" or "pull this off the homepage for now."
 
 First bid ≥ that auction's `starting_bid`; every bid after ≥ previous highest +
 that auction's `min_increment` — both read from the `auctions` row in
-`api/auction-bids.ts`, not global constants (an earlier version hardcoded
+`api/_lib/auction-bids.ts`, not global constants (an earlier version hardcoded
 ₹2,501/₹100 for everyone; every auction now sets its own). The bidder must have an
 active `auction_registrations` row for that auction, and the bid must fall inside
 `opens_at`/`closes_at` — compared directly against those columns, no more

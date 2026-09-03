@@ -29,7 +29,7 @@ type RegistrationResponse = {
 /**
  * Registration state for one auction (an announcement's `id`) within one
  * event. Mirrors the request-access pattern: reads and writes go through
- * /api/auction-registrations, which verifies the signed-in user server-side -
+ * /api/auctions?resource=registrations, which verifies the signed-in user server-side -
  * there is no direct client table access for this data (see the migration).
  */
 export function useAuctionRegistration({
@@ -49,14 +49,14 @@ export function useAuctionRegistration({
     enabled: signedIn && Boolean(eventId),
     queryFn: () =>
       apiFetch<RegistrationResponse>(
-        `/api/auction-registrations?eventId=${encodeURIComponent(eventId!)}&auctionId=${encodeURIComponent(auctionId)}`,
+        `/api/auctions?resource=registrations&eventId=${encodeURIComponent(eventId!)}&auctionId=${encodeURIComponent(auctionId)}`,
       ),
     retry: false,
   });
 
   const register = useMutation({
     mutationFn: (input: { name: string; flat: string; phone: string }) =>
-      apiFetch<{ registration: AuctionRegistration }>("/api/auction-registrations", {
+      apiFetch<{ registration: AuctionRegistration }>("/api/auctions?resource=registrations", {
         method: "POST",
         body: { eventId, auctionId, ...input },
       }),
@@ -65,7 +65,7 @@ export function useAuctionRegistration({
 
   const cancel = useMutation({
     mutationFn: () =>
-      apiFetch<{ ok: true }>("/api/auction-registrations", {
+      apiFetch<{ ok: true }>("/api/auctions?resource=registrations", {
         method: "DELETE",
         body: { eventId, auctionId },
       }),

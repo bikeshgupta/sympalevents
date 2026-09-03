@@ -1,4 +1,4 @@
-import { assertServiceSupabase, getRequestBody, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
+import { assertServiceSupabase, getRequestBody, handleApiError, requireAppUser, sendJson } from "./server.js";
 
 type ApiRequest = {
   method?: string;
@@ -19,7 +19,7 @@ type ApiResponse = {
   };
 };
 
-export default async function handler(req: ApiRequest, res: ApiResponse) {
+export async function handleAuctionRegistrations(req: ApiRequest, res: ApiResponse) {
   try {
     const supabase = assertServiceSupabase();
     const { appUser } = await requireAppUser(req);
