@@ -164,7 +164,10 @@ export const eventPlanRows = [
     day: "Day 1",
     date: "2026-09-14",
     activity: "Ganesh sthapana",
-    subEvents: "Idol arrival\nOpening aarti",
+    // Agenda lines are one point per line - see src/lib/agenda.ts. The demo
+    // carries them so demo mode shows the same timeline detail a real event does.
+    subEvents:
+      "Idol arrival and welcome at the gate\nSthapana and sankalp - Pandit ji leads\nOpening aarti\nPrasad counter - modak and pedha",
     startTime: "09:00",
     endTime: "10:30",
     location: "Clubhouse",
@@ -177,12 +180,27 @@ export const eventPlanRows = [
     day: "Day 2",
     date: "2026-09-15",
     activity: "Evening aarti and prasad",
-    subEvents: "Bhajan session\nPrasad distribution",
+    subEvents:
+      "Bhajan session by the society choir\nSandhya aarti\nPushpanjali\nPrasad distribution - counter closes at 9",
     startTime: "19:00",
     endTime: "21:00",
     location: "Central lawn",
     attendance: 120,
     owner: "Meera",
+    status: "Planned",
+    notes: "",
+  },
+  {
+    day: "Day 3",
+    date: "2026-09-16",
+    activity: "Cultural programme",
+    subEvents:
+      "Welcome and lamp lighting\nKids dance - juniors\nSolo singing\nLadies group dance\nPrize distribution\nGroup aarti",
+    startTime: "19:00",
+    endTime: "21:00",
+    location: "Central lawn",
+    attendance: 200,
+    owner: "Rohit",
     status: "Planned",
     notes: "",
   },

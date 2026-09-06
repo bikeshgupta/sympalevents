@@ -8,11 +8,24 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
-import { pageLabels, publicPageKeys, usePageAccess } from "@/lib/page-access";
+import {
+  configurablePageKeys,
+  pageLabels,
+  usePageAccess,
+  signInOnlyPageKeys,
+  usePageVisibility,
+  visibilityHints,
+  visibilityLabels,
+  visibilityOptionsFor,
+  type PageVisibility,
+} from "@/lib/page-access";
 
 type AccessLevel = "none" | "view" | "edit";
 
-const grantablePages = Object.entries(pageLabels).filter(([key]) => key !== "settings" && !publicPageKeys.has(key));
+// Every page is grantable now. Pages used to be dropped from this list when
+// they were hardcoded as public; visibility is the admin's call per event, so
+// a page they have set back to "restricted" needs a per-member row here.
+const grantablePages = configurablePageKeys.map((key) => [key, pageLabels[key]] as const);
 
 const initialPageAccess = Object.fromEntries(grantablePages.map(([key]) => [key, "none"])) as Record<string, AccessLevel>;
 
@@ -408,7 +421,123 @@ export function SettingsPage() {
             </form>
           </CardContent>
         </Card>
+
+        {access.canEdit ? <PageVisibilityCard /> : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Who can see each page of this event, set by the admin. Separate from Member
+ * Access below it on purpose: this is the blanket rule for everyone, that one
+ * is the exception list for a named person.
+ */
+function PageVisibilityCard() {
+  const { selectedEventId } = useEventContext();
+  const { query, save } = usePageVisibility();
+  const [draft, setDraft] = useState<Record<string, PageVisibility> | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const stored = query.data?.visibility;
+  // The server's map is the baseline; the draft only exists once the admin
+  // has actually changed something, so a refetch never stomps on typing.
+  const current = draft ?? stored ?? null;
+
+  function setVisibility(pageKey: string, visibility: PageVisibility) {
+    setDraft({ ...(current ?? {}), [pageKey]: visibility });
+    setMessage(null);
+  }
+
+  async function handleSave() {
+    if (!current || !selectedEventId) return;
+    setMessage("Saving page visibility...");
+    try {
+      await save.mutateAsync(current);
+      setDraft(null);
+      setMessage("Page visibility saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save page visibility");
+    }
+  }
+
+  return (
+    <Card className="xl:col-span-2">
+      <CardHeader>
+        <CardTitle>Page Visibility</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Decide who can open each page of this event. Editing is never widened by this - it still comes from the role
+          and the per-member grants in Member Access.
+        </p>
+
+        {query.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading page visibility...</p>
+        ) : !current ? (
+          <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            Page visibility could not be loaded. Check that migration 015_event_page_visibility.sql has been run.
+          </p>
+        ) : (
+          <>
+            <div className="overflow-hidden rounded-md border">
+              <div className="divide-y">
+                {configurablePageKeys.map((pageKey) => {
+                  const value = current[pageKey] ?? "restricted";
+                  return (
+                    <div
+                      key={pageKey}
+                      className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{pageLabels[pageKey]}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {signInOnlyPageKeys.has(pageKey)
+                            ? `Always needs a sign-in. ${visibilityHints[value]}`
+                            : visibilityHints[value]}
+                        </p>
+                      </div>
+                      <select
+                        aria-label={`${pageLabels[pageKey]} visibility`}
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm sm:w-64 sm:shrink-0"
+                        value={value}
+                        onChange={(item) => setVisibility(pageKey, item.target.value as PageVisibility)}
+                      >
+                        {visibilityOptionsFor(pageKey).map((level) => (
+                          <option key={level} value={level}>
+                            {visibilityLabels[level]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">Settings</span> is always admin-only and cannot be opened
+                up - it is the screen that controls all the others.
+              </p>
+              <p>
+                A page set to <span className="font-medium text-foreground">Anyone with the link</span> is genuinely
+                public. Keep contact details and payment references off those pages.
+              </p>
+            </div>
+
+            {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void handleSave()} disabled={!draft || save.isPending}>
+                {save.isPending ? "Saving..." : "Save Visibility"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setDraft(null)} disabled={!draft}>
+                Reset
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

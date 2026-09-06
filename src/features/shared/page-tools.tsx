@@ -9,19 +9,33 @@ export function PageTools({
   onSearchChange,
   searchPlaceholder = "Search",
   searchLabel = "Search records",
+  inline = false,
 }: {
   action: ReactNode;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
   searchLabel?: string;
+  /**
+   * Opt-in: keep the search box and the action on one row on a phone too,
+   * instead of stacking them. Off by default - every other screen keeps the
+   * stacked layout it has today; only a screen whose whole point is fitting
+   * many rows on one screen buys the row back.
+   */
+  inline?: boolean;
 }) {
   const showSearch = typeof onSearchChange === "function";
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      className={
+        inline
+          ? "flex items-center justify-between gap-2"
+          : "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      }
+    >
       {showSearch ? (
-        <div className="relative w-full sm:max-w-xs">
+        <div className={inline ? "relative min-w-0 flex-1 sm:max-w-xs" : "relative w-full sm:max-w-xs"}>
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
@@ -50,7 +64,9 @@ export function PageTools({
       ) : (
         <div />
       )}
-      {action}
+      {/* The action keeps its intrinsic width in inline mode; the search box is
+          what gives, since it can shrink to nothing and still be usable. */}
+      {inline ? <div className="shrink-0">{action}</div> : action}
     </div>
   );
 }

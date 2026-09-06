@@ -37,9 +37,11 @@ const EXT_BY_MIME: Record<string, string> = {
 };
 // Folders currently in use, and who is allowed to write to each. Uploads are
 // intentionally scoped this way rather than accepting an arbitrary folder
-// string from the client - add a row here (and its own permission check
-// below, if it should differ from "committee") when event-photo upload is built.
-const ALLOWED_FOLDERS = new Set(["auctions"]);
+// string from the client - add an entry here (and its own permission check
+// below, if it should differ from "committee") for any new upload surface.
+// "closing" holds the celebration photographs on the closing page; like
+// "auctions" it is committee-only, decided explicitly rather than inherited.
+const ALLOWED_FOLDERS = new Set(["auctions", "closing"]);
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {

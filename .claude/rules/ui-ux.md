@@ -64,8 +64,12 @@ Every data surface implements four states, not one:
 
 ## 5. Mobile
 
-- The bottom nav occupies the last ~80px; page content already accounts for this via
-  `pb-20` on the layout. Do not add fixed-position elements that collide with it.
+- **Mobile navigation is a right-hand drawer**, opened by the three-line button next to
+  the profile picture in the header
+  ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). The fixed bottom bar is
+  gone, and with it the `pb-20` the layout used to reserve for it — the bottom of the
+  screen is ordinary page space now. A new fixed-position element still needs a reason;
+  it just no longer has a bar to collide with.
 - Tap targets ≥ 40px.
 - **A wide table is not a mobile design.** Tables with a `min-w-[900px]`-class minimum
   must have a card list for `< lg`, using the same data and the same actions.
@@ -85,8 +89,14 @@ Every data surface implements four states, not one:
 
 ## 7. Privacy on public pages
 
-`publicPageKeys` in [src/lib/page-access.ts](src/lib/page-access.ts) — currently
-`dashboard` and `budget` — render **without a session**. Anyone with the link sees them.
+**Any page can be public now.** The event admin sets visibility per page in
+Settings → Page Visibility (`event_page_visibility`); `dashboard`, `budget`,
+`auctions` and `closing` merely *seed* as `public`. A page set to "Anyone with the
+link" renders **without a session** — anyone with the link sees it.
+
+Because that set is no longer fixed, you cannot tell from the code which screens are
+public. Assume any screen might be, and put a personal field on one only if it would
+be acceptable public.
 
 **Standing decision:** the committee has chosen to show contributor and sponsor names
 and flat numbers in the dashboard's tabbed Contributions/Sponsors tiles (inside Funding
@@ -102,7 +112,8 @@ What still applies:
   *who has not paid* is a different thing from a list of who gave most, and needs
   asking about first.
 - Reading a new column in `useEventData` makes it available to every page, public ones
-  included. Adding a field to a public screen means re-checking this section.
+  included. Adding a field to a screen means re-checking this section — an admin may
+  have that screen set to "Anyone with the link".
 - If the committee ever wants the names restricted, the change is small: gate the list
   on `useSession()` in `FundingProgress` and fall back to amounts only.
 
@@ -143,7 +154,7 @@ alive. It is not decoration for its own sake.
 - [ ] React `key` is a stable id (`row.id ?? ...`) — never a field a user can duplicate
       or leave blank, like a flat number.
 - [ ] Mutating controls gated on `access.canEdit`.
-- [ ] No contact detail or payment reference on a public page (dashboard, budget); names/flats only where already cleared.
+- [ ] No contact detail or payment reference on a page an admin could set public (any of them); names/flats only where already cleared.
 - [ ] Works in both `source: "supabase"` and `source: "demo"`.
 - [ ] `npm.cmd run build` passes.
 - [ ] Touched files gained no new lint problems.

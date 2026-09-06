@@ -8,7 +8,27 @@
       name="description"
       content="SymPal Events is a committee workspace for festival planning: contributions, sponsors, budget, tasks and the full event schedule, all in one place."
     />
-    <meta name="theme-color" content="#1d4e4e" />
+    <meta name="theme-color" content="#1D5B5E" />
+
+    <!--
+      App icon and install metadata. Everything here lives under public/ and is
+      served byte-for-byte at a fixed path - a Vite-imported asset gets a new
+      hashed filename every build, and an icon URL that moves is an icon a
+      browser and an installed home-screen shortcut both lose.
+
+      favicon.svg is the tab icon on anything modern; favicon.ico (16/32/48)
+      covers older browsers and the /favicon.ico a browser requests whether or
+      not you link one. apple-touch-icon is what iOS uses for "Add to Home
+      Screen" - it is drawn full-bleed because iOS applies its own rounding,
+      and iOS ignores the manifest's icons entirely.
+    -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SymPal" />
 
     <!--
       Link previews (WhatsApp, Telegram, Slack, iMessage, etc.) read these tags

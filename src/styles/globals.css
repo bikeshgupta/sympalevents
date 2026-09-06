@@ -104,6 +104,17 @@
     letter-spacing: 0.01em;
   }
 
+  /*
+   * The same Playfair Display face as the countdown, but as prose: the
+   * closing page's headline and the caption printed over a photograph. No
+   * tabular figures here - those exist for digits that tick, not sentences.
+   */
+  .font-display {
+    font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
   /* Each unit flips down into place when its value changes. */
   .flip-unit {
     perspective: 320px;

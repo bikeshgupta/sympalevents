@@ -1,194 +1,387 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, ListChecks, Timer } from "lucide-react";
-import { FormEvent, useState } from "react";
-import { DataSourceBadge } from "@/components/shared/data-source-badge";
-import { FormField } from "@/components/shared/form-field";
-import { StatCard } from "@/components/shared/stat-card";
-import { StatusBadge } from "@/components/shared/status-badge";
+import { AlertTriangle, CircleCheck, ListChecks, LogIn, Plus, Timer, UserCheck } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CrudDialog, formString } from "@/features/shared/crud-dialog";
-import { PageTools } from "@/features/shared/page-tools";
-import { RowActions } from "@/features/shared/row-actions";
-import { ColumnFilter, SortableHeader, TableColumn, TableToolbar, useFilteredSortedRows } from "@/features/shared/table-tools";
-import { getFirstEventId, TaskRow, useEventData } from "@/lib/event-data";
-import { usePageAccess } from "@/lib/page-access";
-import { supabase } from "@/lib/supabase";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { signInWithGoogle, useSession } from "@/lib/auth";
+import { useEventContext } from "@/lib/event-context";
+import { TaskCard } from "@/features/tasks/task-card";
+import { TaskFormDialog } from "@/features/tasks/task-form-dialog";
+import { isOpenTask, useTaskBoard, type Task, type TaskInput, type TaskMember, type TaskStatus } from "@/lib/tasks";
+import { cn } from "@/lib/utils";
 
-const taskColumns: TableColumn<TaskRow>[] = [
-  { key: "task", label: "Task", getValue: (row) => row.task },
-  { key: "owner", label: "Owner", getValue: (row) => row.owner },
-  { key: "priority", label: "Priority", getValue: (row) => row.priority },
-  { key: "due", label: "Due", getValue: (row) => row.due },
-  { key: "status", label: "Status", getValue: (row) => row.status },
+/**
+ * The task board.
+ *
+ * Three deliberate shapes here:
+ *
+ * 1. **Sign-in only.** A task list names people and carries their conversation,
+ *    so there is no signed-out view of it at all - not a partial one. The
+ *    server enforces the same thing on every branch of /api/tasks.
+ * 2. **Yours first.** The first thing a committee member wants on opening this
+ *    on a phone is what is on *them*; "Assigned to you" is its own section
+ *    above everything else, not a filter they have to find.
+ * 3. **Cards, not a table, at every width.** The old table needed a 760px
+ *    minimum and horizontal scrolling on a phone. Each card shows what matters
+ *    at a glance and hides description, assignees and comments behind one
+ *    toggle - see task-card.tsx.
+ */
+
+type Filter = "open" | "all" | "done";
+
+const filters: Array<{ key: Filter; label: string }> = [
+  { key: "open", label: "Open" },
+  { key: "all", label: "All" },
+  { key: "done", label: "Done" },
 ];
 
-function TaskFields({ task }: { task?: TaskRow }) {
-  return (
-    <>
-      <FormField label="Task" name="task" defaultValue={task?.task} required />
-      <FormField label="Category" name="category" />
-      <FormField label="Owner" name="owner" defaultValue={task?.owner} />
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor={task ? `priority-${task.id}` : "priority"}>Priority</label>
-        <select id={task ? `priority-${task.id}` : "priority"} name="priority" className="h-10 w-full rounded-md border bg-background px-3 text-sm" defaultValue={task?.priority ?? "Medium"}>
-          {["Critical", "High", "Medium", "Low"].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-        </select>
-      </div>
-      <FormField label="Due Date" name="due" type="date" defaultValue={task?.due !== "-" ? task?.due : undefined} />
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor={task ? `status-${task.id}` : "status"}>Status</label>
-        <select id={task ? `status-${task.id}` : "status"} name="status" className="h-10 w-full rounded-md border bg-background px-3 text-sm" defaultValue={task?.status ?? "Not Started"}>
-          {["Not Started", "In Progress", "Blocked", "Completed", "Cancelled"].map((status) => <option key={status} value={status}>{status}</option>)}
-        </select>
-      </div>
-    </>
-  );
+function matchesFilter(task: Task, filter: Filter) {
+  if (filter === "all") return true;
+  if (filter === "done") return !isOpenTask(task);
+  return isOpenTask(task);
+}
+
+function matchesSearch(task: Task, term: string) {
+  if (!term) return true;
+  const haystack = [task.task, task.category, task.notes, task.ownerName, ...task.assignees.map((entry) => entry.name)]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(term);
+}
+
+/** Critical first, then earliest due date, then oldest - the order someone
+ *  working through a list actually wants. Undated tasks sort last. */
+const priorityRank: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+
+function byUrgency(left: Task, right: Task) {
+  const priority = (priorityRank[left.priority] ?? 9) - (priorityRank[right.priority] ?? 9);
+  if (priority !== 0) return priority;
+  if (left.dueDate && right.dueDate) return left.dueDate.localeCompare(right.dueDate);
+  if (left.dueDate) return -1;
+  if (right.dueDate) return 1;
+  return left.createdAt.localeCompare(right.createdAt);
 }
 
 export function TasksPage() {
-  const { data } = useEventData();
-  const access = usePageAccess("tasks");
-  const taskRows = data.tasks;
-  const taskTable = useFilteredSortedRows(taskRows, taskColumns, "due");
-  const openTasks = taskRows.filter((task) => task.status !== "Completed" && task.status !== "Cancelled").length;
-  const completedTasks = taskRows.filter((task) => task.status === "Completed").length;
-  const criticalTasks = taskRows.filter((task) => task.priority === "Critical").length;
+  const { data: session, isLoading: isSessionLoading } = useSession();
+  const { selectedEventId } = useEventContext();
+  const { query, create, update, setStatus, remove } = useTaskBoard(selectedEventId);
+  const [filter, setFilter] = useState<Filter>("open");
+  const [search, setSearch] = useState("");
+  const [dialogTask, setDialogTask] = useState<Task | undefined>();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const board = query.data;
+  const tasks = useMemo(() => board?.tasks ?? [], [board]);
+  const meId = board?.me.id;
+  const canManage = board?.access.canManage ?? false;
+  const isAdmin = board?.access.isAdmin ?? false;
+  const collaborationReady = board?.collaborationReady ?? false;
+
+  const { mine, others } = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const visible = tasks.filter((task) => matchesFilter(task, filter) && matchesSearch(task, term)).sort(byUrgency);
+    return {
+      mine: visible.filter((task) => task.assignees.some((entry) => entry.userId === meId)),
+      others: visible.filter((task) => !task.assignees.some((entry) => entry.userId === meId)),
+    };
+  }, [tasks, filter, search, meId]);
+
+  const counts = useMemo(() => {
+    const open = tasks.filter(isOpenTask);
+    return {
+      mineOpen: open.filter((task) => task.assignees.some((entry) => entry.userId === meId)).length,
+      open: open.length,
+      blocked: tasks.filter((task) => task.status === "Blocked").length,
+      done: tasks.filter((task) => task.status === "Completed").length,
+    };
+  }, [tasks, meId]);
+
+  async function handleStatusChange(task: Task, status: TaskStatus) {
+    setActionError(null);
+    try {
+      await setStatus.mutateAsync({ taskId: task.id, status });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to update status");
+    }
+  }
+
+  async function handleDelete(task: Task) {
+    if (!window.confirm(`Delete "${task.task}"? Its comments go with it, and this cannot be undone. To retire it without losing the thread, set its status to Cancelled or Invalid instead.`)) return;
+    setActionError(null);
+    try {
+      await remove.mutateAsync(task.id);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to delete task");
+    }
+  }
+
+  function handleSubmit(input: TaskInput) {
+    return dialogTask ? update.mutateAsync({ taskId: dialogTask.id, ...input }) : create.mutateAsync(input);
+  }
+
+  function openDialog(task?: Task) {
+    setDialogTask(task);
+    setDialogOpen(true);
+  }
+
+  if (isSessionLoading) {
+    return <div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">Loading tasks...</div>;
+  }
+
+  if (!session) {
+    return (
+      <div className="space-y-5">
+        <PageHeading />
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <p className="text-sm text-muted-foreground">
+              Tasks are for the committee, so this page needs a sign-in. Once you are in, anything assigned to you
+              appears at the top.
+            </p>
+            <Button type="button" onClick={() => void signInWithGoogle()}>
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+              Sign in with Google
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Tasks</h2>
-          <p className="text-sm text-muted-foreground">Track owners, priorities, due dates, and completion status.</p>
-        </div>
-        <DataSourceBadge source={data.source} reason={data.fallbackReason} />
+        <PageHeading />
+        {canManage ? (
+          <Button type="button" onClick={() => openDialog()} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            New Task
+          </Button>
+        ) : (
+          <span className="text-sm text-muted-foreground">
+            View-only access &mdash; you can still comment, and update tasks assigned to you.
+          </span>
+        )}
       </div>
-      <section className="grid gap-3 sm:grid-cols-3">
-        <StatCard title="Open" value={String(openTasks)} icon={Timer} />
-        <StatCard title="Completed" value={String(completedTasks)} icon={ListChecks} />
-        <StatCard title="Critical" value={String(criticalTasks)} icon={CalendarClock} />
+
+      {query.isError ? (
+        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          {query.error instanceof Error ? query.error.message : "Unable to load tasks"}
+        </p>
+      ) : null}
+
+      {board && !collaborationReady ? (
+        <p className="flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            Assignment and comments are switched off until{" "}
+            <code className="font-mono text-xs">016_task_collaboration.sql</code> has been run in Supabase. The task
+            list below still works.
+          </span>
+        </p>
+      ) : null}
+
+      {/* One row at every width - four short counts read as a single glance;
+          two rows of two read as two separate things to parse. */}
+      <section className="grid grid-cols-4 gap-1.5 sm:gap-3">
+        <CountTile label="Yours" value={counts.mineOpen} icon={UserCheck} tone="primary" />
+        <CountTile label="Open" value={counts.open} icon={Timer} />
+        <CountTile label="Blocked" value={counts.blocked} icon={AlertTriangle} tone={counts.blocked ? "alert" : "default"} />
+        <CountTile label="Done" value={counts.done} icon={CircleCheck} />
       </section>
-      <PageTools
-        action={
-          access.canEdit ? <CrudDialog title="Add Task" triggerLabel="Add Task" onSubmit={addTask}><TaskFields /></CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
-        }
-      />
-      <Card className="overflow-x-auto">
-        <TableToolbar resultCount={taskTable.rows.length} totalCount={taskRows.length} />
-        <table className="min-w-[760px] w-full text-sm">
-          <thead className="bg-muted text-left text-muted-foreground">
-            <tr>
-              {taskColumns.map((column) => (
-                <th key={column.key} className="px-4 py-3 font-medium">
-                  <SortableHeader label={column.label} columnKey={column.key} sortKey={taskTable.sortKey} sortDirection={taskTable.sortDirection} onSort={taskTable.toggleSort} />
-                  <ColumnFilter column={column} rows={taskRows} filters={taskTable.filters} onFilterChange={taskTable.setColumnFilter} />
-                </th>
-              ))}
-              <th className="px-4 py-3 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
-            {taskTable.rows.map((task) => (
-              <tr key={task.id ?? task.task} className="border-t">
-                <td className="px-4 py-3 font-medium">{task.task}</td>
-                <td className="px-4 py-3">{task.owner}</td>
-                <td className="px-4 py-3">{task.priority}</td>
-                <td className="px-4 py-3">{task.due}</td>
-                <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
-                <td className="px-4 py-3">{task.id && access.canEdit ? <TaskActions task={task} /> : null}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div role="tablist" aria-label="Filter tasks" className="flex rounded-md border p-0.5">
+          {filters.map((item) => (
+            <button
+              key={item.key}
+              role="tab"
+              type="button"
+              aria-selected={filter === item.key}
+              onClick={() => setFilter(item.key)}
+              className={cn(
+                "min-h-10 flex-1 rounded px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none",
+                filter === item.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <Input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search tasks, people, notes"
+          aria-label="Search tasks"
+          className="sm:max-w-xs"
+        />
+      </div>
+
+      {actionError ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p> : null}
+
+      {query.isLoading ? (
+        <div className="space-y-2.5" aria-busy="true">
+          {[0, 1, 2].map((key) => (
+            <div key={key} className="h-28 animate-pulse rounded-lg border bg-muted/50" />
+          ))}
+        </div>
+      ) : (
+        <div role="tabpanel" className="space-y-6">
+          <TaskSection
+            title="Assigned to you"
+            hint="What is on you right now."
+            tasks={mine}
+            emptyMessage={
+              tasks.length
+                ? "Nothing is assigned to you in this view."
+                : "No tasks on this event yet."
+            }
+            meId={meId}
+            members={board?.members ?? []}
+            canManage={canManage}
+            isAdmin={isAdmin}
+            collaborationReady={collaborationReady}
+            onEdit={openDialog}
+            onDelete={handleDelete}
+            onStatusChange={handleStatusChange}
+            isBusy={setStatus.isPending}
+          />
+
+          <TaskSection
+            title={mine.length ? "Everything else" : "All tasks"}
+            hint="The rest of the committee's board."
+            tasks={others}
+            emptyMessage={
+              tasks.length
+                ? "No other tasks match this view."
+                : canManage
+                  ? "No tasks yet. Create the first one and assign it to someone."
+                  : "No tasks yet."
+            }
+            meId={meId}
+            members={board?.members ?? []}
+            canManage={canManage}
+            isAdmin={isAdmin}
+            collaborationReady={collaborationReady}
+            onEdit={openDialog}
+            onDelete={handleDelete}
+            onStatusChange={handleStatusChange}
+            isBusy={setStatus.isPending}
+          />
+        </div>
+      )}
+
+      {canManage ? (
+        <TaskFormDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          task={dialogTask}
+          members={board?.members ?? []}
+          collaborationReady={collaborationReady}
+          canSetStatus={
+            !dialogTask || isAdmin || dialogTask.assignees.some((entry) => entry.userId === meId)
+          }
+          onSubmit={handleSubmit}
+        />
+      ) : null}
     </div>
   );
 }
 
-function TaskActions({ task }: { task: TaskRow }) {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      await updateTask(task.id!, new FormData(event.currentTarget));
-      await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-      setOpen(false);
-    } catch (item) {
-      setError(item instanceof Error ? item.message : "Unable to update task");
-    } finally {
-      setSaving(false);
-    }
-  }
-
+function PageHeading() {
   return (
-    <>
-      <RowActions
-        onEdit={() => setOpen(true)}
-        onDelete={async () => {
-          if (!window.confirm("Delete this task?")) return;
-          await deleteTask(task.id!);
-          await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-        }}
-      />
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Edit Task</DialogTitle></DialogHeader>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="grid gap-4 sm:grid-cols-2"><TaskFields task={task} /></div>
-            {error ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+    <div>
+      <h2 className="text-2xl font-semibold">Tasks</h2>
+      <p className="text-sm text-muted-foreground">
+        Who is doing what, by when - with the conversation on each task kept alongside it.
+      </p>
+    </div>
   );
 }
 
-async function addTask(formData: FormData) {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const eventId = await getFirstEventId();
-  const { error } = await supabase.from("tasks").insert({
-    event_id: eventId,
-    task: formString(formData, "task"),
-    category: formString(formData, "category"),
-    owner_name: formString(formData, "owner"),
-    priority: formString(formData, "priority", "Medium"),
-    due_date: formString(formData, "due") || null,
-    status: formString(formData, "status", "Not Started"),
-  });
-
-  if (error) throw error;
+function CountTile({
+  label,
+  value,
+  icon: Icon,
+  tone = "default",
+}: {
+  label: string;
+  value: number;
+  icon: typeof ListChecks;
+  tone?: "default" | "primary" | "alert";
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-lg border bg-card px-2 py-2 sm:px-3",
+        tone === "primary" && "border-primary/40 bg-primary/5",
+        tone === "alert" && "border-destructive/30",
+      )}
+    >
+      <div className="flex items-baseline gap-1.5">
+        <p className="text-xl font-semibold tabular-nums sm:text-2xl">{value}</p>
+        {/* The icon is decoration next to a labelled number; it is the first
+            thing to go when four tiles have to share a phone's width. */}
+        <Icon
+          className={cn(
+            "hidden h-4 w-4 shrink-0 self-center sm:block",
+            tone === "primary" ? "text-primary" : "text-muted-foreground",
+          )}
+          aria-hidden="true"
+        />
+      </div>
+      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">
+        {label}
+      </p>
+    </div>
+  );
 }
 
-async function updateTask(id: string, formData: FormData) {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase
-    .from("tasks")
-    .update({
-      task: formString(formData, "task"),
-      category: formString(formData, "category"),
-      owner_name: formString(formData, "owner"),
-      priority: formString(formData, "priority", "Medium"),
-      due_date: formString(formData, "due") || null,
-      status: formString(formData, "status", "Not Started"),
-    })
-    .eq("id", id);
-  if (error) throw error;
-}
+function TaskSection({
+  title,
+  hint,
+  tasks,
+  emptyMessage,
+  ...cardProps
+}: {
+  title: string;
+  hint: string;
+  tasks: Task[];
+  emptyMessage: string;
+  meId?: string;
+  members: TaskMember[];
+  canManage: boolean;
+  isAdmin: boolean;
+  collaborationReady: boolean;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
+  onStatusChange: (task: Task, status: TaskStatus) => void;
+  isBusy: boolean;
+}) {
+  return (
+    <section className="space-y-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <h3 className="text-base font-semibold">
+          {title}
+          {tasks.length ? (
+            <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground">{tasks.length}</span>
+          ) : null}
+        </h3>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
 
-async function deleteTask(id: string) {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase.from("tasks").delete().eq("id", id);
-  if (error) throw error;
+      {tasks.length ? (
+        <div className="space-y-2.5">
+          {tasks.map((task) => (
+            <TaskCard key={task.id} task={task} {...cardProps} />
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{emptyMessage}</p>
+      )}
+    </section>
+  );
 }

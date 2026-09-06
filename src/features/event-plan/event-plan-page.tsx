@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { AgendaField } from "@/features/event-plan/agenda-editor";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
 import { ColumnFilter, SortableHeader, TableColumn, TableToolbar, useFilteredSortedRows } from "@/features/shared/table-tools";
+import { parseAgenda } from "@/lib/agenda";
 import { apiFetch } from "@/lib/api";
 import { EventPlanRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { useEventContext } from "@/lib/event-context";
@@ -26,7 +28,7 @@ const eventPlanColumns: TableColumn<EventPlanRow>[] = [
   { key: "day", label: "Day", getValue: (row) => row.day },
   { key: "date", label: "Date", getValue: (row) => row.date },
   { key: "activity", label: "Event", getValue: (row) => row.activity },
-  { key: "subEvents", label: "Sub Events", getValue: (row) => row.subEvents },
+  { key: "subEvents", label: "Agenda", getValue: (row) => row.subEvents },
   { key: "startTime", label: "Start", getValue: (row) => row.startTime },
   { key: "endTime", label: "End", getValue: (row) => row.endTime },
   { key: "location", label: "Location", getValue: (row) => row.location },
@@ -34,13 +36,6 @@ const eventPlanColumns: TableColumn<EventPlanRow>[] = [
   { key: "owner", label: "Owner", getValue: (row) => row.owner },
   { key: "status", label: "Status", getValue: (row) => row.status },
 ];
-
-function splitSubEvents(value: string) {
-  return value
-    .split(/\r?\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 function TextareaField({ label, name, defaultValue }: { label: string; name: string; defaultValue?: string }) {
   return (
@@ -69,7 +64,7 @@ function EventPlanFields({ plan }: { plan?: EventPlanRow }) {
       <FormField label="Expected Attendance" name="attendance" type="number" defaultValue={plan?.attendance ?? 0} />
       <FormField label="Owner" name="owner" defaultValue={plan?.owner} />
       <FormField label="Status" name="status" defaultValue={plan?.status ?? "Planned"} />
-      <TextareaField label="Sub Events" name="subEvents" defaultValue={plan?.subEvents} />
+      <AgendaField defaultValue={plan?.subEvents} />
       <TextareaField label="Notes" name="notes" defaultValue={plan?.notes} />
     </>
   );
@@ -82,20 +77,20 @@ export function EventPlanPage() {
   const planRows = data.eventPlan;
   const planTable = useFilteredSortedRows(planRows, eventPlanColumns, "date");
   const locations = new Set(planRows.map((row) => row.location).filter(Boolean)).size;
-  const subEventCount = planRows.reduce((sum, row) => sum + splitSubEvents(row.subEvents).length, 0);
+  const subEventCount = planRows.reduce((sum, row) => sum + parseAgenda(row.subEvents).length, 0);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Events</h2>
-          <p className="text-sm text-muted-foreground">Plan event timings, owners, locations, and optional sub-events for the dashboard timeline.</p>
+          <p className="text-sm text-muted-foreground">Plan event timings, owners, locations, and the agenda inside each event - puja, arti, pushpanjali, prasad, or a cultural running order. Everything here drives the dashboard timeline.</p>
         </div>
         <DataSourceBadge source={data.source} reason={data.fallbackReason} />
       </div>
       <section className="grid gap-3 sm:grid-cols-3">
         <StatCard title="Events" value={String(planRows.length)} icon={CalendarDays} />
-        <StatCard title="Sub Events" value={String(subEventCount)} icon={ListChecks} />
+        <StatCard title="Agenda Items" value={String(subEventCount)} icon={ListChecks} />
         <StatCard title="Locations" value={String(locations)} icon={MapPin} />
       </section>
       <PageTools
@@ -124,11 +119,14 @@ export function EventPlanPage() {
                 <td className="px-4 py-3">{plan.date}</td>
                 <td className="px-4 py-3 font-medium">{plan.activity}</td>
                 <td className="px-4 py-3">
-                  <div className="flex max-w-56 flex-wrap gap-1.5">
-                    {splitSubEvents(plan.subEvents).map((subEvent) => (
-                      <span key={subEvent} className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{subEvent}</span>
+                  <ul className="max-w-64 space-y-1">
+                    {parseAgenda(plan.subEvents).map((subEvent, index) => (
+                      <li key={`${plan.id ?? plan.activity}-agenda-${index}`} className="flex gap-2 text-xs">
+                        <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                        <span className="text-foreground">{subEvent}</span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </td>
                 <td className="px-4 py-3">{plan.startTime}</td>
                 <td className="px-4 py-3">{plan.endTime}</td>

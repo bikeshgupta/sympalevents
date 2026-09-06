@@ -3,6 +3,7 @@ import { ChevronsUpDown, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
+import { NavDrawer } from "@/components/layout/nav-drawer";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
@@ -20,12 +21,18 @@ export function AppLayout() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
-  const { events, selectedEventId, setSelectedEventId } = useEventContext();
+  const { events, selectedEventId, setSelectedEventId, isLoading: isEventLoading } = useEventContext();
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
-  const visibleNavItems = navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
+  // With no event there is nobody to have set visibility - the app is on the
+  // demo dataset - so the nav shows the tour rather than going blank. With an
+  // event, the server's list is the only thing that decides.
+  const isDemoNav = !selectedEventId && !isEventLoading;
+  const visibleNavItems = isDemoNav
+    ? navItems
+    : navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const canRequestCommitteeAccess = Boolean(
     session && selectedEventId && eventAccess.role !== "admin" && eventAccess.role !== "committee",
@@ -46,8 +53,10 @@ export function AppLayout() {
     }
   }
 
+  // No `pb-20` on the root any more: the fixed bottom bar it reserved space
+  // for is gone, replaced by the header drawer (see nav-drawer.tsx).
   return (
-    <div className="min-h-screen bg-background pb-20 lg:pb-0">
+    <div className="min-h-screen bg-background">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card lg:block">
         <div className="flex h-16 items-center border-b px-5">
           <div>
@@ -154,10 +163,13 @@ export function AppLayout() {
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
           ) : (
-            <Button variant="secondary" size="sm" asChild>
+            // On a phone this lives in the drawer, under the account block -
+            // two sign-in buttons a thumb apart would be noise.
+            <Button variant="secondary" size="sm" asChild className="hidden lg:inline-flex">
               <Link to="/login">Sign in</Link>
             </Button>
           )}
+          <NavDrawer items={visibleNavItems} session={session} userName={userName} />
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-5 lg:px-6">
           {requestMessage ? (
@@ -166,24 +178,6 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
-
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex gap-1 overflow-x-auto border-t bg-card px-2 lg:hidden">
-        {visibleNavItems.map((item) => (
-          <NavLink
-            key={item.href}
-            to={item.href}
-            className={({ isActive }) =>
-              cn(
-                "flex min-w-20 flex-col items-center gap-1 px-2 py-2 text-[11px] text-muted-foreground",
-                isActive && "text-primary",
-              )
-            }
-          >
-            <item.icon className="h-5 w-5" />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
-      </nav>
     </div>
   );
 }

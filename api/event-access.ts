@@ -1,20 +1,14 @@
+import { eventPageKeys, fetchPageVisibility } from "./_lib/page-visibility.js";
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
-const publicPageKeys = ["dashboard", "budget", "auctions"];
-const eventPageKeys = [
-  "dashboard",
-  "contributions",
-  "sponsors",
-  "budget",
-  "expenses",
-  "auctions",
-  "prasad",
-  "tasks",
-  "volunteers",
-  "event-plan",
-  "contacts",
-];
-
+/**
+ * Every page the caller may see for one event, with edit rights - this is
+ * what the sidebar and bottom nav filter on.
+ *
+ * Which pages are open to whom is no longer hardcoded here; it comes from
+ * event_page_visibility, set by the admin in Settings. See
+ * api/_lib/page-visibility.ts.
+ */
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== "GET") {
@@ -29,17 +23,20 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    const visibility = await fetchPageVisibility(eventId);
     const authHeader = String(req.headers.authorization ?? "");
 
     if (!authHeader.startsWith("Bearer ")) {
       sendJson(res, 200, {
         role: null,
-        pages: publicPageKeys.map((pageKey) => ({
-          pageKey,
-          canView: true,
-          canEdit: false,
-          accessLevel: "view",
-        })),
+        pages: eventPageKeys
+          .filter((pageKey) => visibility[pageKey] === "public")
+          .map((pageKey) => ({
+            pageKey,
+            canView: true,
+            canEdit: false,
+            accessLevel: "view",
+          })),
       });
       return;
     }
@@ -79,25 +76,30 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const assignedPages = new Map(
+    const granted = new Map(
       (permissions ?? [])
         .filter((permission) => permission.access_level === "view" || permission.access_level === "edit")
-        .map((permission) => [permission.page_key, permission.access_level]),
+        .map((permission) => [permission.page_key, permission.access_level as "view" | "edit"]),
     );
 
-    for (const pageKey of publicPageKeys) {
-      if (!assignedPages.has(pageKey)) assignedPages.set(pageKey, "view");
-    }
+    // A signed-in user sees every page the admin opened up to "public" or
+    // "authenticated", plus anything granted to them personally. A page the
+    // admin left "restricted" needs that personal grant.
+    const pages = eventPageKeys
+      .map((pageKey) => {
+        const accessLevel = granted.get(pageKey);
+        const openToSignedIn = visibility[pageKey] === "public" || visibility[pageKey] === "authenticated";
+        if (!accessLevel && !openToSignedIn) return null;
+        return {
+          pageKey,
+          canView: true,
+          canEdit: accessLevel === "edit",
+          accessLevel: accessLevel ?? ("view" as const),
+        };
+      })
+      .filter(Boolean);
 
-    sendJson(res, 200, {
-      role,
-      pages: [...assignedPages.entries()].map(([pageKey, accessLevel]) => ({
-        pageKey,
-        canView: true,
-        canEdit: accessLevel === "edit",
-        accessLevel,
-      })),
-    });
+    sendJson(res, 200, { role, pages });
   } catch (error) {
     handleApiError(res, error);
   }
