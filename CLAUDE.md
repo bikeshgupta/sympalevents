@@ -173,6 +173,69 @@ reintroduce it; add a page to `navItems` and it appears in both surfaces.
 Both surfaces filter on the **same** list — `useEventAccess().pages` — so the sidebar
 and the drawer can never disagree about what a viewer may open. See "Auth and access".
 
+## App icon and installability
+
+**Six people around a shared centre**, in warm gold on the brand teal
+(`--primary`, `#1D5B5E`).
+
+The committee rather than the festival. This app is multi-event, so anything
+festival-specific — a diya, a modak, a Ganesh silhouette — would date it to one
+celebration; a group of residents organising something together does not. (Earlier
+drafts of a diya and an "S" monogram were both rejected; the S in particular is a
+trap, because the stroke weight that makes a letter solid at 512px closes its counters
+at 16px.)
+
+Three things about the drawing are load-bearing, all of them learned by getting them
+wrong first:
+
+- **Each figure is a head circle plus a separate shoulder dome with a 12-unit gap**,
+  the dome wider than the head so the silhouette narrows at the neck. Overlap them and
+  the pair reads as a *heart*, not a person.
+- **The gradient is declared in each figure's own rotated frame**, so all six are
+  shaded identically. One gradient across the whole icon left the top of the ring pale
+  and the bottom deep orange, and they stopped reading as one group.
+- **The gradient range is short** (`#FFE4A0` → `#F6BE60`). More contrast than that and
+  the head reads as an object separate from the body.
+
+If you edit the generator, note that GDI+'s `LinearGradientBrush` **tiles** by default:
+a gradient whose range is narrower than the shape it fills wraps around and lays hard
+bands across it.
+
+**Known limitation:** at 16px six figures collapse into a warm blob. That is inherent
+to the concept, not a bug to fix by nudging — accepted deliberately, on the grounds
+that a gold-on-teal tab marker is still distinctive. If tab legibility ever matters
+more, the fix is a *simplified* 16/32px favicon (the hub alone, or three larger
+figures) while the home-screen icon keeps all six.
+
+Everything lives in [public/](public/) and is served byte-for-byte at a fixed path.
+That is not incidental: a Vite-imported asset gets a new hashed filename every build,
+and an icon URL that moves is one a browser cache and an installed home-screen
+shortcut both lose. Same reasoning as `og-image.jpg`.
+
+| File | Used by |
+|---|---|
+| `favicon.svg` | tab icon on anything modern |
+| `favicon.ico` | older browsers, and the `/favicon.ico` a browser requests whether or not you link one. 16/32/48, PNG-in-ICO |
+| `apple-touch-icon.png` | iOS "Add to Home Screen". **Full-bleed** — iOS applies its own rounding, and ignores the manifest's icons entirely |
+| `icon-192.png`, `icon-512.png` | manifest, `purpose: "any"` |
+| `icon-maskable-512.png` | manifest, `purpose: "maskable"`. Full-bleed with the letter at 84%, keeping it inside the 80% safe circle Android crops to |
+| `site.webmanifest` | name, `start_url: /dashboard`, `display: standalone`, theme colours |
+
+**All of them are one drawing.** The geometry is authored in a 1024×1024 space and
+shared between `favicon.svg` and the generator script that rasterised the PNGs
+(`scripts/make-icons.ps1`) — change one and you must change the other, or the tab icon
+and the home-screen icon stop matching.
+
+### It is not a full PWA yet
+
+The manifest and icons make it **installable on iOS** ("Add to Home Screen" gives a
+proper icon and a standalone, chrome-less window) and give Android/Chrome everything
+it needs except one thing: **Chrome will not offer its install prompt without a
+service worker**. There is deliberately no service worker here — adding one to a live
+app introduces cache-invalidation behaviour worth deciding on its own terms, not as a
+side effect of an icon change. Until then, Android users can still install via
+Chrome's "Add to Home screen" menu item, and there is no offline support.
+
 ## Link previews (Open Graph)
 
 [index.html](index.html) carries static `og:*` / `twitter:*` meta tags so sharing a link
