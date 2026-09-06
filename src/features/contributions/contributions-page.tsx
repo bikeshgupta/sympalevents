@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ContributionRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
 import { supabase } from "@/lib/supabase";
+import { formatCurrencyCompact } from "@/features/dashboard/dashboard-utils";
 import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
@@ -166,15 +167,17 @@ export function ContributionsPage() {
   const visibleReceived = visibleRows.reduce((sum, row) => sum + row.received, 0);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Contributions</h2>
-          <p className="text-sm text-muted-foreground">
+    <div className="space-y-4">
+      {/* Title and actions share one line at every width - stacking them cost a
+          whole row on a phone before anything useful was on screen. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold sm:text-2xl">Contributions</h2>
+          <p className="text-xs text-muted-foreground sm:text-sm">
             Track resident interest, expected amount, collections, and payment mode.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <DataSourceBadge source={data.source} reason={data.fallbackReason} isLoading={isFetching} />
           <Button
             variant="outline"
@@ -187,14 +190,22 @@ export function ContributionsPage() {
             }
           >
             <Download className="h-4 w-4" />
-            Export CSV
+            {/* The label is what makes the button wide; the icon and its title
+                still say what it does on a phone. */}
+            <span className="hidden sm:inline">Export CSV</span>
+            <span className="sr-only sm:hidden">Export CSV</span>
           </Button>
         </div>
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* One row at every width. These were one column on a phone - four stacked
+          cards, ~380px of screen, before a single resident was visible.
+          `compact` tiles plus compact currency (with the exact figure on the
+          `title`, as the UI rules require) get the same four numbers into ~60px. */}
+      <section className="grid grid-cols-4 gap-1.5 sm:gap-3">
         <StatCard
-          title="Total Flats"
+          compact
+          title="Flats"
           value={String(contributionRows.length)}
           countTo={contributionRows.length}
           format={(count) => String(count)}
@@ -202,25 +213,31 @@ export function ContributionsPage() {
           note={contributionRows.length ? `${paidCount} have paid` : undefined}
         />
         <StatCard
+          compact
           title="Expected"
-          value={formatCurrency(expected)}
+          value={formatCurrencyCompact(expected)}
+          valueTitle={formatCurrency(expected)}
           countTo={expected}
-          format={formatCurrency}
+          format={formatCurrencyCompact}
           icon={Wallet}
         />
         <StatCard
+          compact
           title="Received"
-          value={formatCurrency(received)}
+          value={formatCurrencyCompact(received)}
+          valueTitle={formatCurrency(received)}
           countTo={received}
-          format={formatCurrency}
+          format={formatCurrencyCompact}
           icon={HandCoins}
           note={expected > 0 ? `${collectedPercent}% of expected` : undefined}
         />
         <StatCard
-          title="Additional Contribution"
-          value={formatCurrency(additionalContribution)}
+          compact
+          title="Additional"
+          value={formatCurrencyCompact(additionalContribution)}
+          valueTitle={formatCurrency(additionalContribution)}
           countTo={additionalContribution}
-          format={formatCurrency}
+          format={formatCurrencyCompact}
           icon={CirclePlus}
           note={
             overPayers.length
@@ -231,9 +248,10 @@ export function ContributionsPage() {
       </section>
 
       <PageTools
+        inline
         searchValue={contributionTable.search}
         onSearchChange={contributionTable.setSearch}
-        searchPlaceholder="Search flat, resident, mode…"
+        searchPlaceholder="Search flat, resident…"
         searchLabel="Search contributions"
         action={
           access.canEdit ? (
@@ -247,7 +265,7 @@ export function ContributionsPage() {
       />
 
       {/* Mobile: a card per resident. The desktop table is 980px wide and unusable on a phone. */}
-      <div className="space-y-3 lg:hidden">
+      <div className="space-y-1.5 lg:hidden">
         <TableToolbar
           resultCount={visibleRows.length}
           totalCount={contributionRows.length}
@@ -258,41 +276,12 @@ export function ContributionsPage() {
         />
         {visibleRows.length ? (
           visibleRows.map((row, index) => (
-            <Card key={rowKey(row, index)} className="animate-fade-up" style={staggerStyle(index)}>
-              <CardContent className="space-y-3 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{row.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {row.flat}
-                      {row.type ? ` · ${row.type}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <StatusBadge status={row.status} />
-                    {row.id && access.canEdit ? <ContributionActions contribution={row} /> : null}
-                  </div>
-                </div>
-                <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Expected</dt>
-                    <dd className="font-medium tabular-nums">{formatCurrency(row.expected)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Received</dt>
-                    <dd className="font-medium tabular-nums">{formatCurrency(row.received)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Payment date</dt>
-                    <dd className="tabular-nums">{formatPaymentDate(row.paymentDate)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Mode</dt>
-                    <dd>{row.mode && row.mode !== "-" ? row.mode : "—"}</dd>
-                  </div>
-                </dl>
-              </CardContent>
-            </Card>
+            <ContributionCard
+              key={rowKey(row, index)}
+              row={row}
+              index={index}
+              canEdit={access.canEdit}
+            />
           ))
         ) : (
           <EmptyState hasRows={contributionRows.length > 0} onClearFilters={contributionTable.clearFilters} />
@@ -351,17 +340,17 @@ export function ContributionsPage() {
                   className="animate-fade-in border-t transition-colors hover:bg-muted/40"
                   style={staggerStyle(index)}
                 >
-                  <td className="px-4 py-3 tabular-nums">{row.flat}</td>
-                  <td className="px-4 py-3 font-medium">{row.name}</td>
-                  <td className="px-4 py-3">{row.type}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(row.expected)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(row.received)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap tabular-nums">{formatPaymentDate(row.paymentDate)}</td>
-                  <td className="px-4 py-3">{row.mode && row.mode !== "-" ? row.mode : "—"}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2 tabular-nums">{row.flat}</td>
+                  <td className="px-4 py-2 font-medium">{row.name}</td>
+                  <td className="px-4 py-2">{row.type}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(row.expected)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(row.received)}</td>
+                  <td className="px-4 py-2 whitespace-nowrap tabular-nums">{formatPaymentDate(row.paymentDate)}</td>
+                  <td className="px-4 py-2">{row.mode && row.mode !== "-" ? row.mode : "—"}</td>
+                  <td className="px-4 py-2">
                     <StatusBadge status={row.status} />
                   </td>
-                  <td className="px-4 py-3">{row.id && access.canEdit ? <ContributionActions contribution={row} /> : null}</td>
+                  <td className="px-4 py-1">{row.id && access.canEdit ? <ContributionActions contribution={row} /> : null}</td>
                 </tr>
               ))
             ) : (
@@ -387,6 +376,58 @@ export function ContributionsPage() {
         </table>
       </Card>
     </div>
+  );
+}
+
+/**
+ * One resident's contribution on a phone, in two rows rather than the six the
+ * expected/received/date/mode definition list used to take. The point of this
+ * screen is scanning a society's worth of flats, so the card is sized for how
+ * many fit on one screen, not for how much each one can hold.
+ *
+ *   Meera Sharma .............................. R500 of R1,000  [Received]
+ *   A-101 - Owner - 12 Sep 2026 - UPI ...................... [edit] [delete]
+ *
+ * "of R1,000" appears only when received and expected differ, so a fully paid
+ * flat reads as one clean number and a shortfall is the thing that stands out.
+ */
+function ContributionCard({
+  row,
+  index,
+  canEdit,
+}: {
+  row: ContributionRow;
+  index: number;
+  canEdit: boolean;
+}) {
+  const short = row.received !== row.expected;
+  const meta = [row.flat, row.type, formatPaymentDate(row.paymentDate), row.mode && row.mode !== "-" ? row.mode : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <Card className="animate-fade-up" style={staggerStyle(index)}>
+      <CardContent className="px-3 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</p>
+          <p className="shrink-0 text-sm tabular-nums">
+            <span className="font-semibold">{formatCurrency(row.received)}</span>
+            {short ? (
+              <span className="text-muted-foreground"> of {formatCurrency(row.expected)}</span>
+            ) : null}
+          </p>
+          <StatusBadge status={row.status} />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{meta}</p>
+          {row.id && canEdit ? (
+            <div className="-my-1 shrink-0">
+              <ContributionActions contribution={row} />
+            </div>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

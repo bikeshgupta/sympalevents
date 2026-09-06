@@ -11,6 +11,7 @@ export function StatCard({
   isLoading = false,
   countTo,
   format,
+  compact = false,
 }: {
   title: string;
   value: string;
@@ -21,8 +22,47 @@ export function StatCard({
   /** Pass with `format` to count the value up on load instead of snapping to it. */
   countTo?: number;
   format?: (value: number) => string;
+  /**
+   * Opt-in dense variant for a row of four tiles that must fit a phone's width
+   * without wrapping: value first, label under it, and the icon and note - both
+   * supplementary next to a labelled number - dropped below `sm`.
+   *
+   * Off by default on purpose. Four screens still use the roomy original and
+   * must keep looking exactly as they do; only Contributions opts in.
+   */
+  compact?: boolean;
 }) {
   const animate = typeof countTo === "number" && typeof format === "function";
+
+  if (compact) {
+    return (
+      <Card className="transition-shadow hover:shadow-md">
+        <CardContent className="px-2 py-2 sm:px-3">
+          <div className="flex items-baseline gap-1.5">
+            {isLoading ? (
+              <div className="h-6 w-14 animate-pulse rounded bg-muted" aria-hidden="true" />
+            ) : animate ? (
+              <AnimatedNumber
+                value={countTo}
+                format={format}
+                className="block truncate text-lg font-semibold tabular-nums sm:text-xl"
+                title={valueTitle}
+              />
+            ) : (
+              <p className="truncate text-lg font-semibold tabular-nums sm:text-xl" title={valueTitle}>
+                {value}
+              </p>
+            )}
+            <Icon className="hidden h-4 w-4 shrink-0 self-center text-primary sm:block" aria-hidden="true" />
+          </div>
+          <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">
+            {title}
+          </p>
+          {note ? <p className="hidden truncate text-xs text-muted-foreground sm:block">{note}</p> : null}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="transition-shadow hover:shadow-md">
