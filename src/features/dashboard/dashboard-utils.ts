@@ -100,7 +100,14 @@ export function getNextEvent(items: EventPlanRow[], now = new Date()) {
 }
 
 export function formatEventDate(date: string) {
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00+05:30`));
+  // The date is parsed at midnight IST and must be *read back* in IST too -
+  // without the timeZone the browser's own zone reformats it, and anyone
+  // west of India sees the previous day on every date the app shows.
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(`${date}T00:00:00+05:30`));
 }
 
 export function formatEventTime(time: string) {
@@ -111,4 +118,58 @@ export function formatEventTime(time: string) {
     hour12: true,
     timeZone: "Asia/Kolkata",
   }).format(new Date(toEventZoneTimestamp("2026-01-01", time)));
+}
+
+/** A stored timestamp (timestamptz) as a date, read in the event's zone. */
+export function formatEventTimestamp(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
+}
+
+/**
+ * Where an agenda item inside one scheduled event sits relative to now.
+ * Same three states as the timeline itself, so the nested rows read as
+ * smaller versions of the row above them rather than a new vocabulary.
+ * An untimed item inherits its parent's status - it is part of that block,
+ * we just do not know when inside it.
+ */
+export function getAgendaItemStatus(
+  item: { startTime: string; endTime: string },
+  date: string,
+  parentStatus: TimelineStatus,
+  now = new Date(),
+): TimelineStatus {
+  if (!item.startTime) return parentStatus;
+
+  const currentMs = now.getTime();
+  const startMs = toEventZoneTimestamp(date, item.startTime);
+  const endMs = item.endTime ? toEventZoneTimestamp(date, item.endTime) : startMs;
+
+  if (currentMs < startMs) return "upcoming";
+  if (item.endTime && currentMs <= endMs) return "current";
+  if (!item.endTime && currentMs - startMs < 30 * 60000) return "current";
+  return "completed";
+}
+
+/** How far through a start-to-end window we are, 0-100. */
+export function getWindowProgress(date: string, startTime: string, endTime: string, now = new Date()) {
+  if (!startTime || !endTime) return 0;
+  const startMs = toEventZoneTimestamp(date, startTime);
+  const endMs = toEventZoneTimestamp(date, endTime);
+  if (endMs <= startMs) return 0;
+  return Math.min(100, Math.max(0, ((now.getTime() - startMs) / (endMs - startMs)) * 100));
+}
+
+/** "8:30 AM - 9:00 PM" across a day's events, or null when nothing is timed. */
+export function getDayWindow(items: EventPlanRow[]) {
+  const starts = items.map((item) => item.startTime).filter(Boolean).sort();
+  const ends = items.map((item) => item.endTime || item.startTime).filter(Boolean).sort();
+  if (!starts.length) return null;
+  return { start: starts[0], end: ends.at(-1) ?? starts.at(-1)! };
 }

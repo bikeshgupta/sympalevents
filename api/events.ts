@@ -1,3 +1,4 @@
+import { handleEventClosing } from "./_lib/closing.js";
 import {
   assertServiceSupabase,
   getRequestBody,
@@ -6,7 +7,18 @@ import {
   sendJson,
 } from "./_lib/server.js";
 
+/**
+ * Event creation, plus the closing page's three resources dispatched by
+ * `?resource=` (see api/_lib/closing.ts for why they live here rather than
+ * in files of their own). A request with no `resource` is the original
+ * create-an-event POST and behaves exactly as it always has.
+ */
 export default async function handler(req: any, res: any) {
+  const resource = String(req.query?.resource ?? "");
+  if (resource === "closing" || resource === "gallery" || resource === "feedback") {
+    return handleEventClosing(req, res);
+  }
+
   try {
     if (req.method !== "POST") {
       sendJson(res, 405, { error: "Method not allowed" });

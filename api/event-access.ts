@@ -1,6 +1,6 @@
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
-const publicPageKeys = ["dashboard", "budget", "auctions"];
+const publicPageKeys = ["dashboard", "budget", "auctions", "closing"];
 const eventPageKeys = [
   "dashboard",
   "contributions",
@@ -13,6 +13,7 @@ const eventPageKeys = [
   "volunteers",
   "event-plan",
   "contacts",
+  "closing",
 ];
 
 export default async function handler(req: any, res: any) {

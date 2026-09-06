@@ -115,6 +115,19 @@ against Google's public keys and map the user into Supabase `app_users`.
   lets it memoize on `rows` alone without an `exhaustive-deps` fight. Follow that
   pattern for a third tab rather than inlining a new closure.
 - CRUD dialogs use `CrudDialog` + `FormField` + the `formString` / `formNumber` helpers.
+- Agenda items inside a scheduled event (puja start, arti, pushpanjali, when the
+  prasad counter opens and closes, a cultural running order) live in the existing
+  `event_schedule.sub_events` text column, one per line as
+  `HH:MM-HH:MM | Title | Note`. Parse and serialize them with `parseAgenda` /
+  `serializeAgenda` in [src/lib/agenda.ts](src/lib/agenda.ts) - never split the
+  string by hand. **No migration was needed for this**: a line that has never had a
+  time still parses as a plain label, and a line holding several comma-separated
+  labels still parses as several. The Events page writes the canonical shape
+  through `AgendaField`
+  ([src/features/event-plan/agenda-editor.tsx](src/features/event-plan/agenda-editor.tsx)),
+  a row editor that serializes into a hidden input so the surrounding uncontrolled
+  `FormData` flow is untouched; it keeps a "Paste as text" mode because
+  bulk-pasting a running order out of WhatsApp is how this actually gets filled in.
 
 ## Link previews (Open Graph)
 
@@ -187,6 +200,8 @@ Three tables, in dependency order:
 3. **`auction_bids`** ([011_auction_bids.sql](supabase/migrations/011_auction_bids.sql))
    — same FK fix. Append-only; bids are never updated or deleted, the history *is* the
    record.
+
+(014, for the closing page, is new and has **not** been run - see "Closing page" below.)
 
 **Migrations 009–011 and 013 are confirmed applied to the live Supabase project**
 (verified directly against it — `is_published` is present and populated on the real
@@ -410,6 +425,86 @@ an auction-only detail.
   check, to avoid a second copy drifting out of sync). **When event-photo upload is
   built, decide its permission model explicitly** rather than assuming every member can
   upload just because auctions required committee.
+
+## Closing page
+
+`/closing` ([src/features/closing/](src/features/closing/)) - what the celebration
+added up to once it is over: the committee's thank-you note, the credits, the
+photographs, and residents' reviews. **Public, like the dashboard** (`closing` is in
+`publicPageKeys` client-side and in the two server lists,
+[api/page-access.ts](api/page-access.ts) and [api/event-access.ts](api/event-access.ts)) -
+a resident opens the link and reads it without an account.
+
+### Data model
+
+[014_event_closing.sql](supabase/migrations/014_event_closing.sql) adds three tables.
+**It has not been run** - like every migration here, the user applies it by hand
+(README -> Supabase); until then the page renders its generated summary and the
+gallery/reviews come back empty.
+
+- **`event_closing`** - one row per event: `headline`, `message`, and `is_closed`.
+- **`event_gallery_photos`** - `image_url`, `caption`, `album`, `sort_order`.
+- **`event_feedback`** - `rating` 1-5 + `comment`, `unique (event_id, user_id)`, which
+  is what makes "write or edit my review" one upsert.
+
+RLS is enabled on all three **with zero policies**, the same deliberate choice as the
+auction tables - Firebase auth means `auth.uid()` never resolves for the browser's
+Supabase client, so a policy against it would be dead code. All access goes through
+the API below with the service-role client. Do not add anon/authenticated policies.
+
+### `is_closed` is not "the end date has passed"
+
+`getEventPhase` already turns the hero badge Upcoming -> Live now -> Completed from the
+event's dates. `is_closed` is a separate, committee-controlled switch, because a
+committee is still collecting photos and writing the note for a week afterwards and the
+closing page should not take over the dashboard until they say so. Flipping it (the
+control lives on `/closing`, admin/committee only, and is reversible):
+
+- puts `ClosingDashboardCard` directly under the hero, and
+- moves the Financial Summary / Funding Progress row **below** the schedule instead of
+  above it - after the event, "how did it go" outranks "what is still unfunded".
+- forces the hero badge to Completed even if the dates say otherwise.
+
+### API - no new serverless function
+
+The three resources are served by **`api/events.ts`** dispatched on `?resource=`
+(`closing`, `gallery`, `feedback`), with the handlers in
+[api/\_lib/closing.ts](api/_lib/closing.ts). Same reason as `api/auctions.ts`: this
+project is at the Vercel function cap, and `api/_lib/` is never routed. A request with
+no `resource` is still the original create-an-event POST. `/api/events` was already in
+`localApiRoutes`, so `vite.config.ts` needed no change.
+
+- `GET` is public and returns everything in one round trip (note, credits, gallery,
+  feedback). A token is sent when there is one, which is only how the server marks
+  which review is `mine`.
+- The note, and every gallery write, need `requireEventCommittee`.
+- A review needs a signed-in user and is addressed by `(event_id, the caller's own
+  user id)` - never an id the client sends - so nobody can edit anybody else's.
+
+**Privacy:** the credits list returns **names only** - no email, no avatar, no role -
+because this page is public and the ask was to credit people, not to publish a
+directory. Review authors carry their avatar because they chose to post under their own
+name. Contact details and payment references stay off it, same as the dashboard; the
+contributor and sponsor lists here are names with no amounts beside them.
+
+### Client structure
+
+- `useEventClosing(eventId)` ([src/lib/closing.ts](src/lib/closing.ts)) - the one query
+  plus every mutation. `groupByAlbum` is the shared album grouping.
+- The thank-you note is **generated from the event's own numbers** when the committee
+  has not written one (`defaultClosingMessage` in
+  [closing-copy.ts](src/features/closing/closing-copy.ts)), so the page is never a blank
+  box and never credits the wrong people. Clearing the message box goes back to it.
+- `ClosingStory` / `ClosingStats` / `ClosingDashboardCard` / `ClosingRatingStrip` all
+  live in [closing-summary.tsx](src/features/closing/closing-summary.tsx) - the
+  dashboard card and the page share them so the two never drift.
+- Captions print **over the bottom of their own photo** on a gradient, in `.font-display`
+  (the Playfair face the countdown uses, without the tabular figures) - a deliberate
+  ask, not a styling accident.
+- Photo uploads reuse `/api/uploads` and `useImageUpload()` with the new `closing`
+  folder (committee-only, decided explicitly - see the note in `api/uploads.ts`).
+- `GalleryPreview` on the dashboard is a window onto the same photos, not a second
+  gallery to manage.
 
 ## Motion
 

@@ -7,6 +7,7 @@ import {
   HandCoins,
   HeartHandshake,
   ListChecks,
+  PartyPopper,
   ReceiptIndianRupee,
   Settings,
   Users,
@@ -25,6 +26,7 @@ export const navItems = [
   { label: "Volunteers", href: "/volunteers", icon: Users },
   { label: "Events", href: "/event-plan", icon: CalendarDays },
   { label: "Contacts", href: "/contacts", icon: Contact },
+  { label: "Closing", href: "/closing", icon: PartyPopper },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 

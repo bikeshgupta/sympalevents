@@ -2,12 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
   Check,
+  ChevronDown,
   CircleAlert,
   Clock3,
   HandCoins,
   HeartHandshake,
   Image,
   Landmark,
+  ListChecks,
   MapPin,
   ReceiptIndianRupee,
   Sparkles,
@@ -18,6 +20,8 @@ import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from
 import { AnimatedNumber } from "@/components/shared/animated-number";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClosingDashboardCard } from "@/features/closing/closing-summary";
+import type { ClosingFacts } from "@/features/closing/closing-copy";
 import { AnnouncementsCard } from "@/features/dashboard/announcements-card";
 import { DashboardAuctions } from "@/features/dashboard/dashboard-auctions";
 import {
@@ -25,22 +29,30 @@ import {
   formatCurrencyCompact,
   formatEventDate,
   formatEventTime,
+  getAgendaItemStatus,
+  getDateInEventZone,
+  getDayWindow,
   getDefaultEventDay,
   getEventDays,
   getEventPhase,
   getNextEvent,
   getTimelineItemStatus,
+  getWindowProgress,
   sortTimelineItems,
   toEventZoneTimestamp,
   type EventPhase,
   type TimelineStatus,
 } from "@/features/dashboard/dashboard-utils";
+import { parseAgenda, type AgendaItem } from "@/lib/agenda";
+import { gapLabel } from "@/lib/announcements";
 import { apiFetch } from "@/lib/api";
+import { useEventClosing, type GalleryPhoto } from "@/lib/closing";
 import type { AppEvent, ContributionRow, EventPlanRow, SponsorRow, TaskRow } from "@/lib/event-data";
 import { useEventData } from "@/lib/event-data";
 import { useSession } from "@/lib/auth";
 import { useCountUp } from "@/lib/motion";
 import { formatCurrency } from "@/lib/utils";
+import { Link } from "react-router-dom";
 import staticHeroImageUrl from "./bg-image.jpeg";
 
 /**
@@ -88,6 +100,23 @@ export function DashboardPage() {
     [timeline, selectedDay, selectedDate],
   );
   const nextEvent = getNextEvent(timeline, now);
+  const closing = useEventClosing(event.id);
+  // Being past the last day is not the same as being finished: the committee
+  // decides when the celebration is closed, because that is when the note and
+  // the photographs are ready to lead the page.
+  const isClosed = Boolean(closing.data?.closing.is_closed);
+  const closingFacts: ClosingFacts = {
+    eventName: event.name,
+    location: event.location,
+    dayCount: eventDays.length,
+    eventCount: timeline.length,
+    contributorCount: data.contributions.length,
+    contributionReceived: financials.contributionReceived,
+    sponsorCount: data.sponsors.length,
+    sponsorshipReceived: financials.sponsorshipReceived,
+    coreCount: closing.data?.credits.core.length ?? 0,
+    volunteerCount: closing.data?.credits.volunteers.length ?? 0,
+  };
 
   // Tick only as fast as the screen needs: per-second for the live countdown, every
   // 30s to keep timeline statuses fresh during the event, and not at all afterwards.
@@ -102,6 +131,40 @@ export function DashboardPage() {
     setSelectedDay(defaultDay);
   }, [defaultDay, event.id]);
 
+  const moneySection = (
+    <section className="grid gap-4 lg:grid-cols-[1fr_0.85fr]">
+      <FinancialSummary
+        totalBudget={financials.totalBudget}
+        actualExpenses={financials.actualExpenses}
+        fundsReceived={fundsReceived}
+        fundingGap={fundingGap}
+        sponsors={data.sponsors.length}
+        contributors={data.contributions.length}
+      />
+      <FundingProgress
+        totalBudget={financials.totalBudget}
+        fundsReceived={fundsReceived}
+        contributionReceived={financials.contributionReceived}
+        sponsorshipReceived={financials.sponsorshipReceived}
+        contributions={data.contributions}
+        sponsors={data.sponsors}
+      />
+    </section>
+  );
+
+  const scheduleSection = (
+    <EventSchedule
+      days={eventDays}
+      selectedDay={selectedDay}
+      onSelectDay={setSelectedDay}
+      items={selectedItems}
+      allItems={timeline}
+      nextEvent={nextEvent}
+      now={now}
+      phase={phase}
+    />
+  );
+
   return (
     <div className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
       <EventHero
@@ -110,40 +173,27 @@ export function DashboardPage() {
         now={now}
         phase={phase}
         isLoading={isFetching}
+        isClosed={isClosed}
         source={data.source}
         fallbackReason={data.fallbackReason}
       />
+      {isClosed ? (
+        <ClosingDashboardCard
+          closing={closing.data?.closing}
+          facts={closingFacts}
+          feedback={closing.data?.feedback}
+          isLoading={isFetching}
+        />
+      ) : null}
       <DashboardAuctions eventId={event.id} />
       <AnnouncementsCard event={event} now={now} />
-      <section className="grid gap-4 lg:grid-cols-[1fr_0.85fr]">
-        <FinancialSummary
-          totalBudget={financials.totalBudget}
-          actualExpenses={financials.actualExpenses}
-          fundsReceived={fundsReceived}
-          fundingGap={fundingGap}
-          sponsors={data.sponsors.length}
-          contributors={data.contributions.length}
-        />
-        <FundingProgress
-          totalBudget={financials.totalBudget}
-          fundsReceived={fundsReceived}
-          contributionReceived={financials.contributionReceived}
-          sponsorshipReceived={financials.sponsorshipReceived}
-          contributions={data.contributions}
-          sponsors={data.sponsors}
-        />
-      </section>
-      <EventSchedule
-        days={eventDays}
-        selectedDay={selectedDay}
-        onSelectDay={setSelectedDay}
-        items={selectedItems}
-        nextEvent={nextEvent}
-        now={now}
-        phase={phase}
-      />
+      {/* Before the event is closed, money is the live question and leads the
+          page. Once it is closed, the celebration summary leads and the
+          contribution and funding cards move underneath it. */}
+      {isClosed ? scheduleSection : moneySection}
+      {isClosed ? moneySection : scheduleSection}
       <MyResponsibilities eventId={event.id} signedIn={Boolean(session?.user)} />
-      <GalleryPreview />
+      <GalleryPreview photos={closing.data?.gallery ?? []} />
     </div>
   );
 }
@@ -154,6 +204,7 @@ function EventHero({
   now,
   phase,
   isLoading,
+  isClosed,
   source,
   fallbackReason,
 }: {
@@ -162,10 +213,15 @@ function EventHero({
   now: Date;
   phase: EventPhase;
   isLoading: boolean;
+  isClosed: boolean;
   source: "supabase" | "demo";
   fallbackReason?: string;
 }) {
   const heroImageUrl = event.heroImageUrl || staticHeroImageUrl;
+  // Marking the celebration closed wraps the hero too, whatever the calendar
+  // says - a countdown to an event the committee has already thanked
+  // everyone for would read as a bug.
+  const displayPhase: EventPhase = isClosed ? "after" : phase;
 
   return (
     <section
@@ -213,7 +269,7 @@ function EventHero({
               the countdown, so the middle of the hero stays open. */}
           <div>
             <div className="flex items-start justify-between gap-3">
-              <PhaseBadge phase={phase} />
+              <PhaseBadge phase={displayPhase} />
               <div className="md:hidden">
                 <DataSourceBadge source={source} reason={fallbackReason} isLoading={isLoading} />
               </div>
@@ -235,7 +291,7 @@ function EventHero({
             </div>
           </div>
 
-          <HeroCountdown event={event} timeline={timeline} now={now} phase={phase} />
+          <HeroCountdown event={event} timeline={timeline} now={now} phase={displayPhase} />
         </div>
 
         <div className="hidden items-start justify-end md:flex">
@@ -369,11 +425,23 @@ function HeroCountdown({
   );
 }
 
+/**
+ * The day-by-day schedule.
+ *
+ * The structure a returning user knows is unchanged - card, day tabs, an
+ * "up next" callout, then a vertical timeline - but each row now carries the
+ * detail that made the old version too generic to plan an evening around:
+ * how far through a live event we are, and the agenda inside it (puja start,
+ * arti, pushpanjali, when the prasad counter opens and closes, the running
+ * order of the cultural programme). Those come from `sub_events`, parsed by
+ * src/lib/agenda.ts - no new columns.
+ */
 function EventSchedule({
   days,
   selectedDay,
   onSelectDay,
   items,
+  allItems,
   nextEvent,
   now,
   phase,
@@ -382,12 +450,33 @@ function EventSchedule({
   selectedDay: string;
   onSelectDay: (day: string) => void;
   items: EventPlanRow[];
+  allItems: EventPlanRow[];
   nextEvent?: EventPlanRow;
   now: Date;
   phase: EventPhase;
 }) {
   const currentItem = items.find((item) => getTimelineItemStatus(item, now) === "current");
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const todayDate = getDateInEventZone(now);
+
+  const dayTabs = useMemo(
+    () =>
+      days.map((day) => ({
+        ...day,
+        count: allItems.filter((item) => item.day === day.key || item.date === day.date).length,
+        isToday: day.date === todayDate,
+        isPast: day.date < todayDate,
+      })),
+    [days, allItems, todayDate],
+  );
+
+  const dayWindow = getDayWindow(items);
+  const agendaCount = useMemo(
+    () => items.reduce((sum, item) => sum + parseAgenda(item.subEvents).length, 0),
+    [items],
+  );
+  const doneCount = items.filter((item) => getTimelineItemStatus(item, now) === "completed").length;
+  const selectedTab = dayTabs.find((day) => day.key === selectedDay);
 
   const onTabKeyDown = useCallback(
     (keyEvent: KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -409,15 +498,23 @@ function EventSchedule({
           <div>
             <CardTitle>Event Schedule</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              {phase === "during" ? "Today's timeline from Events." : "Day-wise timeline synced from Events."}
+              {phase === "during"
+                ? "What is happening now, and what comes next."
+                : "Every day, hour by hour - including what happens inside each event."}
             </p>
           </div>
           <Clock3 className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Event days">
-          {days.map((day, index) => {
+      <CardContent className="space-y-4 px-4 sm:px-5">
+        {/* Horizontal scroll rather than wrapping: a five-day event should not
+            push the timeline below the fold on a phone. */}
+        <div
+          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+          role="tablist"
+          aria-label="Event days"
+        >
+          {dayTabs.map((day, index) => {
             const active = selectedDay === day.key;
             return (
               <button
@@ -429,17 +526,26 @@ function EventSchedule({
                 role="tab"
                 aria-selected={active}
                 aria-controls="event-day-panel"
+                aria-label={`${day.label}, ${formatEventDate(day.date)}, ${day.count} ${day.count === 1 ? "event" : "events"}${day.isToday ? ", today" : day.isPast ? ", finished" : ""}`}
                 tabIndex={active ? 0 : -1}
                 onKeyDown={(keyEvent) => onTabKeyDown(keyEvent, index)}
-                className={`min-w-24 flex-1 rounded-md border px-2 py-2 text-center text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                className={`min-w-[6rem] flex-1 shrink-0 rounded-md border px-2 py-2 text-center text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
                   active ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
-                }`}
+                } ${!active && day.isPast ? "opacity-70" : ""}`}
                 onClick={() => onSelectDay(day.key)}
               >
                 <span className="block">{day.label}</span>
                 <span
-                  className={`mt-0.5 block text-xs ${active ? "text-primary-foreground/85" : "text-muted-foreground"}`}
+                  aria-hidden="true"
+                  className={`mt-0.5 flex items-center justify-center gap-1 text-xs ${
+                    active ? "text-primary-foreground/85" : "text-muted-foreground"
+                  }`}
                 >
+                  {day.isToday ? (
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? "bg-primary-foreground" : "bg-emerald-500"}`} />
+                  ) : day.isPast ? (
+                    <Check className="h-3 w-3 shrink-0" />
+                  ) : null}
                   {formatEventDate(day.date)}
                 </span>
               </button>
@@ -448,10 +554,27 @@ function EventSchedule({
         </div>
 
         <div id="event-day-panel" role="tabpanel" aria-label={`${selectedDay} schedule`} className="space-y-4">
+          {items.length ? (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {items.length} {items.length === 1 ? "event" : "events"}
+              </span>
+              {dayWindow ? (
+                <span className="tabular-nums">
+                  {formatEventTime(dayWindow.start)} - {formatEventTime(dayWindow.end)}
+                </span>
+              ) : null}
+              {agendaCount ? <span>{agendaCount} agenda items</span> : null}
+              {selectedTab?.isToday || selectedTab?.isPast ? (
+                <span className="font-medium text-primary">{doneCount} done</span>
+              ) : null}
+            </p>
+          ) : null}
+
           {currentItem ? (
-            <UpcomingEvent item={currentItem} label="Happening now" tone="live" />
+            <UpcomingEvent item={currentItem} label="Happening now" tone="live" now={now} />
           ) : nextEvent ? (
-            <UpcomingEvent item={nextEvent} label="Up next" />
+            <UpcomingEvent item={nextEvent} label="Up next" now={now} />
           ) : null}
 
           {items.length ? (
@@ -463,12 +586,14 @@ function EventSchedule({
                   status={getTimelineItemStatus(item, now)}
                   isLast={index === items.length - 1}
                   showNowLabel={item !== currentItem}
+                  now={now}
                 />
               ))}
             </div>
           ) : (
             <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
-              No activities planned for this day yet. Add them on the Events page.
+              No activities planned for this day yet. Add them on the Events page, along with the agenda inside each
+              one - puja and arti timings, or the running order of a cultural evening.
             </div>
           )}
         </div>
@@ -477,23 +602,50 @@ function EventSchedule({
   );
 }
 
+/** "in 2 hr 10 min" until an item starts, null once it has begun. */
+function startsInLabel(item: EventPlanRow, now: Date) {
+  if (!item.startTime) return null;
+  const diffMs = toEventZoneTimestamp(item.date, item.startTime) - now.getTime();
+  if (diffMs <= 0) return null;
+  return `in ${gapLabel(diffMs)}`;
+}
+
 function UpcomingEvent({
   item,
   label,
   tone = "default",
+  now,
 }: {
   item: EventPlanRow;
   label: string;
   tone?: "default" | "live";
+  now: Date;
 }) {
-  const subEvents = splitSubEvents(item.subEvents);
+  const agenda = parseAgenda(item.subEvents);
+  const status = getTimelineItemStatus(item, now);
+  const nextAgenda = agenda.find(
+    (entry) => entry.startTime && getAgendaItemStatus(entry, item.date, status, now) !== "completed",
+  );
+  const countdown = startsInLabel(item, now);
+  const progress = tone === "live" ? getWindowProgress(item.date, item.startTime, item.endTime, now) : 0;
 
   return (
     <div className={`rounded-md border p-3 ${tone === "live" ? "border-primary/30 bg-primary/5" : "bg-muted/60"}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-primary">{label}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-primary">{label}</p>
+        {countdown ? (
+          <span className="rounded-full bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {countdown}
+          </span>
+        ) : null}
+      </div>
       <p className="mt-1 font-semibold">{item.activity}</p>
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
-        <span>{formatEventTime(item.startTime)}</span>
+        <span className="tabular-nums">
+          {item.endTime
+            ? `${formatEventTime(item.startTime)} - ${formatEventTime(item.endTime)}`
+            : formatEventTime(item.startTime)}
+        </span>
         {item.location ? (
           <span className="inline-flex items-center gap-1">
             <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -501,25 +653,77 @@ function UpcomingEvent({
           </span>
         ) : null}
       </p>
-      {subEvents.length ? <SubEventList items={subEvents} className="mt-2" /> : null}
+      {tone === "live" && item.endTime ? <EventProgress value={progress} label={item.activity} /> : null}
+      {nextAgenda ? (
+        <p className="mt-2 rounded-md bg-background/70 px-2.5 py-1.5 text-sm">
+          <span className="font-medium tabular-nums text-primary">{formatEventTime(nextAgenda.startTime)}</span>{" "}
+          <span className="text-muted-foreground">{nextAgenda.title}</span>
+        </p>
+      ) : null}
     </div>
   );
 }
 
 function HeroUpcomingEvent({ item, label }: { item: EventPlanRow; label: string }) {
-  const subEvents = splitSubEvents(item.subEvents);
+  const agenda = parseAgenda(item.subEvents);
 
   return (
     <div className="rounded-md border border-white/15 bg-white/10 p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-white/75">{label}</p>
       <p className="mt-1 font-semibold text-white">{item.activity}</p>
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-white/80">
-        <span>{formatEventTime(item.startTime)}</span>
+        <span className="tabular-nums">{formatEventTime(item.startTime)}</span>
         {item.location ? <span>{item.location}</span> : null}
       </p>
-      {subEvents.length ? <SubEventList items={subEvents} className="mt-2 text-white/85" /> : null}
+      {agenda.length ? (
+        <p className="mt-2 truncate text-sm text-white/85">
+          {agenda
+            .slice(0, 3)
+            .map((entry) => (entry.startTime ? `${formatEventTime(entry.startTime)} ${entry.title}` : entry.title))
+            .join(" · ")}
+        </p>
+      ) : null}
     </div>
   );
+}
+
+function EventProgress({ value, label }: { value: number; label: string }) {
+  return (
+    <div
+      className="mt-2 h-1.5 overflow-hidden rounded-full bg-primary/15"
+      role="progressbar"
+      aria-valuenow={Math.round(value)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`${label} progress`}
+    >
+      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${value}%` }} />
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: TimelineStatus }) {
+  if (status === "current") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+        <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+          <span className="absolute inline-flex h-full w-full animate-pulse-ring rounded-full bg-primary" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+        </span>
+        Live
+      </span>
+    );
+  }
+
+  if (status === "completed") {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        Done
+      </span>
+    );
+  }
+
+  return null;
 }
 
 function TimelineItem({
@@ -527,19 +731,31 @@ function TimelineItem({
   status,
   isLast,
   showNowLabel,
+  now,
 }: {
   item: EventPlanRow;
   status: TimelineStatus;
   isLast: boolean;
   showNowLabel: boolean;
+  now: Date;
 }) {
   const isCurrent = status === "current";
   const isCompleted = status === "completed";
-  const subEvents = splitSubEvents(item.subEvents);
+  const agenda = useMemo(() => parseAgenda(item.subEvents), [item.subEvents]);
+  // Finished events fold their agenda away so the day stays scannable; the
+  // one in progress opens itself the moment it goes live, and stays openable
+  // by hand afterwards.
+  const [showAgenda, setShowAgenda] = useState(status !== "completed");
+  const previousStatus = useRef(status);
+
+  useEffect(() => {
+    if (status === "current" && previousStatus.current !== "current") setShowAgenda(true);
+    previousStatus.current = status;
+  }, [status]);
 
   return (
-    <div className="grid grid-cols-[4.25rem_1rem_1fr] gap-3">
-      <div className="pt-0.5 text-right text-sm font-medium tabular-nums text-muted-foreground">
+    <div className="grid grid-cols-[3.5rem_1rem_1fr] gap-2 sm:grid-cols-[4.25rem_1rem_1fr] sm:gap-3">
+      <div className="pt-0.5 text-right text-xs font-medium tabular-nums text-muted-foreground sm:text-sm">
         {formatEventTime(item.startTime)}
       </div>
       <div className="relative flex justify-center">
@@ -556,42 +772,100 @@ function TimelineItem({
         </span>
         {!isLast ? <span className="absolute top-5 h-[calc(100%-0.25rem)] w-px bg-border" /> : null}
       </div>
-      <div className={`pb-5 ${isCompleted ? "opacity-70" : ""}`}>
+      <div className={`min-w-0 pb-5 ${isCompleted ? "opacity-75" : ""}`}>
         {isCurrent && showNowLabel ? (
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary">Happening now</p>
         ) : null}
-        <p className="font-medium leading-snug">{item.activity}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-medium leading-snug">{item.activity}</p>
+          <StatusPill status={status} />
+        </div>
         <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
           {item.endTime ? (
             <span className="tabular-nums">
               {formatEventTime(item.startTime)} - {formatEventTime(item.endTime)}
             </span>
           ) : null}
-          {item.location ? <span>{item.location}</span> : null}
+          {item.location ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {item.location}
+            </span>
+          ) : null}
         </p>
-        {subEvents.length ? <SubEventList items={subEvents} className="mt-2" /> : null}
+        {isCurrent && item.endTime ? <EventProgress value={getWindowProgress(item.date, item.startTime, item.endTime, now)} label={item.activity} /> : null}
         {item.notes ? <p className="mt-1 text-sm text-muted-foreground">{item.notes}</p> : null}
+        {agenda.length ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowAgenda((open) => !open)}
+              aria-expanded={showAgenda}
+              className="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ListChecks className="h-4 w-4" aria-hidden="true" />
+              Agenda ({agenda.length})
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${showAgenda ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              />
+            </button>
+            {showAgenda ? <AgendaList items={agenda} date={item.date} parentStatus={status} now={now} /> : null}
+          </>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function splitSubEvents(value: string) {
-  return value
-    .split(/\r?\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function SubEventList({ items, className = "text-muted-foreground" }: { items: string[]; className?: string }) {
+/**
+ * The running order inside one event. This is the part the old card was
+ * missing: an event that says "7:00 PM - 9:00 PM Cultural Program" tells a
+ * resident nothing about when their daughter dances.
+ */
+function AgendaList({
+  items,
+  date,
+  parentStatus,
+  now,
+}: {
+  items: AgendaItem[];
+  date: string;
+  parentStatus: TimelineStatus;
+  now: Date;
+}) {
   return (
-    <div className={`flex flex-wrap gap-1.5 ${className}`}>
-      {items.map((item) => (
-        <span key={item} className="rounded-md border border-current/10 bg-background/60 px-2 py-1 text-xs text-current">
-          {item}
-        </span>
-      ))}
-    </div>
+    <ol className="mt-2 space-y-2 border-l border-dashed border-border pl-3">
+      {items.map((entry, index) => {
+        const status = getAgendaItemStatus(entry, date, parentStatus, now);
+        const isCurrent = status === "current" && Boolean(entry.startTime);
+        return (
+          <li key={`${entry.startTime}-${entry.title}-${index}`} className="flex gap-2.5">
+            <span
+              className={`w-16 shrink-0 text-xs font-medium tabular-nums ${
+                isCurrent ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              {entry.startTime ? formatEventTime(entry.startTime) : "—"}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p
+                className={`text-sm leading-snug ${
+                  status === "completed" && entry.startTime ? "text-muted-foreground" : "font-medium"
+                }`}
+              >
+                {entry.title}
+                {isCurrent ? <span className="ml-1.5 text-xs font-semibold text-primary">· now</span> : null}
+              </p>
+              {entry.endTime ? (
+                <p className="text-xs tabular-nums text-muted-foreground">until {formatEventTime(entry.endTime)}</p>
+              ) : null}
+              {entry.note ? <p className="text-xs text-muted-foreground">{entry.note}</p> : null}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -985,22 +1259,66 @@ function MyResponsibilities({ eventId, signedIn }: { eventId?: string; signedIn:
   );
 }
 
-function GalleryPreview() {
+/**
+ * The first few celebration photographs, with the rest on the closing page.
+ * Same photos and same captions as `/closing` - this is a window onto that
+ * gallery, not a second place to manage one.
+ */
+function GalleryPreview({ photos }: { photos: GalleryPhoto[] }) {
+  const preview = photos.slice(0, 6);
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle>Gallery</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>Gallery</CardTitle>
+          {photos.length ? (
+            <Link to="/closing" className="text-sm font-medium text-primary underline underline-offset-2">
+              See all {photos.length}
+            </Link>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center gap-3 rounded-md bg-muted p-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background">
-            <Image className="h-5 w-5 text-primary" aria-hidden="true" />
+        {preview.length ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {preview.map((photo) => (
+              <Link
+                key={photo.id}
+                to="/closing"
+                className="group relative overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <img
+                  src={photo.image_url}
+                  alt={photo.caption || "Celebration photograph"}
+                  loading="lazy"
+                  className="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                />
+                {photo.caption ? (
+                  <span className="font-display absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-6 text-xs leading-snug text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.9)]">
+                    {photo.caption}
+                  </span>
+                ) : null}
+              </Link>
+            ))}
           </div>
-          <div>
-            <p className="text-sm font-medium">No event images yet.</p>
-            <p className="text-sm text-muted-foreground">Photos will appear here once added.</p>
+        ) : (
+          <div className="flex items-center gap-3 rounded-md bg-muted p-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background">
+              <Image className="h-5 w-5 text-primary" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">No event images yet.</p>
+              <p className="text-sm text-muted-foreground">
+                Committee members add them on the{" "}
+                <Link to="/closing" className="font-medium text-primary underline underline-offset-2">
+                  Closing page
+                </Link>
+                , with a caption for each.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

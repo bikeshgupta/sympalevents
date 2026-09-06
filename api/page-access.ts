@@ -1,6 +1,6 @@
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
-const publicPageKeys = new Set(["dashboard", "budget"]);
+const publicPageKeys = new Set(["dashboard", "budget", "closing"]);
 
 export default async function handler(req: any, res: any) {
   try {

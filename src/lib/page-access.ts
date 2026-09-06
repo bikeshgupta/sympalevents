@@ -7,7 +7,10 @@ import { useEventContext } from "@/lib/event-context";
 // "auctions" is public alongside dashboard/budget: browsing auctions and
 // watching a bid's chart/history needs no sign-in, matching /api/auctions and
 // /api/auction-bids GET. Only creating an auction or placing a bid does.
-export const publicPageKeys = new Set(["dashboard", "budget", "auctions"]);
+// "closing" is public for the same reason the dashboard is - the thank-you
+// note, the credits and the photographs are for the whole society. Writing a
+// review still needs a sign-in, and editing the page needs committee.
+export const publicPageKeys = new Set(["dashboard", "budget", "auctions", "closing"]);
 
 export const pageLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -20,6 +23,7 @@ export const pageLabels: Record<string, string> = {
   tasks: "Tasks",
   volunteers: "Volunteers",
   "event-plan": "Events",
+  closing: "Closing",
   contacts: "Contacts",
   settings: "Settings",
 };

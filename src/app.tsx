@@ -5,6 +5,7 @@ import { AccessDeniedPage } from "@/features/auth/access-denied-page";
 import { LoginPage } from "@/features/auth/login-page";
 import { AuctionsPage } from "@/features/auctions/auctions-page";
 import { BudgetPage } from "@/features/budget/budget-page";
+import { ClosingPage } from "@/features/closing/closing-page";
 import { ContributionsPage } from "@/features/contributions/contributions-page";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
 import { ExpensesPage } from "@/features/expenses/expenses-page";
@@ -29,6 +30,7 @@ export function App() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/auctions" element={<AuctionsPage />} />
+          <Route path="/closing" element={<ClosingPage />} />
           <Route path="/prasad" element={<PlaceholderPage title="Prasad Tracker" />} />
           <Route path="/volunteers" element={<PlaceholderPage title="Volunteers" />} />
           <Route path="/events" element={<Navigate to="/event-plan" replace />} />
