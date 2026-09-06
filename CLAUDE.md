@@ -41,7 +41,7 @@ src/
   app.tsx                    route table (react-router-dom v6)
   main.tsx                   providers: QueryClient, EventContext, Router
   components/
-    layout/                  app-layout (sidebar + mobile bottom nav), nav-items, route-guard
+    layout/                  app-layout (sidebar + mobile drawer), nav-drawer, nav-items, route-guard
     ui/                      shadcn-style primitives: button, card, dialog, input, label, select
     shared/                  cross-feature widgets: stat-card, status-badge, form-field, data-source-badge
   features/<domain>/         one folder per screen; page component + local helpers
@@ -156,6 +156,22 @@ against Google's public keys and map the user into Supabase `app_users`.
   that silently - a write carrying agenda text now fails with a 501 naming the
   migration, while a write with an empty agenda still saves. Reads still degrade
   gracefully.
+
+## Navigation
+
+- **Desktop (`lg` and up):** the fixed left sidebar in
+  [app-layout.tsx](src/components/layout/app-layout.tsx).
+- **Mobile:** a right-hand drawer behind the three-line button next to the profile
+  picture ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). It shows the
+  signed-in account first (or a Sign in button), then every page, then Sign out.
+
+**The fixed bottom bar is gone**, and so is the `pb-20` the layout reserved for it.
+With thirteen pages that bar showed about four at a time behind a sideways scroll,
+gave no hint the rest existed, and cost the last ~80px of every screen. Do not
+reintroduce it; add a page to `navItems` and it appears in both surfaces.
+
+Both surfaces filter on the **same** list — `useEventAccess().pages` — so the sidebar
+and the drawer can never disagree about what a viewer may open. See "Auth and access".
 
 ## Link previews (Open Graph)
 
@@ -341,7 +357,7 @@ yet" or "pull this off the homepage for now."
   40px rather than production's 32px, to clear the tap-target floor). Manual only —
   deliberately **no auto-rotate** like the announcements carousel has, since
   auto-advancing out from under someone mid-bid would blow away a half-typed amount.
-  No "View all" link to `/auctions` — the sidebar/bottom-nav already has an Auctions
+  No "View all" link to `/auctions` — the sidebar/drawer already has an Auctions
   entry. Renders nothing at all when there are no published auctions — no empty-state
   card competing for space on a page that already has one.
 - **Header bell**: `AnnouncementsBell` ([src/components/layout/announcements-bell.tsx](src/components/layout/announcements-bell.tsx))

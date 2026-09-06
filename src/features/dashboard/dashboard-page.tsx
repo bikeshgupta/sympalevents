@@ -44,6 +44,7 @@ import {
 import { parseAgenda } from "@/lib/agenda";
 import { gapLabel } from "@/lib/announcements";
 import { useEventClosing, type GalleryPhoto } from "@/lib/closing";
+import { useEventAccess } from "@/lib/event-access";
 import { useMyTasks } from "@/lib/tasks";
 import type { AppEvent, ContributionRow, EventPlanRow, SponsorRow } from "@/lib/event-data";
 import { useEventData } from "@/lib/event-data";
@@ -995,7 +996,20 @@ function useTopEntries<T>(rows: T[], getAmount: (row: T) => number, toTile: (row
   }, [rows, getAmount, toTile]);
 }
 
-function TileGrid({ visible, overflowCount }: { visible: TileEntry[]; overflowCount: number }) {
+function TileGrid({
+  visible,
+  overflowCount,
+  moreHref,
+  moreLabel,
+}: {
+  visible: TileEntry[];
+  overflowCount: number;
+  /** Where "+N more" goes. Omitted when the viewer cannot open that page -
+   *  the tile then stays the plain count it has always been, rather than a
+   *  link that would bounce them to access-denied. */
+  moreHref?: string;
+  moreLabel?: string;
+}) {
   if (!visible.length) {
     return <p className="mt-2 text-sm text-muted-foreground">Nothing recorded yet.</p>;
   }
@@ -1017,13 +1031,25 @@ function TileGrid({ visible, overflowCount }: { visible: TileEntry[]; overflowCo
       ))}
 
       {overflowCount ? (
-        <div
-          className="flex animate-fade-up flex-col justify-center rounded-lg border border-dashed bg-muted/50 px-2 py-1.5 shadow-sm"
-          style={{ animationDelay: `${visible.length * 45}ms` }}
-        >
-          <p className="text-[13px] font-semibold leading-tight tabular-nums">+{overflowCount}</p>
-          <p className="truncate text-[11px] leading-tight text-muted-foreground">more</p>
-        </div>
+        moreHref ? (
+          <Link
+            to={moreHref}
+            aria-label={`See all ${moreLabel ?? "entries"}, including ${overflowCount} more`}
+            className="flex animate-fade-up flex-col justify-center rounded-lg border border-dashed bg-muted/50 px-2 py-1.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            style={{ animationDelay: `${visible.length * 45}ms` }}
+          >
+            <p className="text-[13px] font-semibold leading-tight tabular-nums text-primary">+{overflowCount}</p>
+            <p className="truncate text-[11px] leading-tight text-primary/70">See all</p>
+          </Link>
+        ) : (
+          <div
+            className="flex animate-fade-up flex-col justify-center rounded-lg border border-dashed bg-muted/50 px-2 py-1.5 shadow-sm"
+            style={{ animationDelay: `${visible.length * 45}ms` }}
+          >
+            <p className="text-[13px] font-semibold leading-tight tabular-nums">+{overflowCount}</p>
+            <p className="truncate text-[11px] leading-tight text-muted-foreground">more</p>
+          </div>
+        )
       ) : null}
     </div>
   );
@@ -1053,7 +1079,17 @@ function FundingProgress({
 
   const contributorTiles = useTopEntries(contributions, receivedAmount, contributionToTile);
   const sponsorTiles = useTopEntries(sponsors, receivedAmount, sponsorToTile);
-  const activeTiles = activeTab === "contributions" ? contributorTiles : sponsorTiles;
+  // "+N more" becomes a link to the full list, but only for a viewer who can
+  // actually open that page - the dashboard is public, so plenty of people
+  // seeing these tiles cannot. `useEventAccess` is the same list the nav
+  // filters on, so the tile and the sidebar always agree.
+  const { data: eventAccess } = useEventAccess();
+  const canOpen = (pageKey: string) =>
+    (eventAccess?.pages ?? []).some((page) => page.pageKey === pageKey && page.canView);
+  const activeTiles =
+    activeTab === "contributions"
+      ? { ...contributorTiles, href: canOpen("contributions") ? "/contributions" : undefined }
+      : { ...sponsorTiles, href: canOpen("sponsors") ? "/sponsors" : undefined };
   // Each tab is colored to match its own dot in the Sponsorship/Contribution
   // legend just above, so the tab you pick and the bar segment it summarizes
   // read as the same thing rather than an unrelated teal default.
@@ -1180,7 +1216,13 @@ function FundingProgress({
             })}
           </div>
           <div id="funding-tile-panel" role="tabpanel">
-            <TileGrid key={activeTab} visible={activeTiles.visible} overflowCount={activeTiles.overflowCount} />
+            <TileGrid
+              key={activeTab}
+              visible={activeTiles.visible}
+              overflowCount={activeTiles.overflowCount}
+              moreHref={activeTiles.href}
+              moreLabel={activeTab === "contributions" ? "contributions" : "sponsors"}
+            />
           </div>
         </div>
       </CardContent>

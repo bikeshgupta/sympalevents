@@ -64,8 +64,12 @@ Every data surface implements four states, not one:
 
 ## 5. Mobile
 
-- The bottom nav occupies the last ~80px; page content already accounts for this via
-  `pb-20` on the layout. Do not add fixed-position elements that collide with it.
+- **Mobile navigation is a right-hand drawer**, opened by the three-line button next to
+  the profile picture in the header
+  ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). The fixed bottom bar is
+  gone, and with it the `pb-20` the layout used to reserve for it — the bottom of the
+  screen is ordinary page space now. A new fixed-position element still needs a reason;
+  it just no longer has a bar to collide with.
 - Tap targets ≥ 40px.
 - **A wide table is not a mobile design.** Tables with a `min-w-[900px]`-class minimum
   must have a card list for `< lg`, using the same data and the same actions.
