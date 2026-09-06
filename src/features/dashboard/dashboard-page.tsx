@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import {
   CalendarDays,
   Check,
@@ -44,9 +43,9 @@ import {
 } from "@/features/dashboard/dashboard-utils";
 import { parseAgenda } from "@/lib/agenda";
 import { gapLabel } from "@/lib/announcements";
-import { apiFetch } from "@/lib/api";
 import { useEventClosing, type GalleryPhoto } from "@/lib/closing";
-import type { AppEvent, ContributionRow, EventPlanRow, SponsorRow, TaskRow } from "@/lib/event-data";
+import { useMyTasks } from "@/lib/tasks";
+import type { AppEvent, ContributionRow, EventPlanRow, SponsorRow } from "@/lib/event-data";
 import { useEventData } from "@/lib/event-data";
 import { useSession } from "@/lib/auth";
 import { useCountUp } from "@/lib/motion";
@@ -1190,13 +1189,11 @@ function FundingProgress({
 }
 
 function MyResponsibilities({ eventId, signedIn }: { eventId?: string; signedIn: boolean }) {
-  const { data } = useQuery({
-    queryKey: ["my-responsibilities", eventId],
-    enabled: signedIn && Boolean(eventId),
-    queryFn: async () => apiFetch<{ responsibilities: TaskRow[] }>(`/api/my-responsibilities?eventId=${eventId}`),
-    retry: false,
-  });
-  const responsibilities = data?.responsibilities ?? [];
+  // Resolved by real assignment now (task_assignees), not by matching the
+  // signed-in person's name against the free-text owner column - see
+  // api/tasks.ts. Same card, an answer that is actually reliable.
+  const { data } = useMyTasks(eventId, signedIn);
+  const responsibilities = data?.tasks ?? [];
 
   if (!signedIn || !responsibilities.length) return null;
 
@@ -1207,16 +1204,25 @@ function MyResponsibilities({ eventId, signedIn }: { eventId?: string; signedIn:
       </CardHeader>
       <CardContent className="space-y-3">
         {responsibilities.slice(0, 4).map((item) => (
-          <div key={item.id ?? item.task} className="rounded-md border bg-background p-3">
+          <Link
+            key={item.id}
+            to="/tasks"
+            className="block rounded-md border bg-background p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <p className="text-xs font-medium uppercase tracking-wide text-primary">
-              {item.due !== "-" ? formatEventDate(item.due) : "Date TBC"}
+              {item.dueDate ? formatEventDate(item.dueDate) : "Date TBC"}
             </p>
             <p className="mt-1 font-medium">{item.task}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{item.status}</p>
-          </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {item.status}
+              {item.commentCount ? ` · ${item.commentCount} comment${item.commentCount === 1 ? "" : "s"}` : ""}
+            </p>
+          </Link>
         ))}
         {responsibilities.length > 4 ? (
-          <p className="text-sm text-muted-foreground">+{responsibilities.length - 4} more on the Tasks page.</p>
+          <Link to="/tasks" className="block text-sm font-medium text-primary underline underline-offset-2">
+            +{responsibilities.length - 4} more on the Tasks page
+          </Link>
         ) : null}
       </CardContent>
     </Card>

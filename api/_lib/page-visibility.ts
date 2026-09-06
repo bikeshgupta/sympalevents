@@ -42,10 +42,29 @@ const defaultVisibility: Record<string, PageVisibility> = {
   budget: "public",
   auctions: "public",
   closing: "public",
+  // Not "restricted": a committee member has to be able to open Tasks and see
+  // what is on them without an admin granting each person individually. The
+  // admin can still narrow it.
+  tasks: "authenticated",
 };
 
 export function defaultVisibilityFor(pageKey: string): PageVisibility {
   return defaultVisibility[pageKey] ?? "restricted";
+}
+
+/**
+ * Pages that can never be anonymous, whatever is stored or submitted.
+ *
+ * "tasks" names people and carries their conversation with each other, so it
+ * is sign-in only by design - api/tasks.ts requires a signed-in user on every
+ * branch regardless, and this keeps the stored setting from claiming
+ * otherwise. An admin can still choose between "any signed-in user" and
+ * "only members I give access to".
+ */
+const signInOnlyPages = new Set(["tasks"]);
+
+export function isSignInOnlyPage(pageKey: string) {
+  return signInOnlyPages.has(pageKey);
 }
 
 function isPageVisibility(value: unknown): value is PageVisibility {
@@ -53,7 +72,9 @@ function isPageVisibility(value: unknown): value is PageVisibility {
 }
 
 export function normalizeVisibility(value: unknown, pageKey: string): PageVisibility {
-  return isPageVisibility(value) ? value : defaultVisibilityFor(pageKey);
+  const visibility = isPageVisibility(value) ? value : defaultVisibilityFor(pageKey);
+  if (visibility === "public" && signInOnlyPages.has(pageKey)) return "authenticated";
+  return visibility;
 }
 
 /**

@@ -11,7 +11,7 @@ const localApiRoutes = new Map([
   ["/api/event-schedule", "/api/event-schedule.ts"],
   ["/api/event-members", "/api/event-members.ts"],
   ["/api/expenses", "/api/expenses.ts"],
-  ["/api/my-responsibilities", "/api/my-responsibilities.ts"],
+  ["/api/tasks", "/api/tasks.ts"],
   ["/api/health", "/api/health.ts"],
   ["/api/auctions", "/api/auctions.ts"],
   ["/api/uploads", "/api/uploads.ts"],

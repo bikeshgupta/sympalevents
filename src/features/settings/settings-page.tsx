@@ -12,9 +12,11 @@ import {
   configurablePageKeys,
   pageLabels,
   usePageAccess,
+  signInOnlyPageKeys,
   usePageVisibility,
   visibilityHints,
   visibilityLabels,
+  visibilityOptionsFor,
   type PageVisibility,
 } from "@/lib/page-access";
 
@@ -489,7 +491,11 @@ function PageVisibilityCard() {
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{pageLabels[pageKey]}</p>
-                        <p className="text-xs text-muted-foreground">{visibilityHints[value]}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {signInOnlyPageKeys.has(pageKey)
+                            ? `Always needs a sign-in. ${visibilityHints[value]}`
+                            : visibilityHints[value]}
+                        </p>
                       </div>
                       <select
                         aria-label={`${pageLabels[pageKey]} visibility`}
@@ -497,7 +503,7 @@ function PageVisibilityCard() {
                         value={value}
                         onChange={(item) => setVisibility(pageKey, item.target.value as PageVisibility)}
                       >
-                        {(Object.keys(visibilityLabels) as PageVisibility[]).map((level) => (
+                        {visibilityOptionsFor(pageKey).map((level) => (
                           <option key={level} value={level}>
                             {visibilityLabels[level]}
                           </option>

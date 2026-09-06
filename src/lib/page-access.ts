@@ -51,6 +51,20 @@ export const pageLabels: Record<string, string> = {
  *  them - it is the screen that controls the others, so it stays admin-only. */
 export const configurablePageKeys = Object.keys(pageLabels).filter((pageKey) => pageKey !== "settings");
 
+/**
+ * Pages that can never be anonymous. "tasks" names people and carries their
+ * conversation with each other, so it is sign-in only whatever an admin picks;
+ * the server enforces the same list (api/_lib/page-visibility.ts) and
+ * /api/tasks requires a signed-in user regardless. The admin still chooses
+ * between "any signed-in user" and "only members I give access to".
+ */
+export const signInOnlyPageKeys = new Set(["tasks"]);
+
+export function visibilityOptionsFor(pageKey: string): PageVisibility[] {
+  const levels: PageVisibility[] = ["public", "authenticated", "restricted"];
+  return signInOnlyPageKeys.has(pageKey) ? levels.filter((level) => level !== "public") : levels;
+}
+
 export function pageKeyFromPath(pathname: string) {
   const pageKey = pathname.split("/").filter(Boolean)[0] || "dashboard";
   return pageKey === "events" ? "event-plan" : pageKey;

@@ -43,7 +43,10 @@ cross join (
     ('sponsors', 'restricted'),
     ('expenses', 'restricted'),
     ('prasad', 'restricted'),
-    ('tasks', 'restricted'),
+    -- Tasks is sign-in only by design and can never be set to 'public'
+    -- (api/_lib/page-visibility.ts enforces that on read and write), but any
+    -- signed-in member needs to open it and see what is assigned to them.
+    ('tasks', 'authenticated'),
     ('volunteers', 'restricted'),
     ('event-plan', 'restricted'),
     ('contacts', 'restricted')

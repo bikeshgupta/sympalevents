@@ -265,8 +265,12 @@ and therefore never routed, so it costs nothing.
 
 So: **before adding a file under `api/`, count what is already there.** If the count is
 at the cap, fold the new handler into a related route the same way instead of adding a
-function. Dispatch reads only the query string, never the body, so each handler still
-consumes its own body normally.
+function, or replace one. Dispatch reads only the query string, never the body, so each
+handler still consumes its own body normally. Two routes already carry more than one
+resource this way: `api/auctions.ts` (bids, registrations) and `api/page-access.ts`
+(`?resource=visibility`). `api/tasks.ts` is the third, and it exists because
+`api/my-responsibilities.ts` was **deleted** to make room - its one job is now
+`GET /api/tasks?resource=mine`. The count is 12 either side of that change.
 
 New local API routes must be added to `localApiRoutes` in `vite.config.ts` or the dev
 server 404s them silently via `next()`.
@@ -455,6 +459,101 @@ an auction-only detail.
   check, to avoid a second copy drifting out of sync). **When event-photo upload is
   built, decide its permission model explicitly** rather than assuming every member can
   upload just because auctions required committee.
+
+## Tasks
+
+`/tasks` ([src/features/tasks/](src/features/tasks/)) is a small JIRA-shaped board:
+an admin (or a member with edit access to Tasks) creates a task, assigns **one or
+more** people to it, and everyone on it talks in a comment thread attached to it.
+
+**Sign-in only, deliberately.** A task list names people and carries their
+conversation with each other, so there is no signed-out view of it — not a partial
+one. Three separate things enforce that:
+
+- `signInOnlyPages` in [api/_lib/page-visibility.ts](api/_lib/page-visibility.ts) —
+  `tasks` normalises `public` down to `authenticated` on both read and write, so the
+  stored setting can never claim otherwise;
+- `signInOnlyPageKeys` / `visibilityOptionsFor()` in
+  [src/lib/page-access.ts](src/lib/page-access.ts) — Settings → Page Visibility does
+  not offer "Anyone with the link" for this page at all;
+- `requireAppUser` at the top of **every** branch of [api/tasks.ts](api/tasks.ts).
+
+An admin still chooses between "any signed-in user" (the default) and "only members I
+give access to". The default is `authenticated`, not `restricted`, so a committee
+member can open Tasks and see what is on them without being granted the page one by
+one.
+
+### Data model
+
+[016_task_collaboration.sql](supabase/migrations/016_task_collaboration.sql) adds two
+tables next to the existing `tasks` table:
+
+- **`task_assignees`** — `(task_id, user_id)` primary key, plus `assigned_by` /
+  `assigned_at`. Many people per task is the point; a task with two owners is normal.
+- **`task_comments`** — `task_id`, `user_id`, `body`, `created_at`. Append-only in
+  practice: there is no edit or delete UI, the thread is the record.
+
+**`tasks.owner_name` (free text) is not dropped and not migrated.** A typed name
+cannot be resolved to an account reliably, so old rows keep it and `AssigneeStack`
+falls back to showing it as "Owner: …" when a task has no real assignees. New
+assignment goes through `task_assignees` only.
+
+RLS is enabled on both **with zero policies**, the same deliberate choice as the
+auction, upload and page-visibility tables — Firebase auth means `auth.uid()` never
+resolves for the browser's Supabase client. Everything goes through `/api/tasks` with
+the service-role client. Do not add anon/authenticated policies.
+
+**The migration has not been run.** Until it is, `/api/tasks` degrades: the task list
+still loads, with no assignees and `commentCount: 0`, and returns
+`collaborationReady: false`. The page shows an amber banner naming the migration
+rather than looking broken, and assigning or commenting returns a 501 that names it
+too. This is the same "read degrades, write says so" shape as
+`event_schedule.sub_events`.
+
+### One function, three resources
+
+Everything is [api/tasks.ts](api/tasks.ts), dispatched on `?resource=`: nothing (the
+board), `mine` (the dashboard card), `comments`. **This route replaced
+`api/my-responsibilities.ts`** rather than being added alongside it — see the Vercel
+function-cap note above; the count is 12 either side.
+
+### Permissions, three tiers
+
+- **View** follows the admin's page visibility exactly as every other page does
+  (`resolveTaskAccess` in `api/tasks.ts`), except that `public` can only ever mean
+  "any signed-in user" here.
+- **Comment** needs only view access. That is the point: an assignee who cannot edit
+  the task must still be able to say something on it.
+- **Manage** (create, edit, delete, assign) needs `admin`, or an `edit` grant on the
+  `tasks` page in Member Access — the same switch every other screen's editing uses.
+- **One exception:** an assignee who cannot manage a task can still change *its
+  status*, and nothing else. `PATCH` checks `statusOnly` plus `isAssignee()` for that;
+  the client sends it through the separate `setStatus` mutation, not `update`.
+
+### Client structure
+
+- `useTaskBoard(eventId)` ([src/lib/tasks.ts](src/lib/tasks.ts)) — the board plus
+  `create` / `update` / `setStatus` / `remove`. **Tasks do not come through
+  `useEventData()`** and cannot: assignees and comments are behind RLS with no
+  policies, so the browser's Supabase client cannot read them. `useMyTasks` backs the
+  dashboard's "My Responsibilities" card, which now resolves by real assignment
+  instead of matching the signed-in person's name against `owner_name`.
+- `useTaskComments(taskId, enabled)` is gated on the card being open. A board of
+  thirty collapsed cards makes **zero** comment requests — the counts on their headers
+  come from `task_comments(count)` embedded in the board response.
+- **The page is cards at every width, not a table.** The old table needed
+  `min-w-[760px]` and sideways scrolling on a phone. Each `TaskCard` header carries
+  everything at a glance and never collapses — title, status, priority, due date
+  (flagged overdue / due today), assignee faces, comment count — and description,
+  the full assignee list and the thread sit behind one "Details, comments" toggle in
+  `TaskDetailsPanel`. Keep that split when adding anything: header = scannable,
+  panel = everything else.
+- **"Assigned to you" is its own section above everything else**, not a filter someone
+  has to find. Within each section the order is `byUrgency`: Critical first, then
+  earliest due date, undated last.
+- `TaskFormDialog` is create **and** edit (pass a `task` prop to edit). Its assignee
+  picker is a list of toggle buttons, not a `<select multiple>` — a multi-select is
+  close to unusable on a phone.
 
 ## Closing page
 
