@@ -132,31 +132,6 @@ export function formatEventTimestamp(value: string) {
   }).format(parsed);
 }
 
-/**
- * Where an agenda item inside one scheduled event sits relative to now.
- * Same three states as the timeline itself, so the nested rows read as
- * smaller versions of the row above them rather than a new vocabulary.
- * An untimed item inherits its parent's status - it is part of that block,
- * we just do not know when inside it.
- */
-export function getAgendaItemStatus(
-  item: { startTime: string; endTime: string },
-  date: string,
-  parentStatus: TimelineStatus,
-  now = new Date(),
-): TimelineStatus {
-  if (!item.startTime) return parentStatus;
-
-  const currentMs = now.getTime();
-  const startMs = toEventZoneTimestamp(date, item.startTime);
-  const endMs = item.endTime ? toEventZoneTimestamp(date, item.endTime) : startMs;
-
-  if (currentMs < startMs) return "upcoming";
-  if (item.endTime && currentMs <= endMs) return "current";
-  if (!item.endTime && currentMs - startMs < 30 * 60000) return "current";
-  return "completed";
-}
-
 /** How far through a start-to-end window we are, 0-100. */
 export function getWindowProgress(date: string, startTime: string, endTime: string, now = new Date()) {
   if (!startTime || !endTime) return 0;

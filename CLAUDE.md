@@ -81,12 +81,34 @@ against Google's public keys and map the user into Supabase `app_users`.
 
 - `usePageAccess(pageKey)` → `{ canView, canEdit, requiresLogin, isLoading, role }`.
 - Roles: `admin` | `committee` | `read_only`.
-- `publicPageKeys` (`dashboard`, `budget`) render read-only **without a session** —
-  anyone with the link sees them. The committee has cleared contributor and sponsor
-  names and flat numbers for the dashboard's Contributions/Sponsors tiles (inside
-  Funding Progress); contact details and payment references remain off public pages.
-  See the Privacy section of the UI rules before putting any new personal field on
-  those screens.
+- **There is no hardcoded `publicPageKeys` set any more.** Which pages are open to
+  whom is the event admin's call, per event, set in Settings → Page Visibility and
+  stored in `event_page_visibility`
+  ([015_event_page_visibility.sql](supabase/migrations/015_event_page_visibility.sql)).
+  Three levels per page:
+  - `public` — anyone with the link, no sign-in;
+  - `authenticated` — any signed-in user;
+  - `restricted` — the admin, plus members granted view/edit for that page in
+    `event_page_permissions` (Settings → Member Access).
+- **Visibility widens viewing only.** Editing is unchanged: admin, or an explicit
+  `edit` grant. Nothing an admin does in Page Visibility can hand out write access.
+- **`settings` is not configurable** — it stays admin-only in both API branches,
+  because it is the screen that controls all the others.
+- The server is the only authority. [api/_lib/page-visibility.ts](api/_lib/page-visibility.ts)
+  holds `eventPageKeys` + `fetchPageVisibility()`; both
+  [api/page-access.ts](api/page-access.ts) (one page, for the caller) and
+  [api/event-access.ts](api/event-access.ts) (the whole list, which the nav filters on)
+  resolve against it. The client just asks — do not reintroduce a client-side list of
+  "public" pages, and do not gate a page in the UI without the server agreeing.
+- A missing `event_page_visibility` table is treated as "no rows" rather than an
+  error, falling back to the pages that used to be hardcoded public (`dashboard`,
+  `budget`, `auctions`, `closing`), so the app keeps working before the migration is
+  applied instead of locking everyone out of everything.
+- Because a public page can now be *any* page, the committee's standing decision about
+  contributor/sponsor names on the dashboard's Contributions/Sponsors tiles does not
+  transfer. Contact details and payment references stay off anything set to `public`.
+  See the Privacy section of the UI rules before putting a new personal field on a
+  screen an admin might open up.
 - **Always gate mutating UI on `access.canEdit`**, and render a "View-only access"
   affordance rather than a disabled/hidden control with no explanation.
 
@@ -115,19 +137,25 @@ against Google's public keys and map the user into Supabase `app_users`.
   lets it memoize on `rows` alone without an `exhaustive-deps` fight. Follow that
   pattern for a third tab rather than inlining a new closure.
 - CRUD dialogs use `CrudDialog` + `FormField` + the `formString` / `formNumber` helpers.
-- Agenda items inside a scheduled event (puja start, arti, pushpanjali, when the
-  prasad counter opens and closes, a cultural running order) live in the existing
-  `event_schedule.sub_events` text column, one per line as
-  `HH:MM-HH:MM | Title | Note`. Parse and serialize them with `parseAgenda` /
-  `serializeAgenda` in [src/lib/agenda.ts](src/lib/agenda.ts) - never split the
-  string by hand. **No migration was needed for this**: a line that has never had a
-  time still parses as a plain label, and a line holding several comma-separated
-  labels still parses as several. The Events page writes the canonical shape
-  through `AgendaField`
-  ([src/features/event-plan/agenda-editor.tsx](src/features/event-plan/agenda-editor.tsx)),
-  a row editor that serializes into a hidden input so the surrounding uncontrolled
-  `FormData` flow is untouched; it keeps a "Paste as text" mode because
-  bulk-pasting a running order out of WhatsApp is how this actually gets filled in.
+- Agenda points inside a scheduled event (idol arrival, sankalp, when the prasad
+  counter opens, a cultural running order) live in `event_schedule.sub_events`,
+  **one point per line, plain text, no per-point timing**. Read them with
+  `parseAgenda` in [src/lib/agenda.ts](src/lib/agenda.ts) - which returns
+  `string[]` - and never split the column by hand. There is deliberately no time
+  field per point: the parent event already carries start/end, and a two-clock-input
+  row editor is what made this field go unused. `AgendaField`
+  ([src/features/event-plan/agenda-editor.tsx](src/features/event-plan/agenda-editor.tsx))
+  is one plain `<textarea>` named `subEvents`, so the Events page's uncontrolled
+  `FormData` flow is untouched. Both the dashboard timeline and the Events table
+  render each line as a bullet.
+- **`event_schedule.sub_events` requires
+  [007_event_schedule_sub_events.sql](supabase/migrations/007_event_schedule_sub_events.sql),
+  which was never applied to the live project** - verified directly against it. That
+  is why saved agendas silently vanished: `api/event-schedule.ts` caught the
+  missing-column error on write and retried without the field. It no longer does
+  that silently - a write carrying agenda text now fails with a 501 naming the
+  migration, while a write with an empty agenda still saves. Reads still degrade
+  gracefully.
 
 ## Link previews (Open Graph)
 
@@ -246,8 +274,10 @@ server 404s them silently via `next()`.
 ### Permissions
 
 - **Browsing auctions, and watching one (chart, bid history, current bid) is public** —
-  `auctions` is in `publicPageKeys` ([page-access.ts](src/lib/page-access.ts)) and
-  `GET /api/auctions` and `GET /api/auctions?resource=bids` need no token. `useAuctionBids`'s query
+  `auctions` seeds as `public` in `event_page_visibility` (an admin can narrow it; see
+  "Auth and access"), and `GET /api/auctions` and `GET /api/auctions?resource=bids`
+  need no token regardless — those two routes are open by design, so narrowing the
+  page hides it from the nav and the route guard, not from a direct API call. `useAuctionBids`'s query
   has no `signedIn` gate and passes `{ requireAuth: false }` to `apiFetch` for that
   reason — without it, `apiFetch`'s own default refuses to even attempt the request
   without a token, which would silently defeat the point.
@@ -430,10 +460,9 @@ an auction-only detail.
 
 `/closing` ([src/features/closing/](src/features/closing/)) - what the celebration
 added up to once it is over: the committee's thank-you note, the credits, the
-photographs, and residents' reviews. **Public, like the dashboard** (`closing` is in
-`publicPageKeys` client-side and in the two server lists,
-[api/page-access.ts](api/page-access.ts) and [api/event-access.ts](api/event-access.ts)) -
-a resident opens the link and reads it without an account.
+photographs, and residents' reviews. **Public by default** (`closing` seeds as `public` in
+`event_page_visibility`; see "Auth and access") - a resident opens the link and reads
+it without an account, unless the event admin narrows it in Settings.
 
 ### Data model
 

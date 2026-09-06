@@ -164,11 +164,10 @@ export const eventPlanRows = [
     day: "Day 1",
     date: "2026-09-14",
     activity: "Ganesh sthapana",
-    // Agenda lines are "time | title | note" - see src/lib/agenda.ts. The
-    // demo carries timed items so demo mode shows the same timeline detail
-    // a real event does.
+    // Agenda lines are one point per line - see src/lib/agenda.ts. The demo
+    // carries them so demo mode shows the same timeline detail a real event does.
     subEvents:
-      "08:30 | Idol arrival and welcome | Meet at the gate\n09:00-09:30 | Sthapana and sankalp | Pandit ji leads\n09:30 | Opening aarti\n10:00-11:00 | Prasad counter | Modak and pedha",
+      "Idol arrival and welcome at the gate\nSthapana and sankalp - Pandit ji leads\nOpening aarti\nPrasad counter - modak and pedha",
     startTime: "09:00",
     endTime: "10:30",
     location: "Clubhouse",
@@ -182,7 +181,7 @@ export const eventPlanRows = [
     date: "2026-09-15",
     activity: "Evening aarti and prasad",
     subEvents:
-      "19:00-19:45 | Bhajan session | Society choir\n19:45 | Sandhya aarti\n20:00 | Pushpanjali\n20:15-21:00 | Prasad distribution | Counter closes at 9",
+      "Bhajan session by the society choir\nSandhya aarti\nPushpanjali\nPrasad distribution - counter closes at 9",
     startTime: "19:00",
     endTime: "21:00",
     location: "Central lawn",
@@ -196,7 +195,7 @@ export const eventPlanRows = [
     date: "2026-09-16",
     activity: "Cultural programme",
     subEvents:
-      "19:00 | Welcome and lamp lighting\n19:15 | Kids dance - juniors\n19:40 | Solo singing\n20:00 | Ladies group dance\n20:30 | Prize distribution\n20:45 | Group aarti",
+      "Welcome and lamp lighting\nKids dance - juniors\nSolo singing\nLadies group dance\nPrize distribution\nGroup aarti",
     startTime: "19:00",
     endTime: "21:00",
     location: "Central lawn",

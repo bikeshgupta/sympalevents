@@ -80,6 +80,21 @@ function isMissingSubEventsColumn(error: { code?: string; message?: string } | n
   );
 }
 
+/**
+ * Reads tolerate a missing `sub_events` column - the rest of the schedule is
+ * still worth showing. Writes must not: silently retrying without the column
+ * is what made a saved agenda vanish with no error anywhere. If the person is
+ * actually trying to store agenda points, say so instead of dropping them.
+ */
+function assertAgendaStorable(payload: ReturnType<typeof schedulePayload>) {
+  if (!payload.sub_events.trim()) return;
+  const error = new Error(
+    "Agenda points cannot be saved yet: event_schedule.sub_events is missing. Run supabase/migrations/007_event_schedule_sub_events.sql, then try again.",
+  );
+  Object.assign(error, { statusCode: 501 });
+  throw error;
+}
+
 async function fetchSchedule(supabase: ReturnType<typeof assertServiceSupabase>, eventId: string) {
   const columns = "id,day,activity_date,activity,sub_events,start_time,end_time,location,expected_attendance,owner_name,status,notes";
   const columnsWithoutSubEvents =
@@ -155,6 +170,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         .single();
 
       if (isMissingSubEventsColumn(error)) {
+        assertAgendaStorable(payload);
         const retryResult = await supabase
           .from("event_schedule")
           .insert({ event_id: eventId, ...payloadWithoutSubEvents(payload) })
@@ -194,6 +210,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const payload = schedulePayload(body);
     let { error } = await supabase.from("event_schedule").update(payload).eq("id", scheduleId);
     if (isMissingSubEventsColumn(error)) {
+      assertAgendaStorable(payload);
       const retryResult = await supabase.from("event_schedule").update(payloadWithoutSubEvents(payload)).eq("id", scheduleId);
       error = retryResult.error;
     }

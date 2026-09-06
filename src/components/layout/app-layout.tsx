@@ -20,12 +20,18 @@ export function AppLayout() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
-  const { events, selectedEventId, setSelectedEventId } = useEventContext();
+  const { events, selectedEventId, setSelectedEventId, isLoading: isEventLoading } = useEventContext();
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
-  const visibleNavItems = navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
+  // With no event there is nobody to have set visibility - the app is on the
+  // demo dataset - so the nav shows the tour rather than going blank. With an
+  // event, the server's list is the only thing that decides.
+  const isDemoNav = !selectedEventId && !isEventLoading;
+  const visibleNavItems = isDemoNav
+    ? navItems
+    : navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const canRequestCommitteeAccess = Boolean(
     session && selectedEventId && eventAccess.role !== "admin" && eventAccess.role !== "committee",

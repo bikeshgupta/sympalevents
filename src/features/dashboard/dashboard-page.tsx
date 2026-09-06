@@ -29,7 +29,6 @@ import {
   formatCurrencyCompact,
   formatEventDate,
   formatEventTime,
-  getAgendaItemStatus,
   getDateInEventZone,
   getDayWindow,
   getDefaultEventDay,
@@ -43,7 +42,7 @@ import {
   type EventPhase,
   type TimelineStatus,
 } from "@/features/dashboard/dashboard-utils";
-import { parseAgenda, type AgendaItem } from "@/lib/agenda";
+import { parseAgenda } from "@/lib/agenda";
 import { gapLabel } from "@/lib/announcements";
 import { apiFetch } from "@/lib/api";
 import { useEventClosing, type GalleryPhoto } from "@/lib/closing";
@@ -622,10 +621,6 @@ function UpcomingEvent({
   now: Date;
 }) {
   const agenda = parseAgenda(item.subEvents);
-  const status = getTimelineItemStatus(item, now);
-  const nextAgenda = agenda.find(
-    (entry) => entry.startTime && getAgendaItemStatus(entry, item.date, status, now) !== "completed",
-  );
   const countdown = startsInLabel(item, now);
   const progress = tone === "live" ? getWindowProgress(item.date, item.startTime, item.endTime, now) : 0;
 
@@ -654,11 +649,16 @@ function UpcomingEvent({
         ) : null}
       </p>
       {tone === "live" && item.endTime ? <EventProgress value={progress} label={item.activity} /> : null}
-      {nextAgenda ? (
-        <p className="mt-2 rounded-md bg-background/70 px-2.5 py-1.5 text-sm">
-          <span className="font-medium tabular-nums text-primary">{formatEventTime(nextAgenda.startTime)}</span>{" "}
-          <span className="text-muted-foreground">{nextAgenda.title}</span>
-        </p>
+      {agenda.length ? (
+        <ul className="mt-2 space-y-0.5 rounded-md bg-background/70 px-2.5 py-1.5 text-sm text-muted-foreground">
+          {agenda.slice(0, 3).map((entry, index) => (
+            <li key={`${entry}-${index}`} className="flex gap-2">
+              <span aria-hidden="true" className="text-primary">&bull;</span>
+              <span className="min-w-0">{entry}</span>
+            </li>
+          ))}
+          {agenda.length > 3 ? <li className="pl-4 text-xs">+{agenda.length - 3} more</li> : null}
+        </ul>
       ) : null}
     </div>
   );
@@ -677,10 +677,7 @@ function HeroUpcomingEvent({ item, label }: { item: EventPlanRow; label: string 
       </p>
       {agenda.length ? (
         <p className="mt-2 truncate text-sm text-white/85">
-          {agenda
-            .slice(0, 3)
-            .map((entry) => (entry.startTime ? `${formatEventTime(entry.startTime)} ${entry.title}` : entry.title))
-            .join(" · ")}
+          {agenda.slice(0, 3).join(" · ")}
         </p>
       ) : null}
     </div>
@@ -810,7 +807,7 @@ function TimelineItem({
                 aria-hidden="true"
               />
             </button>
-            {showAgenda ? <AgendaList items={agenda} date={item.date} parentStatus={status} now={now} /> : null}
+            {showAgenda ? <AgendaList items={agenda} /> : null}
           </>
         ) : null}
       </div>
@@ -819,53 +816,20 @@ function TimelineItem({
 }
 
 /**
- * The running order inside one event. This is the part the old card was
+ * The agenda points inside one event. This is the part the old card was
  * missing: an event that says "7:00 PM - 9:00 PM Cultural Program" tells a
- * resident nothing about when their daughter dances.
+ * resident nothing about what actually happens in it.
  */
-function AgendaList({
-  items,
-  date,
-  parentStatus,
-  now,
-}: {
-  items: AgendaItem[];
-  date: string;
-  parentStatus: TimelineStatus;
-  now: Date;
-}) {
+function AgendaList({ items }: { items: string[] }) {
   return (
-    <ol className="mt-2 space-y-2 border-l border-dashed border-border pl-3">
-      {items.map((entry, index) => {
-        const status = getAgendaItemStatus(entry, date, parentStatus, now);
-        const isCurrent = status === "current" && Boolean(entry.startTime);
-        return (
-          <li key={`${entry.startTime}-${entry.title}-${index}`} className="flex gap-2.5">
-            <span
-              className={`w-16 shrink-0 text-xs font-medium tabular-nums ${
-                isCurrent ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              {entry.startTime ? formatEventTime(entry.startTime) : "—"}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p
-                className={`text-sm leading-snug ${
-                  status === "completed" && entry.startTime ? "text-muted-foreground" : "font-medium"
-                }`}
-              >
-                {entry.title}
-                {isCurrent ? <span className="ml-1.5 text-xs font-semibold text-primary">· now</span> : null}
-              </p>
-              {entry.endTime ? (
-                <p className="text-xs tabular-nums text-muted-foreground">until {formatEventTime(entry.endTime)}</p>
-              ) : null}
-              {entry.note ? <p className="text-xs text-muted-foreground">{entry.note}</p> : null}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+    <ul className="mt-2 space-y-1.5 border-l border-dashed border-border pl-3">
+      {items.map((entry, index) => (
+        <li key={`${entry}-${index}`} className="flex gap-2.5 text-sm leading-snug">
+          <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/60" />
+          <span className="min-w-0 flex-1">{entry}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { formatEventTime } from "@/features/dashboard/dashboard-utils";
 import { AgendaField } from "@/features/event-plan/agenda-editor";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
@@ -123,10 +122,8 @@ export function EventPlanPage() {
                   <ul className="max-w-64 space-y-1">
                     {parseAgenda(plan.subEvents).map((subEvent, index) => (
                       <li key={`${plan.id ?? plan.activity}-agenda-${index}`} className="flex gap-2 text-xs">
-                        <span className="w-14 shrink-0 tabular-nums text-muted-foreground">
-                          {subEvent.startTime ? formatEventTime(subEvent.startTime) : "—"}
-                        </span>
-                        <span className="text-foreground">{subEvent.title}</span>
+                        <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                        <span className="text-foreground">{subEvent}</span>
                       </li>
                     ))}
                   </ul>
