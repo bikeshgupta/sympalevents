@@ -76,6 +76,7 @@ export function TasksPage() {
   const tasks = useMemo(() => board?.tasks ?? [], [board]);
   const meId = board?.me.id;
   const canManage = board?.access.canManage ?? false;
+  const isAdmin = board?.access.isAdmin ?? false;
   const collaborationReady = board?.collaborationReady ?? false;
 
   const { mine, others } = useMemo(() => {
@@ -107,7 +108,7 @@ export function TasksPage() {
   }
 
   async function handleDelete(task: Task) {
-    if (!window.confirm(`Delete "${task.task}"? Its comments go with it.`)) return;
+    if (!window.confirm(`Delete "${task.task}"? Its comments go with it, and this cannot be undone. To retire it without losing the thread, set its status to Cancelled or Invalid instead.`)) return;
     setActionError(null);
     try {
       await remove.mutateAsync(task.id);
@@ -159,7 +160,9 @@ export function TasksPage() {
             New Task
           </Button>
         ) : (
-          <span className="text-sm text-muted-foreground">View-only access</span>
+          <span className="text-sm text-muted-foreground">
+            View-only access &mdash; you can still comment, and update tasks assigned to you.
+          </span>
         )}
       </div>
 
@@ -180,11 +183,13 @@ export function TasksPage() {
         </p>
       ) : null}
 
-      <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
-        <CountTile label="Yours, open" value={counts.mineOpen} icon={UserCheck} tone="primary" />
+      {/* One row at every width - four short counts read as a single glance;
+          two rows of two read as two separate things to parse. */}
+      <section className="grid grid-cols-4 gap-1.5 sm:gap-3">
+        <CountTile label="Yours" value={counts.mineOpen} icon={UserCheck} tone="primary" />
         <CountTile label="Open" value={counts.open} icon={Timer} />
         <CountTile label="Blocked" value={counts.blocked} icon={AlertTriangle} tone={counts.blocked ? "alert" : "default"} />
-        <CountTile label="Completed" value={counts.done} icon={CircleCheck} />
+        <CountTile label="Done" value={counts.done} icon={CircleCheck} />
       </section>
 
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
@@ -237,6 +242,7 @@ export function TasksPage() {
             meId={meId}
             members={board?.members ?? []}
             canManage={canManage}
+            isAdmin={isAdmin}
             collaborationReady={collaborationReady}
             onEdit={openDialog}
             onDelete={handleDelete}
@@ -258,6 +264,7 @@ export function TasksPage() {
             meId={meId}
             members={board?.members ?? []}
             canManage={canManage}
+            isAdmin={isAdmin}
             collaborationReady={collaborationReady}
             onEdit={openDialog}
             onDelete={handleDelete}
@@ -274,6 +281,9 @@ export function TasksPage() {
           task={dialogTask}
           members={board?.members ?? []}
           collaborationReady={collaborationReady}
+          canSetStatus={
+            !dialogTask || isAdmin || dialogTask.assignees.some((entry) => entry.userId === meId)
+          }
           onSubmit={handleSubmit}
         />
       ) : null}
@@ -306,19 +316,26 @@ function CountTile({
   return (
     <div
       className={cn(
-        "rounded-lg border bg-card p-3",
+        "rounded-lg border bg-card px-2 py-2 sm:px-3",
         tone === "primary" && "border-primary/40 bg-primary/5",
         tone === "alert" && "border-destructive/30",
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="flex items-baseline gap-1.5">
+        <p className="text-xl font-semibold tabular-nums sm:text-2xl">{value}</p>
+        {/* The icon is decoration next to a labelled number; it is the first
+            thing to go when four tiles have to share a phone's width. */}
         <Icon
-          className={cn("h-4 w-4 shrink-0", tone === "primary" ? "text-primary" : "text-muted-foreground")}
+          className={cn(
+            "hidden h-4 w-4 shrink-0 self-center sm:block",
+            tone === "primary" ? "text-primary" : "text-muted-foreground",
+          )}
           aria-hidden="true"
         />
       </div>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">
+        {label}
+      </p>
     </div>
   );
 }
@@ -337,6 +354,7 @@ function TaskSection({
   meId?: string;
   members: TaskMember[];
   canManage: boolean;
+  isAdmin: boolean;
   collaborationReady: boolean;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;

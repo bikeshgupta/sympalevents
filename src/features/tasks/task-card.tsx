@@ -1,7 +1,6 @@
 import { CalendarClock, ChevronDown, MessageSquare, Pencil, Tag, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/shared/status-badge";
 import { formatEventDate, getDateInEventZone } from "@/features/dashboard/dashboard-utils";
 import { AssigneeStack, PriorityPill } from "@/features/tasks/task-bits";
 import { TaskDetailsPanel } from "@/features/tasks/task-details-panel";
@@ -9,32 +8,53 @@ import { taskStatuses, type Task, type TaskMember, type TaskStatus } from "@/lib
 import { cn } from "@/lib/utils";
 
 /**
- * One task, mobile first.
+ * One task, mobile first and deliberately compact: **two rows**.
  *
- * The header carries everything worth knowing at a glance and never collapses:
- * title, status, priority, due date (flagged when it has passed), who it is on,
- * and how many comments it has. Everything else - description, the full
- * assignee list, the thread - is behind the single "Details" toggle, because on
- * a phone that is the difference between scanning eight tasks and scrolling
- * through two.
+ *   Title ........................................ [status]
+ *   Priority · due · category · comments · faces .. [edit][delete][v]
+ *
+ * The header carries everything worth knowing at a glance and never collapses.
+ * Everything else - description, the full assignee list, the thread - is behind
+ * the chevron, because on a phone that is the difference between scanning eight
+ * tasks and scrolling through two.
+ *
+ * The status control *is* the badge rather than sitting next to one, and the
+ * details toggle is the chevron rather than its own full-width button; both
+ * were their own rows before and neither earned one.
+ *
+ * This component is used only by `tasks-page.tsx`, so the compact treatment is
+ * local to the Tasks screen - no other page renders a task card.
  */
 
 /** Due today, overdue, or neither - open tasks only; a finished task is not
  *  late, it is done. */
 function dueState(task: Task) {
   if (!task.dueDate) return "none" as const;
-  if (task.status === "Completed" || task.status === "Cancelled") return "settled" as const;
+  if (task.status === "Completed" || task.status === "Cancelled" || task.status === "Invalid") {
+    return "settled" as const;
+  }
   const today = getDateInEventZone();
   if (task.dueDate < today) return "overdue" as const;
   if (task.dueDate === today) return "today" as const;
   return "upcoming" as const;
 }
 
+// Matches StatusBadge's palette so the select still reads as a status pill.
+const statusStyles: Record<string, string> = {
+  "Not Started": "bg-slate-100 text-slate-700",
+  "In Progress": "bg-sky-100 text-sky-800",
+  Blocked: "bg-rose-100 text-rose-800",
+  Completed: "bg-emerald-100 text-emerald-800",
+  Cancelled: "bg-muted text-muted-foreground",
+  Invalid: "bg-muted text-muted-foreground line-through",
+};
+
 export function TaskCard({
   task,
   meId,
   members,
   canManage,
+  isAdmin,
   collaborationReady,
   onEdit,
   onDelete,
@@ -45,6 +65,7 @@ export function TaskCard({
   meId?: string;
   members: TaskMember[];
   canManage: boolean;
+  isAdmin: boolean;
   collaborationReady: boolean;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -55,32 +76,66 @@ export function TaskCard({
   const panelId = `task-panel-${task.id}`;
   const mine = task.assignees.some((entry) => entry.userId === meId);
   const due = dueState(task);
-  // An assignee who cannot manage the task can still move it along - that is
-  // the point of it being assigned to them.
-  const canSetStatus = canManage || mine;
+  const settled = due === "settled";
+  // Narrower than `canManage`, and not implied by it: only an admin or someone
+  // actually on the task may declare where it stands. The server enforces the
+  // same rule - this only decides whether to render a control that would fail.
+  const canSetStatus = isAdmin || mine;
 
   return (
     <article
       className={cn(
         "overflow-hidden rounded-lg border bg-card",
         mine && "border-primary/40",
-        task.status === "Completed" && "opacity-80",
+        settled && "opacity-75",
       )}
     >
-      <div className="p-3 sm:p-4">
+      <div className="px-2.5 py-2 sm:px-3">
         <div className="flex items-start justify-between gap-2">
           <h3
             className={cn(
-              "min-w-0 font-medium leading-snug",
-              task.status === "Completed" && "text-muted-foreground line-through",
+              "min-w-0 pt-1 text-sm font-medium leading-snug",
+              settled && "text-muted-foreground line-through",
             )}
           >
             {task.task}
           </h3>
-          <StatusBadge status={task.status} />
+
+          {canSetStatus ? (
+            <>
+              <label className="sr-only" htmlFor={`status-${task.id}`}>
+                Status of {task.task}
+              </label>
+              <select
+                id={`status-${task.id}`}
+                value={task.status}
+                disabled={isBusy}
+                onChange={(event) => onStatusChange(task, event.target.value as TaskStatus)}
+                className={cn(
+                  "h-10 shrink-0 rounded-full border-0 px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  statusStyles[task.status] ?? "bg-muted text-muted-foreground",
+                )}
+              >
+                {taskStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <span
+              className={cn(
+                "inline-flex shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium",
+                statusStyles[task.status] ?? "bg-muted text-muted-foreground",
+              )}
+            >
+              {task.status}
+            </span>
+          )}
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
           <PriorityPill priority={task.priority} />
 
           {task.dueDate ? (
@@ -92,15 +147,10 @@ export function TaskCard({
               )}
             >
               <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {due === "overdue" ? "Overdue " : due === "today" ? "Due today · " : "Due "}
+              {due === "overdue" ? "Overdue " : due === "today" ? "Today · " : ""}
               {formatEventDate(task.dueDate)}
             </span>
-          ) : (
-            <span className="inline-flex items-center gap-1">
-              <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              No due date
-            </span>
-          )}
+          ) : null}
 
           {task.category ? (
             <span className="inline-flex items-center gap-1">
@@ -115,68 +165,51 @@ export function TaskCard({
               {task.commentCount}
             </span>
           ) : null}
-        </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <AssigneeStack assignees={task.assignees} meId={meId} fallbackName={task.ownerName} />
-            {mine ? (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Yours</span>
-            ) : null}
-          </div>
+          <AssigneeStack assignees={task.assignees} meId={meId} fallbackName={task.ownerName} />
+          {mine ? <span className="font-medium text-primary">You</span> : null}
 
-          <div className="flex items-center gap-1">
-            {canSetStatus ? (
-              <>
-                <label className="sr-only" htmlFor={`status-${task.id}`}>
-                  Status of {task.task}
-                </label>
-                <select
-                  id={`status-${task.id}`}
-                  className="h-10 rounded-md border bg-background px-2 text-xs"
-                  value={task.status}
-                  disabled={isBusy}
-                  onChange={(event) => onStatusChange(task, event.target.value as TaskStatus)}
-                >
-                  {taskStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </>
-            ) : null}
-
+          <span className="ml-auto flex items-center">
             {canManage ? (
-              <>
-                <Button type="button" variant="ghost" size="icon" aria-label={`Edit ${task.task}`} onClick={() => onEdit(task)}>
-                  <Pencil className="h-4 w-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Delete ${task.task}`}
-                  onClick={() => onDelete(task)}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-9"
+                aria-label={`Edit ${task.task}`}
+                onClick={() => onEdit(task)}
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </Button>
             ) : null}
-          </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          aria-controls={panelId}
-          className="mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {open ? "Hide details" : "Details, comments"}
-          {task.commentCount && !open ? <span className="tabular-nums">({task.commentCount})</span> : null}
-          <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden="true" />
-        </button>
+            {/* Admin only. Everyone else retires a task by marking it
+                Cancelled or Invalid - deleting takes the thread with it. */}
+            {isAdmin ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-9"
+                aria-label={`Delete ${task.task}`}
+                onClick={() => onDelete(task)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => setOpen((value) => !value)}
+              aria-expanded={open}
+              aria-controls={panelId}
+              aria-label={open ? `Hide details for ${task.task}` : `Show details and comments for ${task.task}`}
+              className="inline-flex h-10 w-9 items-center justify-center rounded-md text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden="true" />
+            </button>
+          </span>
+        </div>
       </div>
 
       {/* Mounted only while open, so a collapsed card costs no comment fetch. */}

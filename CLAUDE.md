@@ -524,11 +524,22 @@ function-cap note above; the count is 12 either side.
   "any signed-in user" here.
 - **Comment** needs only view access. That is the point: an assignee who cannot edit
   the task must still be able to say something on it.
-- **Manage** (create, edit, delete, assign) needs `admin`, or an `edit` grant on the
-  `tasks` page in Member Access — the same switch every other screen's editing uses.
-- **One exception:** an assignee who cannot manage a task can still change *its
-  status*, and nothing else. `PATCH` checks `statusOnly` plus `isAssignee()` for that;
-  the client sends it through the separate `setStatus` mutation, not `update`.
+- **Manage** (create, edit, assign) needs `admin`, or an `edit` grant on the `tasks`
+  page in Member Access — the same switch every other screen's editing uses.
+- **Status is its own rule, narrower than manage and not implied by it: `admin` or
+  someone actually assigned to that task.** A committee member with edit access can
+  create and rewrite tasks but cannot declare someone else's work done — that call
+  belongs to the person doing it. `PATCH` enforces this on the `statusOnly` path *and*
+  on a full edit (which silently keeps the stored status if the editor may not change
+  it); `TaskFormDialog` therefore renders Status read-only in that case rather than
+  offering a control the server would ignore.
+- **Deleting is `admin` only.** Everyone else retires a task by marking it `Cancelled`
+  or `Invalid` — deleting takes the comment thread with it, and a board that loses
+  items without trace is worse than one with a few struck-through rows. `Invalid`
+  ("this should not have been raised") needs
+  [017_task_invalid_status.sql](supabase/migrations/017_task_invalid_status.sql),
+  which widens the `tasks_status_check` constraint the same drop-and-recreate way
+  005 did for contributions.
 
 ### Client structure
 
@@ -542,12 +553,20 @@ function-cap note above; the count is 12 either side.
   thirty collapsed cards makes **zero** comment requests — the counts on their headers
   come from `task_comments(count)` embedded in the board response.
 - **The page is cards at every width, not a table.** The old table needed
-  `min-w-[760px]` and sideways scrolling on a phone. Each `TaskCard` header carries
-  everything at a glance and never collapses — title, status, priority, due date
-  (flagged overdue / due today), assignee faces, comment count — and description,
-  the full assignee list and the thread sit behind one "Details, comments" toggle in
+  `min-w-[760px]` and sideways scrolling on a phone. `TaskCard` is **two rows** —
+  title + status on one, then priority / due / category / comment count / assignee
+  faces with the edit, delete and expand controls pushed right on the other — and
+  description, the full assignee list and the thread sit behind the chevron in
   `TaskDetailsPanel`. Keep that split when adding anything: header = scannable,
-  panel = everything else.
+  panel = everything else, and do not spend a new row on something that fits in the
+  meta line. Two things earn their compactness specifically: the status control **is**
+  the badge (a `<select>` wearing the badge's palette) rather than sitting beside one,
+  and the expand affordance is the chevron rather than its own full-width button.
+  `TaskCard` is used only by `tasks-page.tsx`, so that treatment is local to this
+  screen — no other page renders a task card.
+- **The count tiles are one row at every width** (`grid-cols-4`), with short labels
+  and the icon dropped below `sm`. Four short counts read as a single glance; two rows
+  of two read as two separate things to parse.
 - **"Assigned to you" is its own section above everything else**, not a filter someone
   has to find. Within each section the order is `byUrgency`: Critical first, then
   earliest due date, undated last.

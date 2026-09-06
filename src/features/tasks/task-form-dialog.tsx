@@ -29,6 +29,7 @@ export function TaskFormDialog({
   task,
   members,
   collaborationReady,
+  canSetStatus,
   onSubmit,
 }: {
   open: boolean;
@@ -36,6 +37,10 @@ export function TaskFormDialog({
   task?: Task;
   members: TaskMember[];
   collaborationReady: boolean;
+  /** Status is admin-or-assignee, narrower than the edit rights that opened
+   *  this dialog. When false the field is shown read-only rather than being
+   *  offered and then quietly ignored by the server. */
+  canSetStatus: boolean;
   onSubmit: (input: TaskInput) => Promise<unknown>;
 }) {
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
@@ -112,18 +117,33 @@ export function TaskFormDialog({
 
             <div className="space-y-2">
               <Label htmlFor="task-status">Status</Label>
-              <select
-                id="task-status"
-                name="status"
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                defaultValue={task?.status ?? "Not Started"}
-              >
-                {taskStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
+              {canSetStatus ? (
+                <select
+                  id="task-status"
+                  name="status"
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  defaultValue={task?.status ?? "Not Started"}
+                >
+                  {taskStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input type="hidden" name="status" value={task?.status ?? "Not Started"} readOnly />
+                  <p
+                    id="task-status"
+                    className="flex h-10 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground"
+                  >
+                    {task?.status ?? "Not Started"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Only an admin, or someone assigned to this task, can change its status.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="space-y-2 sm:col-span-2">

@@ -31,7 +31,9 @@ import {
  */
 
 const validPriorities = new Set(["Critical", "High", "Medium", "Low"]);
-const validStatuses = new Set(["Not Started", "In Progress", "Blocked", "Completed", "Cancelled"]);
+// "Invalid" needs migration 017. Deleting is admin-only and rare; marking a
+// task Invalid or Cancelled is how everyone else retires one.
+const validStatuses = new Set(["Not Started", "In Progress", "Blocked", "Completed", "Cancelled", "Invalid"]);
 
 const taskColumns =
   "id,event_id,task,category,notes,owner_name,priority,start_date,due_date,status,created_at,updated_at";
@@ -60,9 +62,10 @@ function denied(message: string, statusCode = 403) {
 type TaskAccess = {
   role: "admin" | "committee" | "read_only" | null;
   canView: boolean;
-  /** Create, edit, delete, assign. Commenting and moving your own task's
-   *  status are separate and looser - see the PATCH branch. */
+  /** Create, edit and assign. Deleting is admin-only and status is its own
+   *  rule - see the PATCH and DELETE branches. */
   canManage: boolean;
+  isAdmin: boolean;
 };
 
 /**
@@ -98,6 +101,7 @@ async function resolveTaskAccess(eventId: string, userId: string): Promise<TaskA
 
   return {
     role,
+    isAdmin,
     canView: isAdmin || openToSignedIn || accessLevel === "view" || accessLevel === "edit",
     canManage: isAdmin || accessLevel === "edit",
   };
@@ -344,7 +348,7 @@ export default async function handler(req: any, res: any) {
         collaborationReady,
         members: access.canManage ? await fetchAssignableMembers(eventId) : [],
         me: { id: appUser.id, name: appUser.full_name ?? appUser.email, email: appUser.email },
-        access: { role: access.role, canManage: access.canManage },
+        access: { role: access.role, canManage: access.canManage, isAdmin: access.isAdmin },
       });
       return;
     }
@@ -422,7 +426,13 @@ export default async function handler(req: any, res: any) {
     const eventId = await taskEventId(taskId);
 
     if (req.method === "DELETE") {
-      await requireTaskAccess(eventId, appUser.id, "manage");
+      // Admin only, on purpose. Deleting takes the comment thread with it, so
+      // everyone else retires a task by marking it Cancelled or Invalid.
+      const deleteAccess = await requireTaskAccess(eventId, appUser.id, "view");
+      if (!deleteAccess.isAdmin) {
+        throw denied("Only an event admin can delete a task. Mark it Cancelled or Invalid instead.");
+      }
+
       const supabase = assertServiceSupabase();
       const { error } = await supabase.from("tasks").delete().eq("id", taskId);
       if (error) throw error;
@@ -430,21 +440,26 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    // PATCH. An assignee who cannot manage the task can still move its status
-    // - that is the whole point of assigning it to them - but nothing else.
+    // PATCH.
+    //
+    // Status has its own rule, narrower than `canManage` and not implied by
+    // it: **only an admin or someone actually assigned to the task** may move
+    // it. A committee member with edit access to the Tasks page can create and
+    // rewrite tasks, but cannot declare someone else's work done - that call
+    // belongs to the person doing it.
     const access = await requireTaskAccess(eventId, appUser.id, "view");
     const statusOnly = Object.keys(body).every((key) => ["taskId", "id", "status"].includes(key));
     const supabase = assertServiceSupabase();
 
-    if (!access.canManage) {
-      if (!statusOnly || !(await isAssignee(taskId, appUser.id))) {
-        throw denied("You can only change the status of a task assigned to you");
-      }
-
+    if (statusOnly) {
       const status = String(body.status ?? "");
       if (!validStatuses.has(status)) {
         sendJson(res, 400, { error: "Unknown status" });
         return;
+      }
+
+      if (!access.isAdmin && !(await isAssignee(taskId, appUser.id))) {
+        throw denied("Only an event admin, or someone assigned to this task, can change its status");
       }
 
       const { error } = await supabase
@@ -456,17 +471,24 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    if (statusOnly && !validStatuses.has(String(body.status ?? ""))) {
-      sendJson(res, 400, { error: "Unknown status" });
-      return;
+    // A full edit (title, dates, description, assignees) needs manage rights.
+    if (!access.canManage) {
+      throw denied("Only an event admin, or a member with edit access to Tasks, can edit a task");
     }
 
-    const { error } = await supabase
-      .from("tasks")
-      .update(
-        statusOnly ? { status: String(body.status), updated_at: new Date().toISOString() } : taskPayload(body),
-      )
-      .eq("id", taskId);
+    // ...and it carries a status too, so the same narrower rule applies to it.
+    const payload = taskPayload(body);
+    if (!access.isAdmin && !(await isAssignee(taskId, appUser.id))) {
+      const { data: current, error: currentError } = await supabase
+        .from("tasks")
+        .select("status")
+        .eq("id", taskId)
+        .single();
+      if (currentError) throw currentError;
+      payload.status = current.status as string;
+    }
+
+    const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
     if (error) throw error;
 
     if (Array.isArray(body.assigneeIds)) {

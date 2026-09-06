@@ -55,15 +55,26 @@ export type TaskComment = {
   authorPhotoUrl: string | null;
 };
 
-export type TaskStatus = "Not Started" | "In Progress" | "Blocked" | "Completed" | "Cancelled";
+export type TaskStatus = "Not Started" | "In Progress" | "Blocked" | "Completed" | "Cancelled" | "Invalid";
 export type TaskPriority = "Critical" | "High" | "Medium" | "Low";
 
-export const taskStatuses: TaskStatus[] = ["Not Started", "In Progress", "Blocked", "Completed", "Cancelled"];
+/** "Invalid" needs migration 017. It exists because deleting a task is
+ *  admin-only and rare - everyone else retires one by marking it. */
+export const taskStatuses: TaskStatus[] = [
+  "Not Started",
+  "In Progress",
+  "Blocked",
+  "Completed",
+  "Cancelled",
+  "Invalid",
+];
 export const taskPriorities: TaskPriority[] = ["Critical", "High", "Medium", "Low"];
 
-/** Everything that is not finished or called off. */
+const closedStatuses = new Set<TaskStatus>(["Completed", "Cancelled", "Invalid"]);
+
+/** Everything that is not finished, called off, or marked invalid. */
 export function isOpenTask(task: Task) {
-  return task.status !== "Completed" && task.status !== "Cancelled";
+  return !closedStatuses.has(task.status);
 }
 
 export type TaskInput = {
@@ -81,7 +92,7 @@ type BoardResponse = {
   tasks: Task[];
   members: TaskMember[];
   me: { id: string; name: string | null; email: string | null };
-  access: { role: "admin" | "committee" | "read_only" | null; canManage: boolean };
+  access: { role: "admin" | "committee" | "read_only" | null; canManage: boolean; isAdmin: boolean };
   /** False until migration 016 has been run: the list still renders, but
    *  without assignees or comments. The page says so rather than looking
    *  broken. */
