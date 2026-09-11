@@ -4,7 +4,8 @@ import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { StatCard } from "@/components/shared/stat-card";
+import { StatCard, StatGrid } from "@/components/shared/stat-card";
+import { formatCurrencyCompact } from "@/features/dashboard/dashboard-utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -53,12 +54,18 @@ export function SponsorsPage() {
           <DataSourceBadge source={data.source} reason={data.fallbackReason} />
         </div>
       </div>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Committed" value={formatCurrency(committed)} icon={HeartHandshake} />
-        <StatCard title="Received" value={formatCurrency(received)} icon={HandCoins} />
-        <StatCard title="Outstanding" value={formatCurrency(committed - received)} icon={Hourglass} />
+      <StatGrid>
+        <StatCard title="Committed" shortTitle="Pledged" value={formatCurrencyCompact(committed)} valueTitle={formatCurrency(committed)} icon={HeartHandshake} />
+        <StatCard title="Received" value={formatCurrencyCompact(received)} valueTitle={formatCurrency(received)} icon={HandCoins} />
+        <StatCard
+          title="Outstanding"
+          shortTitle="Due"
+          value={formatCurrencyCompact(committed - received)}
+          valueTitle={formatCurrency(committed - received)}
+          icon={Hourglass}
+        />
         <StatCard title="Sponsors" value={String(sponsorRows.length)} icon={Users} />
-      </section>
+      </StatGrid>
       <PageTools
         action={
           access.canEdit ? <CrudDialog title="Add Sponsor" triggerLabel="Add Sponsor" onSubmit={addSponsor}>

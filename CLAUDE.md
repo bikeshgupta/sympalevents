@@ -132,6 +132,11 @@ against Google's public keys and map the user into Supabase `app_users`.
   [src/features/dashboard/dashboard-utils.ts](src/features/dashboard/dashboard-utils.ts)
   (`toEventZoneTimestamp`, `formatEventDate`, `formatEventTime`), never bare `new Date(string)`.
 - Icons are `lucide-react`, sized `h-4 w-4` in buttons/labels and `h-5 w-5` in card headers.
+- **Stat tiles: `StatGrid` + `StatCard`, one row at every width** — see UI rules §5.
+  `StatCard` used to have a roomy default and an opt-in `compact` variant; the roomy
+  one stacked tiles one per row on a phone, so it was removed and every page (and
+  the closing page's `ClosingStats`) now uses the compact row Contributions
+  introduced. There is no `compact` prop any more.
 - Table screens compose `useFilteredSortedRows` + `SortableHeader` + `ColumnFilter` +
   `TableToolbar` from [src/features/shared/table-tools.tsx](src/features/shared/table-tools.tsx).
   Add a screen's columns as a `TableColumn<T>[]` const at module scope.
@@ -727,8 +732,10 @@ draw.
   styled as a segmented control. A settled claim shows who settled it and when, plus
   "Mark not settled" for managers.
 - The page keeps its original shape — heading, the same three tiles, action row,
-  ledger card. The amount still owed rides on the Total Expenses tile's `note`, not a
-  new tile. The table is `hidden lg:block`; below `lg` the same rows render as cards.
+  ledger card. The amount still owed rides on the Total tile's `note`, not a new
+  tile — which means it shows from `sm` up only (tile notes are hidden on phones);
+  on a phone the Pending tab's count is the signal. The table is `hidden lg:block`;
+  below `lg` the same rows render as cards.
 - No new serverless function: GET, and settle/unsettle as `PATCH { action }`, fold
   into `api/expenses.ts`. The count is still 12.
 

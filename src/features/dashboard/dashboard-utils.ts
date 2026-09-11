@@ -6,7 +6,10 @@ export type TimelineStatus = "completed" | "current" | "upcoming";
 
 const KOLKATA_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
-export function formatCurrencyCompact(value: number) {
+export function formatCurrencyCompact(value: number): string {
+  // An overspent variance or an overpaid pledge must stay compact too - a
+  // full "-₹1,50,000" does not fit a stat tile.
+  if (value < 0) return `-${formatCurrencyCompact(-value)}`;
   const compact = (amount: number, suffix: string) =>
     `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: amount >= 10 ? 1 : 2 }).format(amount)}${suffix}`;
   if (value >= 100000) return compact(value / 100000, "L");

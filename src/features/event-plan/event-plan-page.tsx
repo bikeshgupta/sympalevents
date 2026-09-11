@@ -3,7 +3,7 @@ import { CalendarDays, ListChecks, MapPin } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
-import { StatCard } from "@/components/shared/stat-card";
+import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -88,11 +88,11 @@ export function EventPlanPage() {
         </div>
         <DataSourceBadge source={data.source} reason={data.fallbackReason} />
       </div>
-      <section className="grid gap-3 sm:grid-cols-3">
+      <StatGrid>
         <StatCard title="Events" value={String(planRows.length)} icon={CalendarDays} />
         <StatCard title="Agenda Items" value={String(subEventCount)} icon={ListChecks} />
         <StatCard title="Locations" value={String(locations)} icon={MapPin} />
-      </section>
+      </StatGrid>
       <PageTools
         action={
           access.canEdit ? <CrudDialog title="Add Event" triggerLabel="Add Event" onSubmit={(formData) => addEventPlan(formData, selectedEventId)}><EventPlanFields /></CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>

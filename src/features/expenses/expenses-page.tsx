@@ -1,10 +1,10 @@
 import { AlertTriangle, Banknote, CheckCircle2, FileText, FolderKanban, Image as ImageIcon, Pencil, Plus, ReceiptText, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
-import { StatCard } from "@/components/shared/stat-card";
+import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { formatEventDate, formatEventTimestamp } from "@/features/dashboard/dashboard-utils";
+import { formatCurrencyCompact, formatEventDate, formatEventTimestamp } from "@/features/dashboard/dashboard-utils";
 import { ExpenseFormDialog } from "@/features/expenses/expense-form-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { ColumnFilter, SortableHeader, TableColumn, TableToolbar, useFilteredSortedRows } from "@/features/shared/table-tools";
@@ -242,10 +242,11 @@ export function ExpensesPage() {
         </p>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <StatGrid>
         <StatCard
-          title={onlyMine ? "Your Expenses" : "Total Expenses"}
-          value={formatCurrency(totals.total)}
+          title={onlyMine ? "Your Total" : "Total"}
+          value={formatCurrencyCompact(totals.total)}
+          valueTitle={formatCurrency(totals.total)}
           icon={ReceiptText}
           isLoading={isLoading}
           note={
@@ -258,7 +259,7 @@ export function ExpensesPage() {
         />
         <StatCard title="Categories" value={String(totals.categories)} icon={FolderKanban} isLoading={isLoading} />
         <StatCard title="Records" value={String(expenses.length)} icon={Banknote} isLoading={isLoading} />
-      </section>
+      </StatGrid>
 
       <PageTools
         searchValue={table.search}

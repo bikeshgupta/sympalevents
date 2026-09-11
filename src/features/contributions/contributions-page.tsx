@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { StatCard } from "@/components/shared/stat-card";
+import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -200,11 +200,10 @@ export function ContributionsPage() {
 
       {/* One row at every width. These were one column on a phone - four stacked
           cards, ~380px of screen, before a single resident was visible.
-          `compact` tiles plus compact currency (with the exact figure on the
+          StatGrid plus compact currency (with the exact figure on the
           `title`, as the UI rules require) get the same four numbers into ~60px. */}
-      <section className="grid grid-cols-4 gap-1.5 sm:gap-3">
+      <StatGrid>
         <StatCard
-          compact
           title="Flats"
           value={String(contributionRows.length)}
           countTo={contributionRows.length}
@@ -213,7 +212,6 @@ export function ContributionsPage() {
           note={contributionRows.length ? `${paidCount} have paid` : undefined}
         />
         <StatCard
-          compact
           title="Expected"
           value={formatCurrencyCompact(expected)}
           valueTitle={formatCurrency(expected)}
@@ -222,7 +220,6 @@ export function ContributionsPage() {
           icon={Wallet}
         />
         <StatCard
-          compact
           title="Received"
           value={formatCurrencyCompact(received)}
           valueTitle={formatCurrency(received)}
@@ -232,8 +229,8 @@ export function ContributionsPage() {
           note={expected > 0 ? `${collectedPercent}% of expected` : undefined}
         />
         <StatCard
-          compact
           title="Additional"
+          shortTitle="Extra"
           value={formatCurrencyCompact(additionalContribution)}
           valueTitle={formatCurrency(additionalContribution)}
           countTo={additionalContribution}
@@ -245,7 +242,7 @@ export function ContributionsPage() {
               : "No one has paid above expected"
           }
         />
-      </section>
+      </StatGrid>
 
       <PageTools
         inline

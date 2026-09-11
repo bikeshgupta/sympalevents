@@ -170,26 +170,31 @@ export function ClosingStats({ facts, isLoading }: { facts: ClosingFacts; isLoad
     },
   ];
 
+  // One row at every width, like every page's StatGrid: on a phone the icon
+  // goes and the label sits under the number, so four tiles fit a row.
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
       {tiles.map((tile, index) => {
         const Icon = tile.icon;
         return (
-          <div key={tile.label} className="rounded-lg border bg-gradient-to-br from-background to-muted/40 p-3">
+          <div
+            key={tile.label}
+            className="flex min-w-0 flex-col-reverse justify-end rounded-lg border bg-gradient-to-br from-background to-muted/40 px-2 py-2 sm:flex-col sm:justify-start sm:p-3"
+          >
             <div className="flex items-start justify-between gap-2">
               <p className="text-xs font-medium leading-tight text-muted-foreground">{tile.label}</p>
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <span className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary sm:flex">
                 <Icon className="h-3.5 w-3.5" aria-hidden="true" />
               </span>
             </div>
             {isLoading ? (
-              <p className="mt-2 text-xl font-semibold text-muted-foreground">…</p>
+              <p className="text-lg font-semibold text-muted-foreground sm:mt-2 sm:text-xl">…</p>
             ) : (
               <AnimatedNumber
                 value={tile.value}
                 format={tile.format}
                 duration={800 + index * 100}
-                className="mt-2 block text-xl font-semibold tracking-tight tabular-nums"
+                className="block truncate text-lg font-semibold tracking-tight tabular-nums sm:mt-2 sm:text-xl"
                 title={tile.title}
               />
             )}

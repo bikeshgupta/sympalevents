@@ -71,6 +71,14 @@ Every data surface implements four states, not one:
   screen is ordinary page space now. A new fixed-position element still needs a reason;
   it just no longer has a bar to collide with.
 - Tap targets ≥ 40px.
+- **A page's stat tiles are one row, at every width.** Wrap them in `StatGrid`
+  ([stat-card.tsx](src/components/shared/stat-card.tsx)), which sets one column per
+  tile; never a `sm:grid-cols-3` that stacks them one per row on a phone (that cost
+  ~300–400px of screen before any content). `StatCard` has only the compact design.
+  Money in a tile is `formatCurrencyCompact` with the exact figure on `valueTitle`.
+  A label longer than ~8 capitals in a four-tile row (~12 in three) gets a
+  `shortTitle` for phones that is still true of the number ("Outstanding" → "Due").
+  More than four tiles wraps into rows of four — keep it to four.
 - **A wide table is not a mobile design.** Tables with a `min-w-[900px]`-class minimum
   must have a card list for `< lg`, using the same data and the same actions.
   Pattern: cards `lg:hidden`, table wrapper `hidden lg:block`.
