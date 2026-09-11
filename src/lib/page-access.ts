@@ -60,6 +60,15 @@ export const configurablePageKeys = Object.keys(pageLabels).filter((pageKey) => 
  */
 export const signInOnlyPageKeys = new Set(["tasks"]);
 
+/**
+ * Pages every committee member can open whatever is picked here, because the
+ * page holds something that is theirs to do - on Expenses, recording what they
+ * paid out of pocket and seeing when it is paid back. Mirrors
+ * `isCommitteeOpenPage` in api/_lib/page-visibility.ts; this copy only feeds
+ * the hint in Settings, the server decides.
+ */
+export const committeeOpenPageKeys = new Set(["expenses"]);
+
 export function visibilityOptionsFor(pageKey: string): PageVisibility[] {
   const levels: PageVisibility[] = ["public", "authenticated", "restricted"];
   return signInOnlyPageKeys.has(pageKey) ? levels.filter((level) => level !== "public") : levels;

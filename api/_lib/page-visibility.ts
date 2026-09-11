@@ -67,6 +67,21 @@ export function isSignInOnlyPage(pageKey: string) {
   return signInOnlyPages.has(pageKey);
 }
 
+/**
+ * Pages a committee member can always open, whatever visibility the admin
+ * picked, because the page holds something that is theirs to do.
+ *
+ * "expenses": any committee member can file an out-of-pocket claim and follow
+ * it until it is paid back. This widens *opening the page* only - what they
+ * see there is still decided by api/expenses.ts, which without view access to
+ * the ledger returns their own claims and nothing else. Editing is unchanged.
+ */
+const committeeOpenPages = new Set(["expenses"]);
+
+export function isCommitteeOpenPage(pageKey: string) {
+  return committeeOpenPages.has(pageKey);
+}
+
 function isPageVisibility(value: unknown): value is PageVisibility {
   return value === "public" || value === "authenticated" || value === "restricted";
 }

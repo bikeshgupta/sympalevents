@@ -94,6 +94,11 @@ against Google's public keys and map the user into Supabase `app_users`.
   `edit` grant. Nothing an admin does in Page Visibility can hand out write access.
 - **`settings` is not configurable** — it stays admin-only in both API branches,
   because it is the screen that controls all the others.
+- **`expenses` is committee-open** — `isCommitteeOpenPage` in
+  [api/_lib/page-visibility.ts](api/_lib/page-visibility.ts): a `committee` member can
+  always *open* it, whatever the admin set, so they can file their own out-of-pocket
+  claims. It widens opening only; what they see is still decided by `api/expenses.ts`
+  (their own claims unless they have view access to the ledger). See "Expenses".
 - The server is the only authority. [api/_lib/page-visibility.ts](api/_lib/page-visibility.ts)
   holds `eventPageKeys` + `fetchPageVisibility()`; both
   [api/page-access.ts](api/page-access.ts) (one page, for the caller) and
@@ -652,6 +657,80 @@ function-cap note above; the count is 12 either side.
 - `TaskFormDialog` is create **and** edit (pass a `task` prop to edit). Its assignee
   picker is a list of toggle buttons, not a `<select multiple>` — a multi-select is
   close to unusable on a phone.
+
+## Expenses (out-of-pocket claims)
+
+`/expenses` ([src/features/expenses/](src/features/expenses/)) is the ledger *and* the
+way committee members get paid back: a member pays a vendor from their own pocket,
+records it (optionally with a photo or PDF of the bill), and the admin pays them back
+and marks it **Settled**.
+
+### Data model
+
+[018_expense_claims.sql](supabase/migrations/018_expense_claims.sql) adds five
+columns to the existing `expenses` table rather than a second table — a claim *is*
+an expense, and the dashboard's "Actual Expenses" must keep counting it:
+`submitted_by`, `reimbursement_status`, `settled_at`, `settled_by`, `bill_path`. It
+also creates the **private** `expense-bills` bucket. **Not run yet** — until it is,
+the page shows an amber banner naming it, the ledger still loads (old columns only),
+Add is disabled, and writes return 501 naming the migration.
+
+`reimbursement_status`: `pending` (owed) → `settled`; `not_needed` (paid from event
+funds, nobody to pay back); `null` (recorded before claims existed — stays untracked
+unless an editor picks "who paid"; it is never silently turned into a debt).
+
+The form asks only for item, amount, date, category, who paid, bill, note.
+`payment_mode` / `expense_type` / `approved_by` are **not dropped** — old rows keep
+them; the form just stopped asking, and edits never overwrite them.
+
+### Bills are private, deliberately
+
+`expenses` rows are readable with the anon key (the dashboard totals them — see 002
+and 008), so a public URL stored on a row would be one query away from anyone, and a
+bill can carry a vendor's phone number or a UPI id. So: a private bucket, the row
+stores a **path, never a URL**, and `GET /api/expenses` signs **one-hour** links only
+for committee members, members with a view/edit grant on Expenses, and the claim's own
+recorder — never for a signed-out visitor, even when the page is set public. The
+client refetches every 30 minutes so an open page does not hand out dead links.
+
+Uploads are base64-in-JSON like `/api/uploads`, but **not through it**: bills go
+inline in the expense `POST`/`PATCH` so a row and its bill save together (and a failed
+insert deletes the orphaned file). Server cap is **3MB** — Vercel stops a request at
+4.5MB and base64 adds a third. Formats are checked by leading bytes, not just the
+declared type. Phone photos are routinely 3–8MB, so `prepareBill`
+([src/lib/expenses.ts](src/lib/expenses.ts)) shrinks any photo over 1MB on the device
+to a JPEG ≤2000px on the long edge (a 6.5MB 12MP photo arrives as ~370KB); PDFs go as
+they are.
+
+### Permissions — all enforced in `api/expenses.ts`
+
+| Who | Can |
+|---|---|
+| admin, visibility `public`/`authenticated`, or a view/edit grant | view the whole ledger |
+| any `committee`/`admin` member, or an edit grant | record a claim; see, edit and withdraw **their own** until it is settled |
+| admin, or an edit grant ("manage") | edit / delete any row, settle, unsettle |
+| a manager who is **not** admin | cannot settle **their own** claim — nobody signs off their own reimbursement except the admin, who has no one above them |
+
+Every write is **conditional on the status it was read with**
+(`whereStatus`), so two people settling at once get one 200 and one 409, and a
+claimant's edit landing just after a settle cannot flip it back to pending. The
+client's `expensePermissions()` mirrors these rules only to decide which buttons to
+draw.
+
+### Client structure
+
+- `useExpenses(eventId)` — list + `create` / `update` / `setSettled` / `remove`. The
+  page reads through the API, **not `useEventData()`** (signed bill links, and the
+  own-claims view, need the server). Every write also invalidates `event-data` so the
+  dashboard total follows. Demo mode (no event) falls back to the demo rows read-only.
+- `ExpenseFormDialog` is create **and** edit. "Who paid?" is two real radio inputs
+  styled as a segmented control. A settled claim shows who settled it and when, plus
+  "Mark not settled" for managers.
+- The page keeps its original shape — heading, the same three tiles, action row,
+  ledger card. The amount still owed rides on the Total Expenses tile's `note`, not a
+  new tile. The table is `hidden lg:block`; below `lg` the same rows render as cards.
+- No new serverless function: GET, and settle/unsettle as `PATCH { action }`, fold
+  into `api/expenses.ts`. The count is still 12.
 
 ## Closing page
 

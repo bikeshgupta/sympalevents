@@ -1,4 +1,4 @@
-import { eventPageKeys, fetchPageVisibility } from "./_lib/page-visibility.js";
+import { eventPageKeys, fetchPageVisibility, isCommitteeOpenPage } from "./_lib/page-visibility.js";
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
 /**
@@ -84,12 +84,15 @@ export default async function handler(req: any, res: any) {
 
     // A signed-in user sees every page the admin opened up to "public" or
     // "authenticated", plus anything granted to them personally. A page the
-    // admin left "restricted" needs that personal grant.
+    // admin left "restricted" needs that personal grant - except a
+    // committee-open page (Expenses), which every committee member can reach
+    // to file their own claims.
     const pages = eventPageKeys
       .map((pageKey) => {
         const accessLevel = granted.get(pageKey);
         const openToSignedIn = visibility[pageKey] === "public" || visibility[pageKey] === "authenticated";
-        if (!accessLevel && !openToSignedIn) return null;
+        const openToCommittee = role === "committee" && isCommitteeOpenPage(pageKey);
+        if (!accessLevel && !openToSignedIn && !openToCommittee) return null;
         return {
           pageKey,
           canView: true,

@@ -1,6 +1,7 @@
 import {
   eventPageKeys,
   fetchPageVisibility,
+  isCommitteeOpenPage,
   normalizeVisibility,
   type PageVisibility,
 } from "./_lib/page-visibility.js";
@@ -179,10 +180,15 @@ export default async function handler(req: any, res: any) {
     const grantedView = accessLevel === "view" || accessLevel === "edit";
 
     // Settings is never something an admin can open up - it is the screen that
-    // controls all the others.
+    // controls all the others. A committee-open page (Expenses) is always
+    // reachable for a committee member; see isCommitteeOpenPage.
     const canView = isSettings
       ? isAdmin
-      : isAdmin || visibility === "public" || visibility === "authenticated" || grantedView;
+      : isAdmin ||
+        visibility === "public" ||
+        visibility === "authenticated" ||
+        grantedView ||
+        (role === "committee" && isCommitteeOpenPage(pageKey));
     const canEdit = isSettings ? isAdmin : isAdmin || accessLevel === "edit";
 
     const result: PageAccessResult = {

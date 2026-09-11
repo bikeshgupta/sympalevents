@@ -9,6 +9,7 @@ import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import {
+  committeeOpenPageKeys,
   configurablePageKeys,
   pageLabels,
   usePageAccess,
@@ -495,6 +496,9 @@ function PageVisibilityCard() {
                           {signInOnlyPageKeys.has(pageKey)
                             ? `Always needs a sign-in. ${visibilityHints[value]}`
                             : visibilityHints[value]}
+                          {committeeOpenPageKeys.has(pageKey) && value === "restricted"
+                            ? " Committee members can still open it to add their own expenses and see only those."
+                            : null}
                         </p>
                       </div>
                       <select
