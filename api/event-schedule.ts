@@ -1,3 +1,4 @@
+import { handlePrasad } from "./_lib/prasad.js";
 import {
   assertServiceSupabase,
   getRequestBody,
@@ -5,6 +6,13 @@ import {
   requireAppUser,
   sendJson,
 } from "./_lib/server.js";
+
+/**
+ * The event schedule, plus prasad slots on `?resource=prasad` (handled in
+ * api/_lib/prasad.ts). Folded in here rather than added as a new function -
+ * this project sits at the Vercel function cap; see CLAUDE.md. Dispatch reads
+ * only the query string, so each handler consumes its own body.
+ */
 
 type ApiRequest = {
   method?: string;
@@ -67,7 +75,8 @@ function schedulePayload(body: Record<string, unknown>) {
 }
 
 function payloadWithoutSubEvents(payload: ReturnType<typeof schedulePayload>) {
-  const { sub_events: _subEvents, ...rest } = payload;
+  const rest: Partial<ReturnType<typeof schedulePayload>> = { ...payload };
+  delete rest.sub_events;
   return rest;
 }
 
@@ -131,6 +140,11 @@ async function fetchSchedule(supabase: ReturnType<typeof assertServiceSupabase>,
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
+    if (String(req.query?.resource ?? "") === "prasad") {
+      await handlePrasad(req, res);
+      return;
+    }
+
     if (!["GET", "POST", "PATCH", "DELETE"].includes(String(req.method))) {
       sendJson(res, 405, { error: "Method not allowed" });
       return;
@@ -181,7 +195,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
 
       if (error) throw error;
-      sendJson(res, 201, { scheduleId: data.id });
+      sendJson(res, 201, { scheduleId: data?.id });
       return;
     }
 

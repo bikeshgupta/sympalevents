@@ -113,6 +113,16 @@ export function formatEventDate(date: string) {
   }).format(new Date(`${date}T00:00:00+05:30`));
 }
 
+/** "Mon, 14 Sept" - a date with its weekday, read in the event's zone. */
+export function formatEventWeekday(date: string) {
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(`${date}T00:00:00+05:30`));
+}
+
 export function formatEventTime(time: string) {
   if (!time) return "Time TBC";
   return new Intl.DateTimeFormat("en-IN", {

@@ -360,6 +360,8 @@ resource this way: `api/auctions.ts` (bids, registrations) and `api/page-access.
 (`?resource=visibility`). `api/tasks.ts` is the third, and it exists because
 `api/my-responsibilities.ts` was **deleted** to make room - its one job is now
 `GET /api/tasks?resource=mine`. The count is 12 either side of that change.
+`api/event-schedule.ts` also serves Prasad slots on `?resource=prasad` (see
+"Prasad"), and `api/events.ts` the closing page's resources.
 
 New local API routes must be added to `localApiRoutes` in `vite.config.ts` or the dev
 server 404s them silently via `next()`.
@@ -738,6 +740,66 @@ draw.
   below `lg` the same rows render as cards.
 - No new serverless function: GET, and settle/unsettle as `PATCH { action }`, fold
   into `api/expenses.ts`. The count is still 12.
+
+## Prasad
+
+`/prasad` ([src/features/prasad/](src/features/prasad/)) - prasad slot by slot. A
+**slot** is a day plus a label (Morning, Noon, Evening, Night as one-tap choices, or
+any name typed under "Other"), what prasad is served, and **two lists of people**:
+
+- **Arranged by** - the prasad sponsors, who arrange or bring it;
+- **Distributed by** - who hands it out.
+
+Several people on either list is the normal case, so both are lists, never one name.
+Each person is a name plus an optional flat.
+
+### Data model
+
+[019_prasad_slots.sql](supabase/migrations/019_prasad_slots.sql) reuses the existing
+`prasad_items` table (001) as the slot and adds `arrangers` / `distributors` as
+**jsonb arrays** of `{ name, flat }`, not a child table: saving a slot is one row
+write, so there is never a moment where the old people are gone and the new ones not
+yet in. The old one-name `sponsor_contributor` / `arranged_by` columns stay, and are
+read as arrangers until a slot is saved again. **Not run yet** - until it is, slots
+still list (amber banner naming it), Add is disabled, and saves return 501.
+
+`prasad_items` is not readable from the browser at all (never granted to anon; its
+only policy keys on Supabase Auth, which the browser never has). Keep it that way.
+
+### API - no new serverless function
+
+Served by **`api/event-schedule.ts` on `?resource=prasad`**, with the handler in
+[api/_lib/prasad.ts](api/_lib/prasad.ts) - a slot is part of the schedule, and the
+project is at the Vercel function cap. A request without `resource` is the original
+schedule route, untouched.
+
+- **View** follows the admin's visibility for `prasad` (seeds `restricted`), via
+  `resolvePageAccess` in [api/_lib/page-visibility.ts](api/_lib/page-visibility.ts) -
+  the same answer `api/page-access.ts` gives the route guard, reusable by any data route.
+- **Every write** needs admin or an `edit` grant on Prasad, the same as other pages.
+- **Signed-out visitors get names, never flat numbers** - if an admin makes the page
+  public, the API blanks `flat` for any request without a token.
+- **One slot per label per day** (case-insensitive): a second "Morning" on the same
+  date is a 409 telling them to add people to the existing slot.
+- **Saves are conditional on `updated_at`**: the dialog sends the `updatedAt` it
+  loaded, and if another coordinator saved in between the second save is a 409 rather
+  than silently overwriting their lists.
+- Lists are cleaned server-side: blank rows dropped, whitespace collapsed, flats
+  upper-cased ("b-402" → "B-402"), exact duplicates collapsed, at most 30 per list.
+
+### Client structure
+
+- `usePrasadSlots(eventId)` ([src/lib/prasad.ts](src/lib/prasad.ts)) - query plus
+  `create` / `update` / `remove`. Demo mode (no event) shows `prasadSlotRows` from
+  `src/data/demo.ts`, read-only.
+- Cards at every width, grouped under **"Day N · Mon, 14 Sept"** headings, sorted the
+  way a day runs (`slotRank`: morning → noon → afternoon → evening → night, custom
+  labels after). A slot missing either list gets an amber border and a "Nobody
+  arranging / distributing yet" line - that is what the **Unfilled** tile counts.
+- `PrasadSlotDialog` is create and edit. Each list is rows of name + flat with "Add
+  person"; names already used on other slots are suggested, and picking one fills in
+  its flat. Day buttons for each event day (events of 10 days or fewer), plus a date
+  input for anything outside the event's dates.
 
 ## Closing page
 

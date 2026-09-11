@@ -205,3 +205,54 @@ export const eventPlanRows = [
     notes: "",
   },
 ];
+
+// Prasad slots for demo mode - the shape src/lib/prasad.ts reads. One slot
+// has nobody distributing yet, so the "Unfilled" state is visible in demo too.
+export const prasadSlotRows = [
+  {
+    id: "demo-prasad-1",
+    date: "2026-09-14",
+    slot: "Morning",
+    item: "Modak and pedha",
+    notes: "",
+    arrangers: [
+      { name: "Sharma family", flat: "A-101" },
+      { name: "Meera Iyer", flat: "B-204" },
+    ],
+    distributors: [
+      { name: "Rohan", flat: "C-302" },
+      { name: "Kavya", flat: "A-108" },
+    ],
+    createdAt: "2026-09-01T00:00:00Z",
+    updatedAt: "2026-09-01T00:00:00Z",
+  },
+  {
+    id: "demo-prasad-2",
+    date: "2026-09-14",
+    slot: "Evening",
+    item: "Sheera",
+    notes: "Counter near the stage",
+    arrangers: [{ name: "Patel family", flat: "D-401" }],
+    distributors: [],
+    createdAt: "2026-09-01T00:00:01Z",
+    updatedAt: "2026-09-01T00:00:01Z",
+  },
+  {
+    id: "demo-prasad-3",
+    date: "2026-09-15",
+    slot: "Noon",
+    item: "Khichdi bhog",
+    notes: "",
+    arrangers: [
+      { name: "Gupta family", flat: "B-110" },
+      { name: "Nair family", flat: "C-205" },
+      { name: "Aarav Sharma", flat: "A-101" },
+    ],
+    distributors: [
+      { name: "Youth group", flat: "" },
+      { name: "Priya", flat: "D-402" },
+    ],
+    createdAt: "2026-09-01T00:00:02Z",
+    updatedAt: "2026-09-01T00:00:02Z",
+  },
+];

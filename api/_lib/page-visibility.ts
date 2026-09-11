@@ -120,3 +120,46 @@ export async function fetchPageVisibilityFor(eventId: string, pageKey: string): 
   const visibility = await fetchPageVisibility(eventId);
   return visibility[pageKey] ?? defaultVisibilityFor(pageKey);
 }
+
+/**
+ * Whether this caller (null = signed out) can view and edit one page's data -
+ * the same answer api/page-access.ts gives the route guard, for a data route
+ * to enforce on its own reads and writes. View follows the admin's
+ * visibility; edit is always admin or an explicit "edit" grant.
+ */
+export async function resolvePageAccess(eventId: string, userId: string | null, pageKey: string) {
+  const visibility = (await fetchPageVisibility(eventId))[pageKey] ?? defaultVisibilityFor(pageKey);
+  if (!userId) {
+    return { role: null, canView: visibility === "public", canEdit: false };
+  }
+
+  const supabase = assertServiceSupabase();
+  const [{ data: member, error: memberError }, { data: permission, error: permissionError }] = await Promise.all([
+    supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
+    supabase
+      .from("event_page_permissions")
+      .select("access_level")
+      .eq("event_id", eventId)
+      .eq("user_id", userId)
+      .eq("page_key", pageKey)
+      .maybeSingle(),
+  ]);
+  if (memberError) throw memberError;
+  if (permissionError) throw permissionError;
+
+  const role = (member?.role ?? null) as "admin" | "committee" | "read_only" | null;
+  const accessLevel = permission?.access_level ?? "none";
+  const isAdmin = role === "admin";
+
+  return {
+    role,
+    canView:
+      isAdmin ||
+      visibility === "public" ||
+      visibility === "authenticated" ||
+      accessLevel === "view" ||
+      accessLevel === "edit" ||
+      (role === "committee" && committeeOpenPages.has(pageKey)),
+    canEdit: isAdmin || accessLevel === "edit",
+  };
+}

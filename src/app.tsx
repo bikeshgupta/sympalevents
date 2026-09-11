@@ -10,6 +10,7 @@ import { ContributionsPage } from "@/features/contributions/contributions-page";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
 import { ExpensesPage } from "@/features/expenses/expenses-page";
 import { EventPlanPage } from "@/features/event-plan/event-plan-page";
+import { PrasadPage } from "@/features/prasad/prasad-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { SponsorsPage } from "@/features/sponsors/sponsors-page";
@@ -31,7 +32,7 @@ export function App() {
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/auctions" element={<AuctionsPage />} />
           <Route path="/closing" element={<ClosingPage />} />
-          <Route path="/prasad" element={<PlaceholderPage title="Prasad Tracker" />} />
+          <Route path="/prasad" element={<PrasadPage />} />
           <Route path="/volunteers" element={<PlaceholderPage title="Volunteers" />} />
           <Route path="/events" element={<Navigate to="/event-plan" replace />} />
           <Route path="/event-plan" element={<EventPlanPage />} />
