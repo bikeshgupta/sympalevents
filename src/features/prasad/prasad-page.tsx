@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, HandHeart, Pencil, Plus, Soup, Trash2, UserX, Users } from "lucide-react";
+import { AlertTriangle, Clock, HandHeart, Pencil, Plus, Soup, Trash2, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
@@ -116,8 +116,6 @@ export function PrasadPage() {
       items: items.length,
       slots: new Set(items.map((item) => `${item.date}|${item.slot.trim().toLowerCase()}`)).size,
       sponsors: uniquePeople(items, (item) => item.arrangers),
-      distributors: uniquePeople(items, (item) => item.distributors),
-      unfilled: items.filter(isUnfilled).length,
     }),
     [items],
   );
@@ -189,6 +187,9 @@ export function PrasadPage() {
         </p>
       ) : null}
 
+      {/* Two numbers only, by choice: how much prasad is planned and how many
+          people are sponsoring it. Who is distributing, and which items still
+          need someone, are on the items themselves. */}
       <StatGrid>
         <StatCard
           title="Prasad"
@@ -198,21 +199,6 @@ export function PrasadPage() {
           note={counts.slots ? `Across ${counts.slots} ${counts.slots === 1 ? "slot" : "slots"}` : undefined}
         />
         <StatCard title="Sponsors" value={String(counts.sponsors)} icon={HandHeart} isLoading={isLoading} note="Arranging prasad" />
-        <StatCard
-          title="Distributors"
-          shortTitle="Helpers"
-          value={String(counts.distributors)}
-          icon={Users}
-          isLoading={isLoading}
-          note="Handing it out"
-        />
-        <StatCard
-          title="Unfilled"
-          value={String(counts.unfilled)}
-          icon={UserX}
-          isLoading={isLoading}
-          note={counts.unfilled ? "Missing a sponsor or helper" : "All covered"}
-        />
       </StatGrid>
 
       <PageTools
