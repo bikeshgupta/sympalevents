@@ -3,7 +3,8 @@ import { Calculator, HandCoins, Scale } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
-import { StatCard } from "@/components/shared/stat-card";
+import { StatCard, StatGrid } from "@/components/shared/stat-card";
+import { formatCurrencyCompact } from "@/features/dashboard/dashboard-utils";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -70,11 +71,16 @@ export function BudgetPage() {
           <DataSourceBadge source={data.source} reason={data.fallbackReason} />
         </div>
       </div>
-      <section className="grid gap-3 sm:grid-cols-3">
-        <StatCard title="Estimated" value={formatCurrency(estimated)} icon={Calculator} />
-        <StatCard title="Actual" value={formatCurrency(actual)} icon={HandCoins} />
-        <StatCard title="Variance" value={formatCurrency(estimated - actual)} icon={Scale} />
-      </section>
+      <StatGrid>
+        <StatCard title="Estimated" value={formatCurrencyCompact(estimated)} valueTitle={formatCurrency(estimated)} icon={Calculator} />
+        <StatCard title="Actual" value={formatCurrencyCompact(actual)} valueTitle={formatCurrency(actual)} icon={HandCoins} />
+        <StatCard
+          title="Variance"
+          value={formatCurrencyCompact(estimated - actual)}
+          valueTitle={formatCurrency(estimated - actual)}
+          icon={Scale}
+        />
+      </StatGrid>
       <PageTools
         action={
           access.canEdit ? <CrudDialog title="Add Budget Item" triggerLabel="Add Budget Item" onSubmit={addBudgetItem}>

@@ -1,3 +1,4 @@
+import { handlePrasad } from "./_lib/prasad.js";
 import {
   assertServiceSupabase,
   getRequestBody,
@@ -5,6 +6,13 @@ import {
   requireAppUser,
   sendJson,
 } from "./_lib/server.js";
+
+/**
+ * The event schedule, plus prasad slots on `?resource=prasad` (handled in
+ * api/_lib/prasad.ts). Folded in here rather than added as a new function -
+ * this project sits at the Vercel function cap; see CLAUDE.md. Dispatch reads
+ * only the query string, so each handler consumes its own body.
+ */
 
 type ApiRequest = {
   method?: string;
@@ -67,7 +75,8 @@ function schedulePayload(body: Record<string, unknown>) {
 }
 
 function payloadWithoutSubEvents(payload: ReturnType<typeof schedulePayload>) {
-  const { sub_events: _subEvents, ...rest } = payload;
+  const rest: Partial<ReturnType<typeof schedulePayload>> = { ...payload };
+  delete rest.sub_events;
   return rest;
 }
 
@@ -80,17 +89,39 @@ function isMissingSubEventsColumn(error: { code?: string; message?: string } | n
   );
 }
 
+/**
+ * Reads tolerate a missing `sub_events` column - the rest of the schedule is
+ * still worth showing. Writes must not: silently retrying without the column
+ * is what made a saved agenda vanish with no error anywhere. If the person is
+ * actually trying to store agenda points, say so instead of dropping them.
+ */
+function assertAgendaStorable(payload: ReturnType<typeof schedulePayload>) {
+  if (!payload.sub_events.trim()) return;
+  const error = new Error(
+    "Agenda points cannot be saved yet: event_schedule.sub_events is missing. Run supabase/migrations/007_event_schedule_sub_events.sql, then try again.",
+  );
+  Object.assign(error, { statusCode: 501 });
+  throw error;
+}
+
 async function fetchSchedule(supabase: ReturnType<typeof assertServiceSupabase>, eventId: string) {
   const columns = "id,day,activity_date,activity,sub_events,start_time,end_time,location,expected_attendance,owner_name,status,notes";
   const columnsWithoutSubEvents =
     "id,day,activity_date,activity,start_time,end_time,location,expected_attendance,owner_name,status,notes";
 
-  let { data, error } = await supabase
+  // The two selects return different row shapes (the retry has no
+  // `sub_events`), so `data` is widened to cover both - otherwise assigning
+  // the fallback result below is a type error. The rows are passed straight
+  // back out as JSON, so nothing downstream needs the narrower type.
+  const primary = await supabase
     .from("event_schedule")
     .select(columns)
     .eq("event_id", eventId)
     .order("activity_date", { ascending: true })
     .order("start_time", { ascending: true });
+
+  let data: Record<string, unknown>[] | null = primary.data;
+  let error = primary.error;
 
   if (isMissingSubEventsColumn(error)) {
     const retryResult = await supabase
@@ -109,6 +140,11 @@ async function fetchSchedule(supabase: ReturnType<typeof assertServiceSupabase>,
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
+    if (String(req.query?.resource ?? "") === "prasad") {
+      await handlePrasad(req, res);
+      return;
+    }
+
     if (!["GET", "POST", "PATCH", "DELETE"].includes(String(req.method))) {
       sendJson(res, 405, { error: "Method not allowed" });
       return;
@@ -148,6 +184,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         .single();
 
       if (isMissingSubEventsColumn(error)) {
+        assertAgendaStorable(payload);
         const retryResult = await supabase
           .from("event_schedule")
           .insert({ event_id: eventId, ...payloadWithoutSubEvents(payload) })
@@ -158,7 +195,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
 
       if (error) throw error;
-      sendJson(res, 201, { scheduleId: data.id });
+      sendJson(res, 201, { scheduleId: data?.id });
       return;
     }
 
@@ -187,6 +224,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const payload = schedulePayload(body);
     let { error } = await supabase.from("event_schedule").update(payload).eq("id", scheduleId);
     if (isMissingSubEventsColumn(error)) {
+      assertAgendaStorable(payload);
       const retryResult = await supabase.from("event_schedule").update(payloadWithoutSubEvents(payload)).eq("id", scheduleId);
       error = retryResult.error;
     }

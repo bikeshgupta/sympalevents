@@ -6,7 +6,10 @@ export type TimelineStatus = "completed" | "current" | "upcoming";
 
 const KOLKATA_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
-export function formatCurrencyCompact(value: number) {
+export function formatCurrencyCompact(value: number): string {
+  // An overspent variance or an overpaid pledge must stay compact too - a
+  // full "-₹1,50,000" does not fit a stat tile.
+  if (value < 0) return `-${formatCurrencyCompact(-value)}`;
   const compact = (amount: number, suffix: string) =>
     `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: amount >= 10 ? 1 : 2 }).format(amount)}${suffix}`;
   if (value >= 100000) return compact(value / 100000, "L");
@@ -100,7 +103,24 @@ export function getNextEvent(items: EventPlanRow[], now = new Date()) {
 }
 
 export function formatEventDate(date: string) {
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00+05:30`));
+  // The date is parsed at midnight IST and must be *read back* in IST too -
+  // without the timeZone the browser's own zone reformats it, and anyone
+  // west of India sees the previous day on every date the app shows.
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(`${date}T00:00:00+05:30`));
+}
+
+/** "Mon, 14 Sept" - a date with its weekday, read in the event's zone. */
+export function formatEventWeekday(date: string) {
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(`${date}T00:00:00+05:30`));
 }
 
 export function formatEventTime(time: string) {
@@ -111,4 +131,33 @@ export function formatEventTime(time: string) {
     hour12: true,
     timeZone: "Asia/Kolkata",
   }).format(new Date(toEventZoneTimestamp("2026-01-01", time)));
+}
+
+/** A stored timestamp (timestamptz) as a date, read in the event's zone. */
+export function formatEventTimestamp(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
+}
+
+/** How far through a start-to-end window we are, 0-100. */
+export function getWindowProgress(date: string, startTime: string, endTime: string, now = new Date()) {
+  if (!startTime || !endTime) return 0;
+  const startMs = toEventZoneTimestamp(date, startTime);
+  const endMs = toEventZoneTimestamp(date, endTime);
+  if (endMs <= startMs) return 0;
+  return Math.min(100, Math.max(0, ((now.getTime() - startMs) / (endMs - startMs)) * 100));
+}
+
+/** "8:30 AM - 9:00 PM" across a day's events, or null when nothing is timed. */
+export function getDayWindow(items: EventPlanRow[]) {
+  const starts = items.map((item) => item.startTime).filter(Boolean).sort();
+  const ends = items.map((item) => item.endTime || item.startTime).filter(Boolean).sort();
+  if (!starts.length) return null;
+  return { start: starts[0], end: ends.at(-1) ?? starts.at(-1)! };
 }

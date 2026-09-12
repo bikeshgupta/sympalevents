@@ -3,11 +3,14 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { RouteGuard } from "@/components/layout/route-guard";
 import { AccessDeniedPage } from "@/features/auth/access-denied-page";
 import { LoginPage } from "@/features/auth/login-page";
+import { AuctionsPage } from "@/features/auctions/auctions-page";
 import { BudgetPage } from "@/features/budget/budget-page";
+import { ClosingPage } from "@/features/closing/closing-page";
 import { ContributionsPage } from "@/features/contributions/contributions-page";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
 import { ExpensesPage } from "@/features/expenses/expenses-page";
 import { EventPlanPage } from "@/features/event-plan/event-plan-page";
+import { PrasadPage } from "@/features/prasad/prasad-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { SponsorsPage } from "@/features/sponsors/sponsors-page";
@@ -27,16 +30,13 @@ export function App() {
           <Route path="/budget" element={<BudgetPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
-          <Route path="/procurement" element={<PlaceholderPage title="Procurement" />} />
-          <Route path="/prasad" element={<PlaceholderPage title="Prasad Tracker" />} />
+          <Route path="/auctions" element={<AuctionsPage />} />
+          <Route path="/closing" element={<ClosingPage />} />
+          <Route path="/prasad" element={<PrasadPage />} />
           <Route path="/volunteers" element={<PlaceholderPage title="Volunteers" />} />
           <Route path="/events" element={<Navigate to="/event-plan" replace />} />
           <Route path="/event-plan" element={<EventPlanPage />} />
-          <Route path="/run-sheet" element={<PlaceholderPage title="Run Sheet" />} />
-          <Route path="/inventory" element={<PlaceholderPage title="Inventory" />} />
-          <Route path="/vendors" element={<PlaceholderPage title="Vendors" />} />
           <Route path="/contacts" element={<PlaceholderPage title="Contacts" />} />
-          <Route path="/risks" element={<PlaceholderPage title="Safety / Risks" />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>
