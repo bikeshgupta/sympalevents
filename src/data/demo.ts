@@ -206,14 +206,15 @@ export const eventPlanRows = [
   },
 ];
 
-// Prasad slots for demo mode - the shape src/lib/prasad.ts reads. One slot
-// has nobody distributing yet, so the "Unfilled" state is visible in demo too.
-export const prasadSlotRows = [
+// Prasad for demo mode - the shape src/lib/prasad.ts reads. The first two
+// share one slot (a slot holds as many prasad items as the committee likes),
+// and one item has nobody distributing yet, so "Unfilled" shows in demo too.
+export const prasadItemRows = [
   {
     id: "demo-prasad-1",
     date: "2026-09-14",
     slot: "Morning",
-    item: "Modak and pedha",
+    item: "Modak",
     notes: "",
     arrangers: [
       { name: "Sharma family", flat: "A-101" },
@@ -225,6 +226,20 @@ export const prasadSlotRows = [
     ],
     createdAt: "2026-09-01T00:00:00Z",
     updatedAt: "2026-09-01T00:00:00Z",
+  },
+  {
+    id: "demo-prasad-4",
+    date: "2026-09-14",
+    slot: "Morning",
+    item: "Pedha",
+    notes: "",
+    arrangers: [
+      { name: "Joshi family", flat: "C-104" },
+      { name: "Deshpande family", flat: "D-206" },
+    ],
+    distributors: [{ name: "Rohan", flat: "C-302" }],
+    createdAt: "2026-09-01T00:00:03Z",
+    updatedAt: "2026-09-01T00:00:03Z",
   },
   {
     id: "demo-prasad-2",

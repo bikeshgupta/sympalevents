@@ -3,36 +3,43 @@ import { useMemo, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
-import { prasadSlotRows } from "@/data/demo";
+import { prasadItemRows } from "@/data/demo";
 import { formatEventWeekday, getDateInEventZone } from "@/features/dashboard/dashboard-utils";
-import { PrasadSlotDialog, type EventDay } from "@/features/prasad/prasad-slot-dialog";
+import { PrasadItemDialog, type EventDay } from "@/features/prasad/prasad-item-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import {
   byDayThenSlot,
+  groupBySlot,
   isUnfilled,
   personKey,
-  usePrasadSlots,
+  usePrasadItems,
+  type PrasadItem,
+  type PrasadItemInput,
   type PrasadPerson,
-  type PrasadSlot,
-  type PrasadSlotInput,
 } from "@/lib/prasad";
 import { cn } from "@/lib/utils";
 
 /**
- * Prasad, slot by slot: for each day, each slot (morning, noon, evening, or
- * whatever the committee names it), what is served, who arranges it - the
- * prasad sponsors - and who hands it out. Several people on either list is
- * the normal case, so both are lists, never a single name.
+ * Prasad, slot by slot. Three "manys" drive the whole screen:
  *
- * Cards at every width, grouped by day, like Tasks: a slot is a handful of
- * names, not a row of columns, and it has to read on a phone at the counter.
+ *   a slot   holds several prasad items - modak from one family and pedha from
+ *            another, both in the Morning slot;
+ *   an item  has several sponsors arranging it;
+ *   an item  has several people distributing it.
+ *
+ * So the page nests: day -> slot -> the prasad items in it, each with its own
+ * two lists of people. Every slot carries its own "Add prasad" button, which
+ * is how a second prasad joins a slot that already has one.
+ *
+ * Cards at every width, like Tasks: a prasad is a handful of names, not a row
+ * of columns, and it has to read on a phone at the counter.
  */
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** The event's days as "Day 1 · Mon, 14 Sept" - none for a long or undated event. */
+/** The event's days as "Day 1" + "Mon, 14 Sept" - none for a long or undated event. */
 function eventDaysBetween(startDate: string, endDate: string): EventDay[] {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return [];
   const start = Date.parse(`${startDate}T00:00:00Z`);
@@ -49,26 +56,27 @@ function dayHeading(date: string, eventDays: EventDay[]) {
   return { label: day?.label ?? formatEventWeekday(date), sub: day ? formatEventWeekday(date) : "" };
 }
 
-function matchesSearch(slot: PrasadSlot, term: string) {
+function matchesSearch(item: PrasadItem, term: string) {
   if (!term) return true;
-  return [slot.slot, slot.item, slot.notes, ...slot.arrangers.flatMap((p) => [p.name, p.flat]), ...slot.distributors.flatMap((p) => [p.name, p.flat])]
+  return [item.slot, item.item, item.notes, ...item.arrangers.flatMap((p) => [p.name, p.flat]), ...item.distributors.flatMap((p) => [p.name, p.flat])]
     .join(" ")
     .toLowerCase()
     .includes(term);
 }
 
-function uniquePeople(slots: PrasadSlot[], pick: (slot: PrasadSlot) => PrasadPerson[]) {
-  return new Set(slots.flatMap(pick).map(personKey)).size;
+function uniquePeople(items: PrasadItem[], pick: (item: PrasadItem) => PrasadPerson[]) {
+  return new Set(items.flatMap(pick).map(personKey)).size;
 }
 
 export function PrasadPage() {
   const { data } = useEventData();
   const { selectedEventId } = useEventContext();
-  const { query, create, update, remove } = usePrasadSlots(selectedEventId);
+  const { query, create, update, remove } = usePrasadItems(selectedEventId);
   const [dayFilter, setDayFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogSlot, setDialogSlot] = useState<PrasadSlot | undefined>();
+  const [dialogItem, setDialogItem] = useState<PrasadItem | undefined>();
+  const [dialogSlot, setDialogSlot] = useState<{ date: string; slot: string } | undefined>();
   const [actionError, setActionError] = useState<string | null>(null);
 
   const fromApi = Boolean(selectedEventId);
@@ -77,41 +85,44 @@ export function PrasadPage() {
   const ready = query.data?.ready ?? true;
   const { startDate, endDate } = data.event;
 
-  const slots = useMemo(
-    () => [...(fromApi ? query.data?.slots ?? [] : prasadSlotRows)].sort(byDayThenSlot),
+  const items = useMemo(
+    () => [...(fromApi ? query.data?.slots ?? [] : prasadItemRows)].sort(byDayThenSlot),
     [fromApi, query.data],
   );
   const eventDays = useMemo(() => eventDaysBetween(startDate, endDate), [startDate, endDate]);
 
-  // Tabs: every event day, plus any day a slot sits on outside the event's
+  // Tabs: every event day, plus any day something sits on outside the event's
   // dates (a pre-event puja, say), so nothing is unreachable.
   const dayTabs = useMemo(() => {
-    const dates = new Set([...eventDays.map((day) => day.date), ...slots.map((slot) => slot.date)]);
+    const dates = new Set([...eventDays.map((day) => day.date), ...items.map((item) => item.date)]);
     return [...dates].sort().map((date) => ({ date, ...dayHeading(date, eventDays) }));
-  }, [eventDays, slots]);
+  }, [eventDays, items]);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return slots.filter((slot) => (dayFilter === "all" || slot.date === dayFilter) && matchesSearch(slot, term));
-  }, [slots, dayFilter, search]);
+    return items.filter((item) => (dayFilter === "all" || item.date === dayFilter) && matchesSearch(item, term));
+  }, [items, dayFilter, search]);
 
-  const groups = useMemo(() => {
-    const byDate = new Map<string, PrasadSlot[]>();
-    for (const slot of visible) byDate.set(slot.date, [...(byDate.get(slot.date) ?? []), slot]);
-    return [...byDate.entries()].map(([date, list]) => ({ date, ...dayHeading(date, eventDays), slots: list }));
+  const days = useMemo(() => {
+    const byDate = new Map<string, PrasadItem[]>();
+    for (const item of visible) byDate.set(item.date, [...(byDate.get(item.date) ?? []), item]);
+    return [...byDate.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([date, list]) => ({ date, ...dayHeading(date, eventDays), slots: groupBySlot(list), count: list.length }));
   }, [visible, eventDays]);
 
   const counts = useMemo(
     () => ({
-      slots: slots.length,
-      sponsors: uniquePeople(slots, (slot) => slot.arrangers),
-      distributors: uniquePeople(slots, (slot) => slot.distributors),
-      unfilled: slots.filter(isUnfilled).length,
+      items: items.length,
+      slots: new Set(items.map((item) => `${item.date}|${item.slot.trim().toLowerCase()}`)).size,
+      sponsors: uniquePeople(items, (item) => item.arrangers),
+      distributors: uniquePeople(items, (item) => item.distributors),
+      unfilled: items.filter(isUnfilled).length,
     }),
-    [slots],
+    [items],
   );
 
-  const knownPeople = useMemo(() => slots.flatMap((slot) => [...slot.arrangers, ...slot.distributors]), [slots]);
+  const knownPeople = useMemo(() => items.flatMap((item) => [...item.arrangers, ...item.distributors]), [items]);
 
   const today = getDateInEventZone();
   const defaultDate =
@@ -121,33 +132,34 @@ export function PrasadPage() {
         ? today
         : eventDays[0]?.date ?? today;
 
-  function openDialog(slot?: PrasadSlot) {
-    setDialogSlot(slot);
+  /** Edit one, add a fresh one, or add another into a slot that exists. */
+  function openDialog(item?: PrasadItem, intoSlot?: { date: string; slot: string }) {
+    setDialogItem(item);
+    setDialogSlot(intoSlot);
     setDialogOpen(true);
   }
 
-  function handleSubmit(input: PrasadSlotInput) {
-    return dialogSlot
-      ? update.mutateAsync({ id: dialogSlot.id, updatedAt: dialogSlot.updatedAt, ...input })
+  function handleSubmit(input: PrasadItemInput) {
+    return dialogItem
+      ? update.mutateAsync({ id: dialogItem.id, updatedAt: dialogItem.updatedAt, ...input })
       : create.mutateAsync(input);
   }
 
-  async function handleDelete(slot: PrasadSlot) {
-    const when = `${slot.slot} slot on ${formatEventWeekday(slot.date)}`;
-    if (!window.confirm(`Delete the ${when}? Its lists of who arranges and who distributes go with it.`)) return;
+  async function handleDelete(item: PrasadItem) {
+    if (!window.confirm(`Delete "${item.item}" from the ${item.slot} slot? Its sponsors and distributors go with it.`)) return;
     setActionError(null);
     try {
-      await remove.mutateAsync(slot.id);
+      await remove.mutateAsync(item.id);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to delete the slot");
+      setActionError(error instanceof Error ? error.message : "Unable to delete this prasad");
     }
   }
 
-  const emptyMessage = slots.length
-    ? "No slots match this view."
+  const emptyMessage = items.length
+    ? "Nothing matches this view."
     : canEdit
-      ? "No prasad slots yet. Add the first one - pick a day and a slot, then who arranges and who distributes."
-      : "No prasad slots have been planned yet.";
+      ? "No prasad planned yet. Add the first one - a day, a slot, and who is sponsoring it. A slot can hold as many prasad items as you need."
+      : "No prasad has been planned yet.";
 
   return (
     <div className="space-y-5">
@@ -155,7 +167,7 @@ export function PrasadPage() {
         <div>
           <h2 className="text-2xl font-semibold">Prasad</h2>
           <p className="text-sm text-muted-foreground">
-            Each slot, what is served, who arranges it and who hands it out.
+            Every slot can hold several prasad items, each with its own sponsors and the people handing it out.
           </p>
         </div>
         <DataSourceBadge source={fromApi ? "supabase" : data.source} reason={data.fallbackReason} />
@@ -163,7 +175,7 @@ export function PrasadPage() {
 
       {query.isError ? (
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {query.error instanceof Error ? query.error.message : "Unable to load prasad slots"}
+          {query.error instanceof Error ? query.error.message : "Unable to load prasad"}
         </p>
       ) : null}
 
@@ -171,14 +183,20 @@ export function PrasadPage() {
         <p className="flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
-            Adding and editing prasad slots is switched off until{" "}
+            Adding and editing prasad is switched off until{" "}
             <code className="font-mono text-xs">019_prasad_slots.sql</code> has been run in Supabase.
           </span>
         </p>
       ) : null}
 
       <StatGrid>
-        <StatCard title="Slots" value={String(counts.slots)} icon={Soup} isLoading={isLoading} />
+        <StatCard
+          title="Prasad"
+          value={String(counts.items)}
+          icon={Soup}
+          isLoading={isLoading}
+          note={counts.slots ? `Across ${counts.slots} ${counts.slots === 1 ? "slot" : "slots"}` : undefined}
+        />
         <StatCard title="Sponsors" value={String(counts.sponsors)} icon={HandHeart} isLoading={isLoading} note="Arranging prasad" />
         <StatCard
           title="Distributors"
@@ -193,20 +211,20 @@ export function PrasadPage() {
           value={String(counts.unfilled)}
           icon={UserX}
           isLoading={isLoading}
-          note={counts.unfilled ? "Missing a sponsor or helper" : "Every slot is covered"}
+          note={counts.unfilled ? "Missing a sponsor or helper" : "All covered"}
         />
       </StatGrid>
 
       <PageTools
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search names, flats, prasad"
-        searchLabel="Search prasad slots"
+        searchPlaceholder="Search prasad, names, flats"
+        searchLabel="Search prasad"
         action={
           canEdit ? (
             <Button type="button" onClick={() => openDialog()} disabled={!ready} className="w-full sm:w-auto">
               <Plus className="h-4 w-4" aria-hidden="true" />
-              Add Slot
+              Add Prasad
             </Button>
           ) : (
             <span className="text-sm text-muted-foreground">View-only access</span>
@@ -223,7 +241,7 @@ export function PrasadPage() {
                 role="tab"
                 type="button"
                 aria-selected={dayFilter === tab.date}
-                aria-controls="prasad-slots"
+                aria-controls="prasad-days"
                 onClick={() => setDayFilter(tab.date)}
                 className={cn(
                   "min-h-10 flex-1 whitespace-nowrap rounded px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none",
@@ -239,28 +257,36 @@ export function PrasadPage() {
 
       {actionError ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p> : null}
 
-      <div id="prasad-slots" role={dayTabs.length > 1 ? "tabpanel" : undefined} className="space-y-6">
+      <div id="prasad-days" role={dayTabs.length > 1 ? "tabpanel" : undefined} className="space-y-6">
         {isLoading ? (
-          <div className="grid gap-2.5 md:grid-cols-2" aria-busy="true">
-            {[0, 1, 2, 3].map((key) => (
-              <div key={key} className="h-32 animate-pulse rounded-lg border bg-muted/50" />
+          <div className="space-y-2.5" aria-busy="true">
+            {[0, 1].map((key) => (
+              <div key={key} className="h-40 animate-pulse rounded-lg border bg-muted/50" />
             ))}
           </div>
-        ) : groups.length ? (
-          groups.map((group) => (
-            <section key={group.date} className="space-y-2.5" aria-label={`${group.label} ${group.sub}`.trim()}>
+        ) : days.length ? (
+          days.map((day) => (
+            <section key={day.date} className="space-y-2.5" aria-label={`${day.label} ${day.sub}`.trim()}>
               <h3 className="flex flex-wrap items-baseline gap-x-2 text-base font-semibold">
-                {group.label}
-                {group.sub ? <span className="text-sm font-normal text-muted-foreground">{group.sub}</span> : null}
+                {day.label}
+                {day.sub ? <span className="text-sm font-normal text-muted-foreground">{day.sub}</span> : null}
                 <span className="text-sm font-normal tabular-nums text-muted-foreground">
-                  · {group.slots.length} {group.slots.length === 1 ? "slot" : "slots"}
+                  · {day.count} {day.count === 1 ? "prasad" : "prasad items"}
                 </span>
               </h3>
-              <div className="grid gap-2.5 md:grid-cols-2">
-                {group.slots.map((slot) => (
-                  <SlotCard key={slot.id} slot={slot} canEdit={canEdit && ready} onEdit={openDialog} onDelete={handleDelete} />
-                ))}
-              </div>
+
+              {day.slots.map((group) => (
+                <SlotGroup
+                  key={`${day.date}-${group.slot.toLowerCase()}`}
+                  date={day.date}
+                  slot={group.slot}
+                  items={group.items}
+                  canEdit={canEdit && ready}
+                  onAdd={() => openDialog(undefined, { date: day.date, slot: group.slot })}
+                  onEdit={openDialog}
+                  onDelete={handleDelete}
+                />
+              ))}
             </section>
           ))
         ) : (
@@ -269,11 +295,12 @@ export function PrasadPage() {
       </div>
 
       {canEdit ? (
-        <PrasadSlotDialog
+        <PrasadItemDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
-          slot={dialogSlot}
-          defaultDate={defaultDate}
+          item={dialogItem}
+          defaultDate={dialogSlot?.date ?? defaultDate}
+          defaultSlot={dialogSlot?.slot}
           eventDays={eventDays.map((day) => ({ ...day, sub: formatEventWeekday(day.date) }))}
           knownPeople={knownPeople}
           onSubmit={handleSubmit}
@@ -283,45 +310,95 @@ export function PrasadPage() {
   );
 }
 
-function SlotCard({
+/** One slot, with every prasad in it - and its own "Add prasad". */
+function SlotGroup({
+  date,
   slot,
+  items,
   canEdit,
+  onAdd,
   onEdit,
   onDelete,
 }: {
-  slot: PrasadSlot;
+  date: string;
+  slot: string;
+  items: PrasadItem[];
   canEdit: boolean;
-  onEdit: (slot: PrasadSlot) => void;
-  onDelete: (slot: PrasadSlot) => void;
+  onAdd: () => void;
+  onEdit: (item: PrasadItem) => void;
+  onDelete: (item: PrasadItem) => void;
 }) {
-  const name = `${slot.slot} slot${slot.item ? ` (${slot.item})` : ""}`;
+  const sponsors = uniquePeople(items, (item) => item.arrangers);
 
   return (
-    <article className={cn("rounded-lg border bg-card px-3 py-2.5", isUnfilled(slot) && "border-amber-300")}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pt-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            {slot.slot}
-          </span>
-          {slot.item ? <h4 className="text-sm font-medium">{slot.item}</h4> : null}
-        </div>
+    <article className="overflow-hidden rounded-lg border bg-card">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-muted/40 px-3 py-2">
+        <h4 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+          <Clock className="h-4 w-4 text-primary" aria-hidden="true" />
+          {slot}
+        </h4>
+        <p className="text-xs tabular-nums text-muted-foreground">
+          {items.length} {items.length === 1 ? "prasad" : "prasad items"}
+          {sponsors ? ` · ${sponsors} ${sponsors === 1 ? "sponsor" : "sponsors"}` : ""}
+        </p>
         {canEdit ? (
-          <span className="flex shrink-0 items-center">
-            <Button type="button" variant="ghost" size="icon" className="h-10 w-9" aria-label={`Edit ${name}`} onClick={() => onEdit(slot)}>
-              <Pencil className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon" className="h-10 w-9" aria-label={`Delete ${name}`} onClick={() => onDelete(slot)}>
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            aria-label={`Add another prasad to the ${slot} slot on ${formatEventWeekday(date)}`}
+            onClick={onAdd}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add prasad
+          </Button>
         ) : null}
-      </div>
+      </header>
 
-      <PeopleList icon={HandHeart} label="Arranged by" people={slot.arrangers} emptyText="Nobody arranging yet" />
-      <PeopleList icon={Users} label="Distributed by" people={slot.distributors} emptyText="Nobody distributing yet" />
+      <ul className="divide-y">
+        {items.map((item) => (
+          <li
+            key={item.id}
+            className={cn("px-3 py-2.5", isUnfilled(item) && "border-l-2 border-l-amber-300")}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h5 className="min-w-0 pt-1.5 text-sm font-medium">{item.item}</h5>
+              {canEdit ? (
+                <span className="flex shrink-0 items-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-9"
+                    aria-label={`Edit ${item.item} in the ${item.slot} slot`}
+                    onClick={() => onEdit(item)}
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-9"
+                    aria-label={`Delete ${item.item} from the ${item.slot} slot`}
+                    onClick={() => onDelete(item)}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </span>
+              ) : null}
+            </div>
 
-      {slot.notes ? <p className="mt-2 text-xs text-muted-foreground">{slot.notes}</p> : null}
+            <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+              <PeopleList icon={HandHeart} label="Sponsored by" people={item.arrangers} emptyText="No sponsor yet" />
+              <PeopleList icon={Users} label="Distributed by" people={item.distributors} emptyText="Nobody distributing yet" />
+            </div>
+
+            {item.notes ? <p className="mt-2 text-xs text-muted-foreground">{item.notes}</p> : null}
+          </li>
+        ))}
+      </ul>
     </article>
   );
 }
@@ -338,7 +415,7 @@ function PeopleList({
   emptyText: string;
 }) {
   return (
-    <div className="mt-2">
+    <div className="mt-1.5">
       <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
         {label}

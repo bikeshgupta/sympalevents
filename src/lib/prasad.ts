@@ -3,35 +3,43 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 
 /**
- * Prasad slots - see api/_lib/prasad.ts (served on
+ * Prasad - see api/_lib/prasad.ts (served on
  * /api/event-schedule?resource=prasad).
  *
- * A slot is a day plus a label - Morning, Noon, Evening, or anything the
- * committee names - with what prasad is served, who arranges it (the prasad
- * sponsors) and who distributes it. Several people on either list is normal.
+ * One **item** is one prasad in one slot: a day, a slot label (Morning, Noon,
+ * Evening, or anything the committee names), what the prasad is, who arranges
+ * it - the prasad sponsors - and who distributes it.
  *
- * Slots come from the API, not useEventData: `prasad_items` is not readable
+ * Three "manys", all of them normal:
+ *   - a slot holds several prasad items (modak from one family, pedha from
+ *     another, both in the Morning slot);
+ *   - an item has several sponsors arranging it;
+ *   - an item has several people distributing it.
+ *
+ * Items come from the API, not useEventData: `prasad_items` is not readable
  * from the browser, which is also what lets the server leave flat numbers out
  * for a signed-out visitor.
  */
 
 export type PrasadPerson = { name: string; flat: string };
 
-export type PrasadSlot = {
+export type PrasadItem = {
   id: string;
   date: string;
+  /** The slot this prasad belongs to - several items can share one. */
   slot: string;
+  /** What the prasad is. Required: it is what tells two items in one slot apart. */
   item: string;
   notes: string;
-  /** The prasad sponsors: who arranges / brings it. */
+  /** The prasad sponsors: who arranges / brings this item. */
   arrangers: PrasadPerson[];
-  /** Who hands it out. */
+  /** Who hands this item out. */
   distributors: PrasadPerson[];
   createdAt: string;
   updatedAt: string;
 };
 
-export type PrasadSlotInput = {
+export type PrasadItemInput = {
   date: string;
   slot: string;
   item: string;
@@ -40,9 +48,9 @@ export type PrasadSlotInput = {
   distributors: PrasadPerson[];
 };
 
-type SlotsResponse = {
-  slots: PrasadSlot[];
-  /** False until migration 019 has been run: slots still list, saving is off. */
+type ItemsResponse = {
+  slots: PrasadItem[];
+  /** False until migration 019 has been run: items still list, saving is off. */
   ready: boolean;
   access: { canEdit: boolean };
 };
@@ -65,49 +73,70 @@ export function slotRank(label: string) {
   return slotOrder[label.trim().toLowerCase()] ?? 10;
 }
 
-export function byDayThenSlot(left: PrasadSlot, right: PrasadSlot) {
+export function byDayThenSlot(left: PrasadItem, right: PrasadItem) {
   return (
     left.date.localeCompare(right.date) ||
     slotRank(left.slot) - slotRank(right.slot) ||
     left.slot.localeCompare(right.slot) ||
+    left.item.localeCompare(right.item) ||
     left.createdAt.localeCompare(right.createdAt)
   );
 }
 
-/** A slot still missing someone to arrange it or someone to hand it out. */
-export function isUnfilled(slot: PrasadSlot) {
-  return !slot.arrangers.length || !slot.distributors.length;
+/** An item still missing someone to arrange it or someone to hand it out. */
+export function isUnfilled(item: PrasadItem) {
+  return !item.arrangers.length || !item.distributors.length;
 }
 
 export function personKey(person: PrasadPerson) {
   return `${person.name.trim().toLowerCase()}|${person.flat.trim().toUpperCase()}`;
 }
 
-export function usePrasadSlots(eventId?: string) {
+export type PrasadSlotGroup = { slot: string; items: PrasadItem[] };
+
+/**
+ * Groups items into the slots they share, in the order a day runs. Slot
+ * labels are matched case-insensitively ("morning" joins "Morning") and the
+ * first spelling is the one shown.
+ */
+export function groupBySlot(items: PrasadItem[]): PrasadSlotGroup[] {
+  const slots = new Map<string, PrasadSlotGroup>();
+  for (const item of items) {
+    const key = item.slot.trim().toLowerCase();
+    const group = slots.get(key);
+    if (group) group.items.push(item);
+    else slots.set(key, { slot: item.slot, items: [item] });
+  }
+  return [...slots.values()].sort(
+    (left, right) => slotRank(left.slot) - slotRank(right.slot) || left.slot.localeCompare(right.slot),
+  );
+}
+
+export function usePrasadItems(eventId?: string) {
   const { data: session, isLoading: isSessionLoading } = useSession();
   const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["prasad-slots"] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["prasad-items"] });
 
   const query = useQuery({
-    queryKey: ["prasad-slots", eventId, session?.user.appUserId ?? "guest"],
+    queryKey: ["prasad-items", eventId, session?.user.appUserId ?? "guest"],
     enabled: Boolean(eventId) && !isSessionLoading,
     // The admin may have made the page public; the server decides what a
     // signed-out request gets.
     queryFn: () =>
-      apiFetch<SlotsResponse>(`/api/event-schedule?resource=prasad&eventId=${encodeURIComponent(eventId!)}`, {
+      apiFetch<ItemsResponse>(`/api/event-schedule?resource=prasad&eventId=${encodeURIComponent(eventId!)}`, {
         requireAuth: false,
       }),
     retry: false,
   });
 
   const create = useMutation({
-    mutationFn: (input: PrasadSlotInput) =>
+    mutationFn: (input: PrasadItemInput) =>
       apiFetch<{ slotId: string }>("/api/event-schedule?resource=prasad", { method: "POST", body: { eventId, ...input } }),
     onSuccess: invalidate,
   });
 
   const update = useMutation({
-    mutationFn: ({ id, updatedAt, ...input }: PrasadSlotInput & { id: string; updatedAt: string }) =>
+    mutationFn: ({ id, updatedAt, ...input }: PrasadItemInput & { id: string; updatedAt: string }) =>
       apiFetch<{ ok: true }>("/api/event-schedule?resource=prasad", {
         method: "PATCH",
         body: { id, updatedAt, ...input },

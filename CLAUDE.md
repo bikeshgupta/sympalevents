@@ -743,15 +743,24 @@ draw.
 
 ## Prasad
 
-`/prasad` ([src/features/prasad/](src/features/prasad/)) - prasad slot by slot. A
-**slot** is a day plus a label (Morning, Noon, Evening, Night as one-tap choices, or
-any name typed under "Other"), what prasad is served, and **two lists of people**:
+`/prasad` ([src/features/prasad/](src/features/prasad/)) - prasad slot by slot.
+**One row is one prasad in one slot**: a day, a slot label (Morning, Noon, Evening,
+Night as one-tap choices, or any name typed under "Other"), what the prasad is, and
+two lists of people - **Sponsored by** (who arranges or brings it) and **Distributed
+by** (who hands it out). Each person is a name plus an optional flat.
 
-- **Arranged by** - the prasad sponsors, who arrange or bring it;
-- **Distributed by** - who hands it out.
+**Three "manys", all of them normal, and all three are the feature:**
 
-Several people on either list is the normal case, so both are lists, never one name.
-Each person is a name plus an optional flat.
+1. a **slot holds several prasad items** - modak from one family and pedha from
+   another, both in the Morning slot;
+2. a **prasad has several sponsors** arranging it;
+3. a **prasad has several distributors**.
+
+An earlier version allowed only one row per (day, slot) and answered 409 to the
+second - that was wrong, and is exactly what a slot must allow. Only the *same*
+prasad twice in one slot is refused now, since that is someone starting a duplicate
+where they meant to join the existing one's sponsors. `item` is therefore required:
+it is what tells two prasad items in one slot apart.
 
 ### Data model
 
@@ -779,8 +788,9 @@ schedule route, untouched.
 - **Every write** needs admin or an `edit` grant on Prasad, the same as other pages.
 - **Signed-out visitors get names, never flat numbers** - if an admin makes the page
   public, the API blanks `flat` for any request without a token.
-- **One slot per label per day** (case-insensitive): a second "Morning" on the same
-  date is a 409 telling them to add people to the existing slot.
+- **A slot takes any number of prasad items**; only the same `item` twice in the same
+  (day, slot) is a 409, telling them to open that one and add the sponsors there.
+  Slot labels match case-insensitively, so "morning" joins "Morning".
 - **Saves are conditional on `updated_at`**: the dialog sends the `updatedAt` it
   loaded, and if another coordinator saved in between the second save is a 409 rather
   than silently overwriting their lists.
@@ -789,16 +799,19 @@ schedule route, untouched.
 
 ### Client structure
 
-- `usePrasadSlots(eventId)` ([src/lib/prasad.ts](src/lib/prasad.ts)) - query plus
-  `create` / `update` / `remove`. Demo mode (no event) shows `prasadSlotRows` from
-  `src/data/demo.ts`, read-only.
-- Cards at every width, grouped under **"Day N · Mon, 14 Sept"** headings, sorted the
-  way a day runs (`slotRank`: morning → noon → afternoon → evening → night, custom
-  labels after). A slot missing either list gets an amber border and a "Nobody
-  arranging / distributing yet" line - that is what the **Unfilled** tile counts.
-- `PrasadSlotDialog` is create and edit. Each list is rows of name + flat with "Add
-  person"; names already used on other slots are suggested, and picking one fills in
-  its flat. Day buttons for each event day (events of 10 days or fewer), plus a date
+- `usePrasadItems(eventId)` ([src/lib/prasad.ts](src/lib/prasad.ts)) - query plus
+  `create` / `update` / `remove`, and `groupBySlot`. Demo mode (no event) shows
+  `prasadItemRows` from `src/data/demo.ts`, read-only.
+- The page nests **day → slot → the prasad items in it**, days as
+  "Day N · Mon, 14 Sept" and slots in the order a day runs (`slotRank`: morning →
+  noon → afternoon → evening → night, custom labels after). **Every slot header
+  carries its own "Add prasad"**, which opens the dialog already on that day and
+  slot - that is how a second prasad joins a slot. An item missing either list gets
+  an amber edge and a "No sponsor yet" / "Nobody distributing yet" line, which is
+  what the **Unfilled** tile counts.
+- `PrasadItemDialog` adds and edits **one item**. Each list is rows of name + flat
+  with "Add person"; names used elsewhere are suggested and bring their flat with
+  them. Day buttons for each event day (events of 10 days or fewer), plus a date
   input for anything outside the event's dates.
 
 ## Closing page

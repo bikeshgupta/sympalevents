@@ -6,15 +6,21 @@ import { assertServiceSupabase, getRequestBody, requireAppUser, sendJson } from 
  * slot is part of the event's schedule, and this project sits at the Vercel
  * function cap, so it folds into that route instead of adding a function.
  *
- *   GET    /api/event-schedule?resource=prasad&eventId=   slots + whether you can edit
- *   POST   /api/event-schedule?resource=prasad            create a slot
- *   PATCH  /api/event-schedule?resource=prasad            edit a slot (whole-slot save)
- *   DELETE /api/event-schedule?resource=prasad            delete a slot
+ *   GET    /api/event-schedule?resource=prasad&eventId=   items + whether you can edit
+ *   POST   /api/event-schedule?resource=prasad            add a prasad item
+ *   PATCH  /api/event-schedule?resource=prasad            edit one (whole-item save)
+ *   DELETE /api/event-schedule?resource=prasad            delete one
  *
- * A slot is one row of `prasad_items`: a date, a label ("Morning", "Noon",
- * "Evening", or anything else), what prasad is served, and two lists of
- * people - who arranges it (the prasad sponsors) and who distributes it.
- * Several people on either list is the normal case.
+ * One row of `prasad_items` is **one prasad in one slot**: a date, a slot
+ * label ("Morning", "Noon", "Evening", or anything else), what the prasad is,
+ * and two lists of people - who arranges it (the prasad sponsors) and who
+ * distributes it.
+ *
+ * A slot holds as many prasad items as the committee likes (modak from one
+ * family, pedha from another, in the same Morning slot), and each item takes
+ * as many sponsors and as many distributors as it needs. Only the exact same
+ * prasad twice in one slot is refused, since that is someone adding
+ * themselves to the wrong place instead of joining the existing one.
  *
  * View follows the admin's visibility for the "prasad" page; every write needs
  * admin or an edit grant on it. A signed-out visitor (page set public) gets
@@ -165,7 +171,10 @@ function readSlotFields(body: Record<string, unknown>) {
   }
   if (!slot) throw fail("Pick a slot - morning, noon, evening, or name your own.");
   if (slot.length > 40) throw fail("Keep the slot name under 40 characters.");
-  if (item.length > 120) throw fail("Keep the prasad description under 120 characters.");
+  // Required now that a slot holds several: the prasad is what tells two
+  // entries in the same slot apart.
+  if (!item) throw fail("Say what the prasad is - that is what tells two in the same slot apart.");
+  if (item.length > 120) throw fail("Keep the prasad name under 120 characters.");
   if (notes.length > 500) throw fail("Keep the note under 500 characters.");
 
   return {
@@ -179,22 +188,31 @@ function readSlotFields(body: Record<string, unknown>) {
   };
 }
 
-/** One slot per label per day: two "Morning" slots on the same date is almost
- *  always a second person adding themselves in the wrong place. */
-async function assertSlotIsFree(eventId: string, date: string, slot: string, exceptId?: string) {
+/**
+ * A slot may hold any number of prasad items; only the *same* prasad twice in
+ * one slot is refused, because that is someone adding a second entry where
+ * they meant to join the first one's sponsors.
+ */
+async function assertPrasadIsFree(eventId: string, date: string, slot: string, item: string, exceptId?: string) {
   const supabase = assertServiceSupabase();
   const { data, error } = await supabase
     .from("prasad_items")
-    .select("id,slot")
+    .select("id,slot,item")
     .eq("event_id", eventId)
     .eq("prasad_date", date);
   if (error) throw error;
 
   const clash = (data ?? []).find(
-    (row) => row.id !== exceptId && String(row.slot ?? "").trim().toLowerCase() === slot.toLowerCase(),
+    (row) =>
+      row.id !== exceptId &&
+      String(row.slot ?? "").trim().toLowerCase() === slot.toLowerCase() &&
+      String(row.item ?? "").trim().toLowerCase() === item.toLowerCase(),
   );
   if (clash) {
-    throw fail(`There is already a ${slot} slot on that day. Add the people to that slot instead.`, 409);
+    throw fail(
+      `"${item}" is already in the ${slot} slot on that day. Open it and add the sponsors there, or give this one a different name.`,
+      409,
+    );
   }
 }
 
@@ -256,7 +274,7 @@ export async function handlePrasad(req: ApiRequest, res: ApiResponse) {
     await requireEditor(eventId, appUser.id);
 
     const fields = readSlotFields(body);
-    await assertSlotIsFree(eventId, fields.prasad_date, fields.slot);
+    await assertPrasadIsFree(eventId, fields.prasad_date, fields.slot, fields.item);
 
     const { data, error } = await supabase
       .from("prasad_items")
@@ -284,7 +302,7 @@ export async function handlePrasad(req: ApiRequest, res: ApiResponse) {
     .eq("id", slotId)
     .maybeSingle();
   if (existingError) throw existingError;
-  if (!existing) throw fail("That prasad slot no longer exists. Refresh the page.", 404);
+  if (!existing) throw fail("That prasad no longer exists. Refresh the page.", 404);
 
   await requireEditor(existing.event_id, appUser.id);
 
@@ -299,7 +317,7 @@ export async function handlePrasad(req: ApiRequest, res: ApiResponse) {
   // editor loaded, so two coordinators editing the same slot cannot silently
   // overwrite each other's lists - the second one is asked to look again.
   const fields = readSlotFields(body);
-  await assertSlotIsFree(existing.event_id, fields.prasad_date, fields.slot, slotId);
+  await assertPrasadIsFree(existing.event_id, fields.prasad_date, fields.slot, fields.item, slotId);
 
   let query = supabase.from("prasad_items").update(fields).eq("id", slotId);
   if (body.updatedAt) query = query.eq("updated_at", String(body.updatedAt));

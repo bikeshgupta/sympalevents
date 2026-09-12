@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { personKey, slotPresets, type PrasadPerson, type PrasadSlot, type PrasadSlotInput } from "@/lib/prasad";
+import { personKey, slotPresets, type PrasadItem, type PrasadItemInput, type PrasadPerson } from "@/lib/prasad";
 import { cn } from "@/lib/utils";
 
 /** `label` is "Day 1"; `sub`, when given, sits under it ("Mon, 14 Sept"). */
@@ -17,30 +17,37 @@ const toRows = (people: PrasadPerson[]): Row[] => people.map((person) => ({ ...p
 const blankRow = (): Row => ({ name: "", flat: "", key: ++nextRowKey });
 
 /**
- * Create and edit a prasad slot - pass `slot` to edit, omit it to create.
+ * Add or edit one prasad in one slot - pass `item` to edit, omit it to add.
+ *
+ * A slot holds as many prasad items as the committee likes, so this dialog is
+ * about **one** of them: what it is, and the people on it. Opened from a
+ * slot's "Add prasad" it arrives with that day and slot already chosen, which
+ * is how a second prasad joins an existing slot.
  *
  * The two people lists are the point of the screen: several families often
- * arrange one slot's prasad, and several volunteers hand it out. Each list is
- * rows of name + flat that grow with "Add person"; an empty row is ignored on
- * save. Names already used on other slots are suggested, and picking one fills
- * in its flat.
+ * sponsor one prasad, and several volunteers hand it out. Each list is rows of
+ * name + flat that grow with "Add person"; an empty row is ignored on save.
+ * Names already used elsewhere are suggested, and picking one fills its flat.
  */
-export function PrasadSlotDialog({
+export function PrasadItemDialog({
   open,
   onOpenChange,
-  slot,
+  item,
   defaultDate,
+  defaultSlot,
   eventDays,
   knownPeople,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  slot?: PrasadSlot;
+  item?: PrasadItem;
   defaultDate: string;
+  /** Set when adding into an existing slot, so it starts on that slot. */
+  defaultSlot?: string;
   eventDays: EventDay[];
   knownPeople: PrasadPerson[];
-  onSubmit: (input: PrasadSlotInput) => Promise<unknown>;
+  onSubmit: (input: PrasadItemInput) => Promise<unknown>;
 }) {
   const [date, setDate] = useState(defaultDate);
   const [slotChoice, setSlotChoice] = useState<string>(slotPresets[0]);
@@ -52,14 +59,15 @@ export function PrasadSlotDialog({
 
   useEffect(() => {
     if (!open) return;
-    const isPreset = !slot || slotPresets.some((preset) => preset.toLowerCase() === slot.slot.toLowerCase());
-    setDate(slot?.date ?? defaultDate);
-    setSlotChoice(slot ? (isPreset ? slotPresets.find((preset) => preset.toLowerCase() === slot.slot.toLowerCase())! : "Other") : slotPresets[0]);
-    setCustomSlot(slot && !isPreset ? slot.slot : "");
-    setArrangers(slot?.arrangers.length ? toRows(slot.arrangers) : [blankRow()]);
-    setDistributors(slot?.distributors.length ? toRows(slot.distributors) : [blankRow()]);
+    const slot = item?.slot ?? defaultSlot ?? slotPresets[0];
+    const preset = slotPresets.find((entry) => entry.toLowerCase() === slot.trim().toLowerCase());
+    setDate(item?.date ?? defaultDate);
+    setSlotChoice(preset ?? "Other");
+    setCustomSlot(preset ? "" : slot);
+    setArrangers(item?.arrangers.length ? toRows(item.arrangers) : [blankRow()]);
+    setDistributors(item?.distributors.length ? toRows(item.distributors) : [blankRow()]);
     setError(null);
-  }, [open, slot, defaultDate]);
+  }, [open, item, defaultDate, defaultSlot]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,8 +90,8 @@ export function PrasadSlotDialog({
         distributors: distributors.map(({ name, flat }) => ({ name, flat })).filter((person) => person.name.trim()),
       });
       onOpenChange(false);
-    } catch (item) {
-      setError(item instanceof Error ? item.message : "Unable to save the slot");
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : "Unable to save this prasad");
     } finally {
       setSaving(false);
     }
@@ -93,15 +101,33 @@ export function PrasadSlotDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{slot ? "Edit prasad slot" : "Add a prasad slot"}</DialogTitle>
+          <DialogTitle>{item ? "Edit prasad" : "Add prasad"}</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Who arranges the prasad, and who hands it out. Add as many people to each as you need.
+            One prasad and the people on it. A slot can hold as many as you need - add them one at a time.
           </p>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={submit}>
           <div className="space-y-2">
-            <Label htmlFor="prasad-date">Day{eventDays.length ? <span className="font-normal text-muted-foreground"> - or any other date below</span> : null}</Label>
+            <Label htmlFor="prasad-item">Prasad</Label>
+            <Input
+              id="prasad-item"
+              name="item"
+              required
+              maxLength={120}
+              defaultValue={item?.item}
+              placeholder="e.g. Modak"
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="prasad-date">
+              Day
+              {eventDays.length ? (
+                <span className="font-normal text-muted-foreground"> - or any other date below</span>
+              ) : null}
+            </Label>
             {eventDays.length ? (
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Event days">
                 {eventDays.map((day) => (
@@ -170,21 +196,13 @@ export function PrasadSlotDialog({
                 onChange={(event) => setCustomSlot(event.target.value)}
                 maxLength={40}
                 placeholder="e.g. After aarti, Visarjan"
-                autoFocus
               />
             ) : null}
           </fieldset>
 
-          <div className="space-y-2">
-            <Label htmlFor="prasad-item">
-              Prasad <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Input id="prasad-item" name="item" maxLength={120} defaultValue={slot?.item} placeholder="e.g. Modak and pedha" />
-          </div>
-
           <PeopleEditor
-            legend="Arranged by"
-            hint="The prasad sponsors - who arranges or brings it."
+            legend="Sponsored by"
+            hint="Who arranges or brings this prasad. Add everyone sharing it."
             icon={HandHeart}
             rows={arrangers}
             onChange={setArrangers}
@@ -194,7 +212,7 @@ export function PrasadSlotDialog({
 
           <PeopleEditor
             legend="Distributed by"
-            hint="Who hands it out."
+            hint="Who hands this one out."
             icon={Users}
             rows={distributors}
             onChange={setDistributors}
@@ -211,8 +229,8 @@ export function PrasadSlotDialog({
               name="notes"
               rows={2}
               maxLength={500}
-              defaultValue={slot?.notes}
-              placeholder="e.g. Counter near the stage, quantity, timing"
+              defaultValue={item?.notes}
+              placeholder="e.g. quantity, where the counter is"
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
@@ -224,7 +242,7 @@ export function PrasadSlotDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : slot ? "Save slot" : "Add slot"}
+              {saving ? "Saving..." : item ? "Save prasad" : "Add prasad"}
             </Button>
           </div>
         </form>
@@ -265,8 +283,8 @@ function PeopleEditor({
       rows.map((row) => {
         if (row.key !== key) return row;
         const next = { ...row, ...patch };
-        // Picking a name used on another slot brings its flat along, unless
-        // one has already been typed.
+        // Picking a name used elsewhere brings its flat along, unless one has
+        // already been typed.
         if (patch.name !== undefined && !row.flat) {
           const match = knownPeople.find((person) => person.name.toLowerCase() === patch.name!.trim().toLowerCase());
           if (match?.flat) next.flat = match.flat;
