@@ -1,10 +1,13 @@
-import { AlertTriangle, CircleCheck, ListChecks, LogIn, Plus, Timer, UserCheck } from "lucide-react";
+import { AlertTriangle, CircleCheck, ListChecks, LogIn, Plus, Printer, Timer, UserCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { TasksNoticeDialog } from "@/features/notices/tasks-notice";
 import { signInWithGoogle, useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
+import { useEventData } from "@/lib/event-data";
+import { canPrintNotices } from "@/lib/notices";
 import { TaskCard } from "@/features/tasks/task-card";
 import { TaskFormDialog } from "@/features/tasks/task-form-dialog";
 import { isOpenTask, useTaskBoard, type Task, type TaskInput, type TaskMember, type TaskStatus } from "@/lib/tasks";
@@ -65,11 +68,16 @@ function byUrgency(left: Task, right: Task) {
 export function TasksPage() {
   const { data: session, isLoading: isSessionLoading } = useSession();
   const { selectedEventId } = useEventContext();
+  // Only for the event's name and dates on a printed roster. Called with no
+  // options so it shares the layout's cached query rather than starting a
+  // second one under a different key.
+  const { data } = useEventData();
   const { query, create, update, setStatus, remove } = useTaskBoard(selectedEventId);
   const [filter, setFilter] = useState<Filter>("open");
   const [search, setSearch] = useState("");
   const [dialogTask, setDialogTask] = useState<Task | undefined>();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const board = query.data;
@@ -77,6 +85,9 @@ export function TasksPage() {
   const meId = board?.me.id;
   const canManage = board?.access.canManage ?? false;
   const isAdmin = board?.access.isAdmin ?? false;
+  // The roster names people and their duties, so it is the committee's to
+  // print - an assignee with view-only access does not get the button.
+  const canPrint = canPrintNotices(board?.access.role);
   const collaborationReady = board?.collaborationReady ?? false;
 
   const { mine, others } = useMemo(() => {
@@ -154,17 +165,29 @@ export function TasksPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <PageHeading />
-        {canManage ? (
-          <Button type="button" onClick={() => openDialog()} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            New Task
-          </Button>
-        ) : (
-          <span className="text-sm text-muted-foreground">
-            View-only access &mdash; you can still comment, and update tasks assigned to you.
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canPrint ? (
+            <Button type="button" variant="outline" onClick={() => setNoticeOpen(true)}>
+              <Printer className="h-4 w-4" aria-hidden="true" />
+              Roster
+            </Button>
+          ) : null}
+          {canManage ? (
+            <Button type="button" onClick={() => openDialog()}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              New Task
+            </Button>
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              View-only access &mdash; you can still comment, and update tasks assigned to you.
+            </span>
+          )}
+        </div>
       </div>
+
+      {canPrint ? (
+        <TasksNoticeDialog open={noticeOpen} onOpenChange={setNoticeOpen} event={data.event} tasks={tasks} />
+      ) : null}
 
       {query.isError ? (
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">

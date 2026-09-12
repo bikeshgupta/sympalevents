@@ -893,6 +893,52 @@ contributor and sponsor lists here are names with no amounts beside them.
 - `GalleryPreview` on the dashboard is a window onto the same photos, not a second
   gallery to manage.
 
+## Notices (print / PDF)
+
+A committee prints things: the programme for the notice board, the prasad roster,
+an auction announcement, the duty list. [src/features/notices/](src/features/notices/)
+gives four screens a **Notice** button (Tasks calls it **Roster**) that opens an A4
+sheet, previews it, and prints it.
+
+**There is no PDF library, and no serverless renderer.** The sheet is ordinary HTML
+with print rules, and the browser's print dialog already has "Save as PDF" (and
+Share → Print on iOS). That means selectable text, no dependency, nothing added to
+the Vercel function count, and the preview *is* the output because it is the same
+markup. `document.title` is set while printing, so the file saves as
+"<event> - Prasad.pdf" rather than "index".
+
+- **How printing works:** the dialog portals outside `#root`, so the `@media print`
+  block in [globals.css](src/styles/globals.css) hides `#root`, strips the dialog's
+  own framing (`[data-notice-shell]`) and drops anything marked `notice-no-print`,
+  leaving the sheet alone on A4 with a 14mm margin. `.notice-block` keeps a day or an
+  auction from being split across pages. The body class `printing-notice` is only set
+  while a notice dialog is open, so Ctrl+P anywhere else prints the page as before.
+- **Only admin and committee get the button** - `canPrintNotices(role)` in
+  [src/lib/notices.ts](src/lib/notices.ts), checked on all four pages, and neither
+  dialog is mounted otherwise. A notice goes out over the committee's name and its
+  committee copy carries flats, owners and internal notes, so a resident who can
+  merely *read* a page (or anyone at all, on a page an admin made public) does not
+  issue one. It is a UI gate on data the viewer already holds, not a data boundary -
+  what a viewer receives is still the server's call.
+- **Two audiences, on every notice:** `external` (the board, the residents' group)
+  and `internal` (the committee's copy). Each notice decides what that means, and
+  the split is the privacy rule in print form:
+
+  | Notice | External carries | Internal adds |
+  |---|---|---|
+  | Programme (Events) | days, times, places, each running order | owner, expected attendance, notes |
+  | Prasad | slot, prasad, sponsor names | flats, who is distributing, notes |
+  | Auction | published live/upcoming ones, the bid rules, how to take part | unpublished and cancelled ones, with status |
+  | Duty roster (Tasks) | the job, who is on it, the date | priority, status, category, notes; plus finished work |
+
+  Never widen the external column without asking - a board copy is the one surface
+  where a flat number or a private note cannot be taken back.
+- **The programme notice prints one event on its own** as well as the whole
+  programme, which is how the cultural evening gets its own poster: `size="poster"`
+  on `NoticeSheet` scales the title and the running order up for a board, and the
+  sheet's heading carries the day, time and place so the entry does not repeat them.
+- Comment threads are never printed, on any notice.
+
 ## Motion
 
 - `useCountUp(target)` and `usePrefersReducedMotion()` live in

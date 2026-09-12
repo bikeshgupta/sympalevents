@@ -1,19 +1,25 @@
-import { Gavel, Plus } from "lucide-react";
+import { Gavel, Plus, Printer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AuctionCard } from "@/features/auctions/auction-card";
 import { AuctionFormDialog } from "@/features/auctions/auction-form-dialog";
+import { AuctionNoticeDialog } from "@/features/notices/auction-notice";
 import { auctionRuntimeStatus, useAuctions, type Auction } from "@/lib/auctions";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
+import { useEventData } from "@/lib/event-data";
 
 export function AuctionsPage() {
   const { selectedEventId } = useEventContext();
+  // Only for the event's name and dates on a printed notice; the query is
+  // already in flight for the layout, so this costs nothing.
+  const { data } = useEventData();
   const { auctions, isLoading, isError, create, update, cancel, setPublished } = useAuctions(selectedEventId);
   const { data: eventAccess } = useEventAccess();
   const canManage = eventAccess?.role === "admin" || eventAccess?.role === "committee";
 
   const [now, setNow] = useState(() => new Date());
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingAuction, setEditingAuction] = useState<Auction | null>(null);
 
@@ -55,13 +61,25 @@ export function AuctionsPage() {
             Committee-run online auctions. Register, watch bidding live, and see who wins.
           </p>
         </div>
+        {/* Notices go out over the committee's name, so only the committee may
+            issue one - the same bar as managing an auction. */}
         {canManage ? (
-          <Button onClick={openCreateForm}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Create Auction
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => setNoticeOpen(true)}>
+              <Printer className="h-4 w-4" aria-hidden="true" />
+              Notice
+            </Button>
+            <Button onClick={openCreateForm}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Create Auction
+            </Button>
+          </div>
         ) : null}
       </div>
+
+      {canManage ? (
+        <AuctionNoticeDialog open={noticeOpen} onOpenChange={setNoticeOpen} event={data.event} auctions={auctions} />
+      ) : null}
 
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2">

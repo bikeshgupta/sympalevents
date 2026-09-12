@@ -1,14 +1,17 @@
-import { AlertTriangle, Clock, HandHeart, Pencil, Plus, Soup, Trash2, Users } from "lucide-react";
+import { AlertTriangle, Clock, HandHeart, Pencil, Plus, Printer, Soup, Trash2, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { prasadItemRows } from "@/data/demo";
 import { formatEventWeekday, getDateInEventZone } from "@/features/dashboard/dashboard-utils";
+import { PrasadNoticeDialog } from "@/features/notices/prasad-notice";
 import { PrasadItemDialog, type EventDay } from "@/features/prasad/prasad-item-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
+import { canPrintNotices } from "@/lib/notices";
+import { usePageAccess } from "@/lib/page-access";
 import {
   byDayThenSlot,
   groupBySlot,
@@ -72,16 +75,22 @@ export function PrasadPage() {
   const { data } = useEventData();
   const { selectedEventId } = useEventContext();
   const { query, create, update, remove } = usePrasadItems(selectedEventId);
+  // Already fetched for this page by the route guard, so this is free.
+  const pageAccess = usePageAccess("prasad");
   const [dayFilter, setDayFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogItem, setDialogItem] = useState<PrasadItem | undefined>();
   const [dialogSlot, setDialogSlot] = useState<{ date: string; slot: string } | undefined>();
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const fromApi = Boolean(selectedEventId);
   const isLoading = fromApi && query.isLoading;
   const canEdit = query.data?.access.canEdit ?? false;
+  // Printing a notice is a committee job, not something a read-only viewer
+  // (or a passer-by, if the admin made this page public) does.
+  const canPrint = canPrintNotices(pageAccess.role);
   const ready = query.data?.ready ?? true;
   const { startDate, endDate } = data.event;
 
@@ -207,16 +216,28 @@ export function PrasadPage() {
         searchPlaceholder="Search prasad, names, flats"
         searchLabel="Search prasad"
         action={
-          canEdit ? (
-            <Button type="button" onClick={() => openDialog()} disabled={!ready} className="w-full sm:w-auto">
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add Prasad
-            </Button>
-          ) : (
-            <span className="text-sm text-muted-foreground">View-only access</span>
-          )
+          <div className="flex flex-wrap items-center gap-2">
+            {canPrint ? (
+              <Button type="button" variant="outline" onClick={() => setNoticeOpen(true)}>
+                <Printer className="h-4 w-4" aria-hidden="true" />
+                Notice
+              </Button>
+            ) : null}
+            {canEdit ? (
+              <Button type="button" onClick={() => openDialog()} disabled={!ready}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add Prasad
+              </Button>
+            ) : (
+              <span className="text-sm text-muted-foreground">View-only access</span>
+            )}
+          </div>
         }
       />
+
+      {canPrint ? (
+        <PrasadNoticeDialog open={noticeOpen} onOpenChange={setNoticeOpen} event={data.event} items={items} />
+      ) : null}
 
       {dayTabs.length > 1 ? (
         <div className="overflow-x-auto">

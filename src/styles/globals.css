@@ -92,6 +92,52 @@
   }
 
   /*
+   * Printed notices - see src/features/notices/notice-sheet.tsx.
+   *
+   * A notice is the same markup on screen and on paper: the dialog portals
+   * outside #root, so printing means hiding the app and stripping the
+   * dialog's own framing, leaving the A4 sheet alone on the page. The body
+   * class is only set while a notice dialog is open, so Ctrl+P anywhere else
+   * still prints the page as before.
+   */
+  @media print {
+    body.printing-notice #root {
+      display: none !important;
+    }
+
+    body.printing-notice [data-notice-shell] {
+      position: static !important;
+      display: block !important;
+      inset: auto !important;
+      width: auto !important;
+      max-width: none !important;
+      max-height: none !important;
+      transform: none !important;
+      overflow: visible !important;
+      gap: 0 !important;
+      border: 0 !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+
+    /* Controls and buttons are for the screen only. */
+    .notice-no-print {
+      display: none !important;
+    }
+
+    /* Keep a day, a slot or an auction whole rather than split over a break. */
+    .notice-block {
+      break-inside: avoid;
+    }
+
+    @page {
+      size: A4;
+      margin: 14mm;
+    }
+  }
+
+  /*
    * Countdown numerals. Playfair Display is loaded in index.html; the serif
    * fallbacks keep the same character if it fails to load. Tabular figures stop
    * the digits shifting as they tick.

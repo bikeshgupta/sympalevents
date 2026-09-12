@@ -11,7 +11,9 @@ export const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => (
   <DialogPrimitive.Portal>
-    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/35" />
+    {/* print:hidden so a printed notice (which renders inside a dialog) does
+        not carry the dimmed backdrop or an extra blank page with it. */}
+    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/35 print:hidden" />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
@@ -21,7 +23,7 @@ export const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 print:hidden">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>

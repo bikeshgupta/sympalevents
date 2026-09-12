@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, ListChecks, MapPin } from "lucide-react";
+import { CalendarDays, ListChecks, MapPin, Printer } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { AgendaField } from "@/features/event-plan/agenda-editor";
+import { ScheduleNoticeDialog } from "@/features/notices/schedule-notice";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
@@ -17,6 +18,7 @@ import { ColumnFilter, SortableHeader, TableColumn, TableToolbar, useFilteredSor
 import { parseAgenda } from "@/lib/agenda";
 import { apiFetch } from "@/lib/api";
 import { EventPlanRow, getFirstEventId, useEventData } from "@/lib/event-data";
+import { canPrintNotices } from "@/lib/notices";
 import { useEventContext } from "@/lib/event-context";
 import { usePageAccess } from "@/lib/page-access";
 
@@ -74,6 +76,9 @@ export function EventPlanPage() {
   const { data } = useEventData();
   const { selectedEventId } = useEventContext();
   const access = usePageAccess("event-plan");
+  // Printing a notice is a committee job, not something a read-only viewer does.
+  const canPrint = canPrintNotices(access.role);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const planRows = data.eventPlan;
   const planTable = useFilteredSortedRows(planRows, eventPlanColumns, "date");
   const locations = new Set(planRows.map((row) => row.location).filter(Boolean)).size;
@@ -95,9 +100,20 @@ export function EventPlanPage() {
       </StatGrid>
       <PageTools
         action={
-          access.canEdit ? <CrudDialog title="Add Event" triggerLabel="Add Event" onSubmit={(formData) => addEventPlan(formData, selectedEventId)}><EventPlanFields /></CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {canPrint ? (
+              <Button type="button" variant="outline" onClick={() => setNoticeOpen(true)}>
+                <Printer className="h-4 w-4" aria-hidden="true" />
+                Notice
+              </Button>
+            ) : null}
+            {access.canEdit ? <CrudDialog title="Add Event" triggerLabel="Add Event" onSubmit={(formData) => addEventPlan(formData, selectedEventId)}><EventPlanFields /></CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>}
+          </div>
         }
       />
+      {canPrint ? (
+        <ScheduleNoticeDialog open={noticeOpen} onOpenChange={setNoticeOpen} event={data.event} rows={planRows} />
+      ) : null}
       <Card className="overflow-x-auto">
         <TableToolbar resultCount={planTable.rows.length} totalCount={planRows.length} />
         <table className="min-w-[1240px] w-full text-sm">
