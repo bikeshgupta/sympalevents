@@ -37,16 +37,6 @@ export function formatNoticeTimestamp(value: string) {
   }).format(parsed);
 }
 
-/** "Printed 12 Sept 2026", for the footer of a sheet. */
-export function formatPrintedOn(now = new Date()) {
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Kolkata",
-  }).format(now);
-}
-
 /**
  * "Day 2" when the date falls on or after the event's first day, otherwise
  * the plain weekday date - a slot or an event can sit outside the event's own

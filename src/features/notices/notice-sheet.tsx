@@ -2,7 +2,6 @@ import { Printer } from "lucide-react";
 import { ReactNode, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { formatPrintedOn } from "@/lib/notices";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,11 +83,10 @@ export function NoticeSheet({
 
       <div className="mt-4 space-y-4">{children}</div>
 
-      <footer className="mt-6 flex flex-wrap justify-between gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
-        <span>
-          {audience === "internal" ? "Committee copy - not for the notice board" : `Issued by the ${eventName} committee`}
-        </span>
-        <span>Printed {formatPrintedOn()}</span>
+      {/* No "printed on" date here, deliberately: a notice stays pinned on the
+          board for days and a stale print date only makes it look out of date. */}
+      <footer className="mt-6 border-t border-border pt-2 text-xs text-muted-foreground">
+        {audience === "internal" ? "Committee copy - not for the notice board" : `Issued by the ${eventName} committee`}
       </footer>
     </article>
   );
