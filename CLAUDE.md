@@ -867,17 +867,43 @@ no `resource` is still the original create-an-event POST. `/api/events` was alre
 - The note, and every gallery write, need `requireEventCommittee`.
 - A review needs a signed-in user and is addressed by `(event_id, the caller's own
   user id)` - never an id the client sends - so nobody can edit anybody else's.
+- `credits.prasadSponsors` is read from `prasad_items` by `fetchPrasadSponsors()` in
+  the same file, **not** through `/api/event-schedule?resource=prasad`: that route
+  answers to the admin's visibility for the Prasad page (which seeds `restricted`)
+  while the closing page is public, so this is the names-only slice of the same data.
+  It degrades the way every prasad read does (the pre-019 `sponsor_contributor` /
+  `arranged_by` columns, then an empty list) rather than failing the whole page.
 
-**Privacy:** the credits list returns **names only** - no email, no avatar, no role -
-because this page is public and the ask was to credit people, not to publish a
-directory. Review authors carry their avatar because they chose to post under their own
-name. Contact details and payment references stay off it, same as the dashboard; the
-contributor and sponsor lists here are names with no amounts beside them.
+**Privacy:** the credits list returns **names only** - no email, no avatar, no role,
+and no flat - because this page is public and the ask was to credit people, not to
+publish a directory. Review authors carry their avatar because they chose to post under
+their own name. Contact details and payment references stay off it, same as the
+dashboard.
+
+The **Contributors and Sponsors chips are the one exception, and only for the flat**:
+those two groups are built client-side from `useEventData()` rows, and each chip is a
+name plus its flat, the same pairing the dashboard's Contributions/Sponsors tiles
+already show publicly (see the standing decision in the UI rules). Still no amounts,
+no contact, no payment reference. The server-built groups - committee, volunteers,
+prasad sponsors - carry no flat at all.
 
 ### Client structure
 
 - `useEventClosing(eventId)` ([src/lib/closing.ts](src/lib/closing.ts)) - the one query
   plus every mutation. `groupByAlbum` is the shared album grouping.
+- **Some names cannot be derived from any row**, so [src/data/credits.ts](src/data/credits.ts)
+  keeps them by hand - a plain file, not a table, the same arrangement as
+  `announcements.ts`: `extraCoreCommittee`, `extraVolunteers`, and `specialMentions`.
+  `mergeCredits()` in `src/lib/closing.ts` folds the first two into the server's lists
+  **inside the query**, so the closing page, the dashboard card and the generated
+  note's `coreCount` / `volunteerCount` can never disagree; a name the data already
+  carries is not added twice (matched case-insensitively). Note this file is **not
+  per-event** - every event shows these names.
+- `SpecialMentions` ([special-mentions.tsx](src/features/closing/special-mentions.tsx))
+  is the shout-out block above the credits: one column per person who ran a whole
+  strand of the celebration and would otherwise be one chip among two hundred
+  equal-sized ones. Deliberately no sheen or pulse - `ClosingStory` owns this page's
+  one looping element. Renders nothing when `specialMentions` is empty.
 - The thank-you note is **generated from the event's own numbers** when the committee
   has not written one (`defaultClosingMessage` in
   [closing-copy.ts](src/features/closing/closing-copy.ts)), so the page is never a blank
