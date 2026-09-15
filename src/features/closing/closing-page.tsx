@@ -5,21 +5,42 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ClosingFacts } from "@/features/closing/closing-copy";
 import { ClosingRatingStrip, ClosingStats, ClosingStory } from "@/features/closing/closing-summary";
-import { CreditsSection } from "@/features/closing/credits-section";
+import { CreditsSection, type CreditPerson } from "@/features/closing/credits-section";
 import { FeedbackSection } from "@/features/closing/feedback-section";
 import { GallerySection } from "@/features/closing/gallery-section";
+import { SpecialMentions } from "@/features/closing/special-mentions";
 import { getEventDays } from "@/features/dashboard/dashboard-utils";
 import { useSession } from "@/lib/auth";
-import { useEventClosing } from "@/lib/closing";
+import { mergeCredits, useEventClosing } from "@/lib/closing";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 
-/** Everyone who gave something, by name, with nothing beside the name. */
-function creditNames(rows: Array<{ name: string }>) {
-  return [...new Set(rows.map((row) => row.name.trim()).filter((name) => name && name !== "-"))].sort((a, b) =>
-    a.localeCompare(b),
-  );
+/**
+ * Everyone who gave something, by name and flat, one entry each.
+ *
+ * The flat is what tells two families with the same name apart, which is the
+ * whole reason it is here - and it is the same pairing the dashboard's
+ * Contributions and Sponsors tiles already show publicly (see
+ * .claude/rules/ui-ux.md, "Privacy on public pages"). Nothing else off the
+ * row travels: no amount, no contact, no payment reference.
+ *
+ * Rows are keyed on name + flat, so one family's four contributions are one
+ * chip, while two different flats with the same surname stay two.
+ */
+function creditPeople(rows: Array<{ name: string; flat?: string }>): CreditPerson[] {
+  const people = new Map<string, CreditPerson>();
+
+  for (const row of rows) {
+    const name = row.name.replace(/\s+/g, " ").trim();
+    if (!name || name === "-") continue;
+    const raw = (row.flat ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+    const flat = raw === "-" ? "" : raw;
+    const key = `${name.toLowerCase()}|${flat}`;
+    if (!people.has(key)) people.set(key, { name, flat });
+  }
+
+  return [...people.values()].sort((a, b) => a.name.localeCompare(b.name) || a.flat.localeCompare(b.flat));
 }
 
 /**
@@ -39,16 +60,21 @@ export function ClosingPage() {
   const canManage = eventAccess?.role === "admin" || eventAccess?.role === "committee";
   const closing = useEventClosing(selectedEventId ?? data.event.id);
 
-  const contributors = useMemo(() => creditNames(data.contributions), [data.contributions]);
-  const sponsors = useMemo(() => creditNames(data.sponsors), [data.sponsors]);
-  // The server builds the volunteer list from task and schedule owners. When
-  // it has not answered - demo mode, or migration 014 not run yet - the
-  // schedule the page already has still names most of them, so the credits
-  // are never emptier than the data actually is.
-  const credits = closing.data?.credits ?? {
-    core: [],
-    volunteers: creditNames(data.eventPlan.map((row) => ({ name: row.owner }))),
-  };
+  const contributors = useMemo(() => creditPeople(data.contributions), [data.contributions]);
+  const sponsors = useMemo(() => creditPeople(data.sponsors), [data.sponsors]);
+  // The server builds the volunteer list from task and schedule owners, and
+  // the prasad sponsors from prasad_items. When it has not answered - demo
+  // mode, or migration 014 not run yet - the schedule the page already has
+  // still names most of the volunteers, so the credits are never emptier than
+  // the data actually is. Either way the hand-kept names in src/data/credits.ts
+  // are folded in by the same mergeCredits() the query uses.
+  const credits =
+    closing.data?.credits ??
+    mergeCredits({
+      core: [],
+      volunteers: creditPeople(data.eventPlan.map((row) => ({ name: row.owner }))).map((person) => person.name),
+      prasadSponsors: [],
+    });
 
   const facts: ClosingFacts = {
     eventName: data.event.name,
@@ -100,6 +126,8 @@ export function ClosingPage() {
           onToggle={(closed) => closing.setClosed.mutateAsync(closed)}
         />
       ) : null}
+
+      <SpecialMentions />
 
       <CreditsSection
         credits={credits}

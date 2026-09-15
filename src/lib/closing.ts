@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { extraCoreCommittee, extraVolunteers } from "@/data/credits";
 import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 
@@ -37,6 +38,9 @@ export type ClosingPayload = {
      *  privacy note in api/_lib/closing.ts. */
     core: string[];
     volunteers: string[];
+    /** Whoever arranged a prasad, from `prasad_items`. Names only, never
+     *  flat numbers: this page can be read without signing in. */
+    prasadSponsors: string[];
   };
   gallery: GalleryPhoto[];
   feedback: {
@@ -70,8 +74,12 @@ export function useEventClosing(eventId?: string) {
   const query = useQuery({
     queryKey,
     enabled: Boolean(eventId),
-    queryFn: () =>
-      apiFetch<ClosingPayload>(`${CLOSING_PATH}&eventId=${encodeURIComponent(eventId!)}`, { requireAuth: false }),
+    queryFn: async () => {
+      const payload = await apiFetch<ClosingPayload>(`${CLOSING_PATH}&eventId=${encodeURIComponent(eventId!)}`, {
+        requireAuth: false,
+      });
+      return { ...payload, credits: mergeCredits(payload.credits) };
+    },
     retry: false,
   });
 
@@ -131,6 +139,38 @@ export function useEventClosing(eventId?: string) {
     saveReview,
     deleteReview,
   };
+}
+
+/**
+ * The server's credits plus the hand-kept names in src/data/credits.ts.
+ *
+ * Applied once, inside the query, so that every consumer - the closing page,
+ * the dashboard card, and the generated thank-you note's counts - sees the
+ * same roll and cannot drift from each other. A name the data already carries
+ * is not added twice; the match is case-insensitive and ignores repeated
+ * spaces, which is as much as can be done without an account to key on.
+ */
+export function mergeCredits(credits: ClosingPayload["credits"]): ClosingPayload["credits"] {
+  return {
+    core: withExtraNames(credits.core, extraCoreCommittee),
+    volunteers: withExtraNames(credits.volunteers, extraVolunteers),
+    prasadSponsors: credits.prasadSponsors ?? [],
+  };
+}
+
+const nameKey = (name: string) => name.replace(/\s+/g, " ").trim().toLowerCase();
+
+/** `names`, in the order the server chose, then whichever extras are new. */
+function withExtraNames(names: string[], extras: string[]) {
+  const seen = new Set(names.map(nameKey));
+  const merged = [...names];
+  for (const extra of extras) {
+    const key = nameKey(extra);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(extra.trim());
+  }
+  return merged;
 }
 
 /** Photos grouped by album, in the order the albums first appear. */

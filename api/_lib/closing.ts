@@ -96,31 +96,78 @@ async function optionalAppUser(req: ApiRequest) {
   }
 }
 
+/**
+ * Who arranged the prasad, by name, for the credits.
+ *
+ * Read here rather than through /api/event-schedule?resource=prasad because
+ * that route answers to the admin's visibility for the Prasad page (which
+ * seeds `restricted`) while the closing page is public. This is the
+ * names-only slice of the same data, with the flat numbers left behind -
+ * exactly the line the prasad route already draws for a signed-out visitor.
+ *
+ * Degrades the way every prasad read does: before migration 019 the two old
+ * free-text columns are the only people a row carries, and both of them meant
+ * "who arranged it". If neither read works, the credits simply have no prasad
+ * group rather than the whole closing page failing over it.
+ */
+async function fetchPrasadSponsors(supabase: Supabase, eventId: string): Promise<string[]> {
+  const rich = await supabase.from("prasad_items").select("arrangers").eq("event_id", eventId);
+
+  let names: string[] = [];
+  if (!rich.error) {
+    names = (rich.data ?? []).flatMap((row) =>
+      Array.isArray(row.arrangers)
+        ? (row.arrangers as Array<{ name?: unknown }>).map((person) => String(person?.name ?? ""))
+        : [],
+    );
+  } else {
+    console.warn("Falling back to the pre-019 prasad columns for the closing credits:", rich.error.message);
+    const legacy = await supabase
+      .from("prasad_items")
+      .select("sponsor_contributor,arranged_by")
+      .eq("event_id", eventId);
+    if (legacy.error) {
+      console.warn("Skipping prasad sponsors in the closing credits:", legacy.error.message);
+      return [];
+    }
+    names = (legacy.data ?? []).flatMap((row) => [String(row.sponsor_contributor ?? ""), String(row.arranged_by ?? "")]);
+  }
+
+  const seen = new Map<string, string>();
+  for (const raw of names) {
+    const name = raw.replace(/\s+/g, " ").trim();
+    if (name && name !== "-" && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
 async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiResponse, eventId: string) {
   const viewer = await optionalAppUser(req);
 
-  const [closingResult, galleryResult, feedbackResult, membersResult, tasksResult, scheduleResult] = await Promise.all([
-    supabase
-      .from("event_closing")
-      .select("event_id,headline,message,is_closed,closed_at,updated_at")
-      .eq("event_id", eventId)
-      .maybeSingle(),
-    supabase
-      .from("event_gallery_photos")
-      .select("id,image_url,caption,album,sort_order,created_at")
-      .eq("event_id", eventId)
-      .order("album", { ascending: true })
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("event_feedback")
-      .select("id,user_id,rating,comment,created_at,updated_at")
-      .eq("event_id", eventId)
-      .order("updated_at", { ascending: false }),
-    supabase.from("event_members").select("user_id,role").eq("event_id", eventId),
-    supabase.from("tasks").select("owner_name").eq("event_id", eventId),
-    supabase.from("event_schedule").select("owner_name").eq("event_id", eventId),
-  ]);
+  const [closingResult, galleryResult, feedbackResult, membersResult, tasksResult, scheduleResult, prasadSponsors] =
+    await Promise.all([
+      supabase
+        .from("event_closing")
+        .select("event_id,headline,message,is_closed,closed_at,updated_at")
+        .eq("event_id", eventId)
+        .maybeSingle(),
+      supabase
+        .from("event_gallery_photos")
+        .select("id,image_url,caption,album,sort_order,created_at")
+        .eq("event_id", eventId)
+        .order("album", { ascending: true })
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("event_feedback")
+        .select("id,user_id,rating,comment,created_at,updated_at")
+        .eq("event_id", eventId)
+        .order("updated_at", { ascending: false }),
+      supabase.from("event_members").select("user_id,role").eq("event_id", eventId),
+      supabase.from("tasks").select("owner_name").eq("event_id", eventId),
+      supabase.from("event_schedule").select("owner_name").eq("event_id", eventId),
+      fetchPrasadSponsors(supabase, eventId),
+    ]);
 
   if (closingResult.error) throw closingResult.error;
   if (galleryResult.error) throw galleryResult.error;
@@ -193,7 +240,7 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
       closed_at: null,
       updated_at: null,
     },
-    credits: { core, volunteers },
+    credits: { core, volunteers, prasadSponsors },
     gallery: galleryResult.data ?? [],
     feedback: {
       average,
