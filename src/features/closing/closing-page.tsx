@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ClosingFacts } from "@/features/closing/closing-copy";
 import { ClosingRatingStrip, ClosingStats, ClosingStory } from "@/features/closing/closing-summary";
+import { CreditsDialog } from "@/features/closing/credits-dialog";
 import { CreditsSection, type CreditPerson } from "@/features/closing/credits-section";
 import { FeedbackSection } from "@/features/closing/feedback-section";
 import { GallerySection } from "@/features/closing/gallery-section";
-import { SpecialMentions } from "@/features/closing/special-mentions";
-import { getEventDays } from "@/features/dashboard/dashboard-utils";
+import { formatEventWeekday, getEventDays } from "@/features/dashboard/dashboard-utils";
 import { useSession } from "@/lib/auth";
-import { mergeCredits, useEventClosing } from "@/lib/closing";
+import { emptyCredits, useEventClosing, withSeedCredits } from "@/lib/closing";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
@@ -59,6 +59,7 @@ export function ClosingPage() {
   const { data: eventAccess } = useEventAccess();
   const canManage = eventAccess?.role === "admin" || eventAccess?.role === "committee";
   const closing = useEventClosing(selectedEventId ?? data.event.id);
+  const [editingCredits, setEditingCredits] = useState(false);
 
   const contributors = useMemo(() => creditPeople(data.contributions), [data.contributions]);
   const sponsors = useMemo(() => creditPeople(data.sponsors), [data.sponsors]);
@@ -70,16 +71,23 @@ export function ClosingPage() {
   // are folded in by the same mergeCredits() the query uses.
   const credits =
     closing.data?.credits ??
-    mergeCredits({
-      core: [],
-      volunteers: creditPeople(data.eventPlan.map((row) => ({ name: row.owner }))).map((person) => person.name),
-      prasadSponsors: [],
-    });
+    withSeedCredits(
+      emptyCredits(creditPeople(data.eventPlan.map((row) => ({ name: row.owner }))).map((person) => person.name)),
+    );
+
+  // "Day 3 · Sat, 20 Sept" for a prasad slot. The server sends the plain date
+  // because only the client knows which day of this event it is.
+  const eventDays = useMemo(() => getEventDays(data.event), [data.event]);
+  const dayLabel = (date: string) => {
+    if (!date) return "";
+    const day = eventDays.find((entry) => entry.date === date);
+    return [day?.label, formatEventWeekday(date)].filter(Boolean).join(" · ");
+  };
 
   const facts: ClosingFacts = {
     eventName: data.event.name,
     location: data.event.location,
-    dayCount: getEventDays(data.event).length,
+    dayCount: eventDays.length,
     eventCount: data.eventPlan.length,
     contributorCount: contributors.length,
     contributionReceived: data.financials.contributionReceived,
@@ -127,14 +135,23 @@ export function ClosingPage() {
         />
       ) : null}
 
-      <SpecialMentions />
-
       <CreditsSection
         credits={credits}
         contributors={contributors}
         sponsors={sponsors}
         isLoading={closing.isLoading}
+        canManage={canManage}
+        onEdit={() => setEditingCredits(true)}
+        dayLabel={dayLabel}
       />
+
+      {canManage && editingCredits ? (
+        <CreditsDialog
+          credits={credits}
+          onOpenChange={setEditingCredits}
+          onSave={(draft) => closing.saveCredits.mutateAsync(draft)}
+        />
+      ) : null}
 
       <GallerySection
         photos={closing.data?.gallery ?? []}

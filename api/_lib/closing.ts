@@ -32,6 +32,84 @@ const MAX_MESSAGE = 4000;
 const MAX_COMMENT = 1500;
 const MAX_CAPTION = 160;
 const MAX_ALBUM = 60;
+const MAX_NAME = 80;
+const MAX_ROLE = 60;
+const MAX_NOTE = 400;
+/** A society committee is tens of people, not thousands. Generous, but finite. */
+const MAX_NAMES_PER_LIST = 200;
+const MAX_SHOUTOUTS = 6;
+
+const CREDITS_MIGRATION = "supabase/migrations/020_closing_credits.sql";
+
+/** The closing row, with the hand-kept credit lists 020 adds. */
+const CLOSING_COLUMNS =
+  "event_id,headline,message,is_closed,closed_at,updated_at,extra_core,extra_volunteers,core_order,shoutouts";
+/** The same row before 020. Reads degrade to this; writes say so instead. */
+const CLOSING_COLUMNS_LEGACY = "event_id,headline,message,is_closed,closed_at,updated_at";
+
+/** Migration 020 has not been run: the four credit columns are missing. */
+function isMissingCreditColumns(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    (["42703", "PGRST204", "PGRST116"].includes(error.code ?? "") || /does not exist|could not find/i.test(message)) &&
+    /extra_core|extra_volunteers|core_order|shoutouts/.test(message)
+  );
+}
+
+type Shoutout = { name: string; role: string; note: string };
+
+/** A clean, de-duplicated, ordered list of names out of whatever jsonb holds. */
+function asNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const entry of value) {
+    const name = String(entry ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_NAME);
+    const key = name.toLowerCase();
+    if (!name || name === "-" || seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names.slice(0, MAX_NAMES_PER_LIST);
+}
+
+function asShoutouts(value: unknown): Shoutout[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      const row = (entry ?? {}) as Record<string, unknown>;
+      return {
+        name: String(row.name ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_NAME),
+        role: String(row.role ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_ROLE),
+        note: String(row.note ?? "").trim().slice(0, MAX_NOTE),
+      };
+    })
+    .filter((row) => row.name)
+    .slice(0, MAX_SHOUTOUTS);
+}
+
+/**
+ * `names` in the order `order` asks for, then whatever `order` never mentioned.
+ *
+ * Deliberately forgiving in both directions, because the order is stored as
+ * names rather than ids: a member who joined after the admin last arranged the
+ * list appears at the end instead of disappearing, and a name in the order
+ * that no longer exists is simply skipped.
+ */
+function inStoredOrder(names: string[], order: string[]) {
+  const rank = new Map(order.map((name, index) => [name.toLowerCase(), index]));
+  return names
+    .map((name, index) => ({ name, rank: rank.get(name.toLowerCase()) ?? order.length + index }))
+    .sort((a, b) => a.rank - b.rank)
+    .map((entry) => entry.name);
+}
+
+/** `names` plus whichever `extras` it does not already carry. */
+function withExtras(names: string[], extras: string[]) {
+  const seen = new Set(names.map((name) => name.toLowerCase()));
+  return [...names, ...extras.filter((extra) => !seen.has(extra.toLowerCase()))];
+}
 
 /**
  * The closing page's three resources - the closing note itself, the photo
@@ -96,8 +174,30 @@ async function optionalAppUser(req: ApiRequest) {
   }
 }
 
+export type PrasadCredit = {
+  /** ISO date of the slot, so the client can label it "Day 3" itself. */
+  date: string;
+  slot: string;
+  item: string;
+  /** Who arranged this one. Names only - see the privacy note below. */
+  sponsors: string[];
+};
+
+/** The order a day actually runs in, mirroring slotRank in src/lib/prasad.ts. */
+const slotOrder: Record<string, number> = {
+  "early morning": 0,
+  morning: 1,
+  "late morning": 2,
+  noon: 3,
+  afternoon: 4,
+  evening: 5,
+  night: 6,
+};
+
+const slotRank = (label: string) => slotOrder[label.trim().toLowerCase()] ?? 10;
+
 /**
- * Who arranged the prasad, by name, for the credits.
+ * What each prasad was, and who arranged it, in the sequence it was served.
  *
  * Read here rather than through /api/event-schedule?resource=prasad because
  * that route answers to the admin's visibility for the Prasad page (which
@@ -105,52 +205,89 @@ async function optionalAppUser(req: ApiRequest) {
  * names-only slice of the same data, with the flat numbers left behind -
  * exactly the line the prasad route already draws for a signed-out visitor.
  *
+ * The credits name the prasad and its slot, not just the sponsor, because
+ * "Sharma family" on its own says nothing about what they actually did;
+ * "Day 3, Morning - modak" does.
+ *
  * Degrades the way every prasad read does: before migration 019 the two old
  * free-text columns are the only people a row carries, and both of them meant
  * "who arranged it". If neither read works, the credits simply have no prasad
  * group rather than the whole closing page failing over it.
  */
-async function fetchPrasadSponsors(supabase: Supabase, eventId: string): Promise<string[]> {
-  const rich = await supabase.from("prasad_items").select("arrangers").eq("event_id", eventId);
+async function fetchPrasadCredits(supabase: Supabase, eventId: string): Promise<PrasadCredit[]> {
+  const rich = await supabase
+    .from("prasad_items")
+    .select("prasad_date,slot,item,arrangers")
+    .eq("event_id", eventId);
 
-  let names: string[] = [];
+  let rows: Array<Record<string, unknown>> = [];
   if (!rich.error) {
-    names = (rich.data ?? []).flatMap((row) =>
-      Array.isArray(row.arrangers)
-        ? (row.arrangers as Array<{ name?: unknown }>).map((person) => String(person?.name ?? ""))
-        : [],
-    );
+    rows = (rich.data ?? []) as unknown as Array<Record<string, unknown>>;
   } else {
     console.warn("Falling back to the pre-019 prasad columns for the closing credits:", rich.error.message);
     const legacy = await supabase
       .from("prasad_items")
-      .select("sponsor_contributor,arranged_by")
+      .select("prasad_date,slot,item,sponsor_contributor,arranged_by")
       .eq("event_id", eventId);
     if (legacy.error) {
       console.warn("Skipping prasad sponsors in the closing credits:", legacy.error.message);
       return [];
     }
-    names = (legacy.data ?? []).flatMap((row) => [String(row.sponsor_contributor ?? ""), String(row.arranged_by ?? "")]);
+    rows = (legacy.data ?? []) as unknown as Array<Record<string, unknown>>;
   }
 
-  const seen = new Map<string, string>();
-  for (const raw of names) {
-    const name = raw.replace(/\s+/g, " ").trim();
-    if (name && name !== "-" && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+  return rows
+    .map((row) => {
+      const sponsors = Array.isArray(row.arrangers)
+        ? (row.arrangers as Array<{ name?: unknown }>).map((person) => String(person?.name ?? ""))
+        : [String(row.sponsor_contributor ?? ""), String(row.arranged_by ?? "")];
+      return {
+        date: String(row.prasad_date ?? ""),
+        slot: String(row.slot ?? "").trim(),
+        item: String(row.item ?? "").trim(),
+        sponsors: asNames(sponsors),
+      };
+    })
+    .filter((entry) => entry.sponsors.length)
+    .sort(
+      (left, right) =>
+        left.date.localeCompare(right.date) ||
+        slotRank(left.slot) - slotRank(right.slot) ||
+        left.slot.localeCompare(right.slot) ||
+        left.item.localeCompare(right.item),
+    );
+}
+
+/**
+ * The event's closing row, with the credit lists 020 adds when they exist.
+ *
+ * Read degrades, write says so - the same shape as every other migration in
+ * this repo. `ready` is false when the four columns are missing, which is
+ * what turns the page's credits editor off rather than letting a save 501.
+ */
+async function fetchClosingRow(supabase: Supabase, eventId: string) {
+  const rich = await supabase.from("event_closing").select(CLOSING_COLUMNS).eq("event_id", eventId).maybeSingle();
+  if (!isMissingCreditColumns(rich.error)) {
+    if (rich.error) throw rich.error;
+    return { row: (rich.data ?? {}) as Record<string, unknown>, ready: true };
   }
-  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+
+  console.warn(`event_closing is missing its credit columns. Run ${CREDITS_MIGRATION}.`);
+  const plain = await supabase
+    .from("event_closing")
+    .select(CLOSING_COLUMNS_LEGACY)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (plain.error) throw plain.error;
+  return { row: (plain.data ?? {}) as Record<string, unknown>, ready: false };
 }
 
 async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiResponse, eventId: string) {
   const viewer = await optionalAppUser(req);
 
-  const [closingResult, galleryResult, feedbackResult, membersResult, tasksResult, scheduleResult, prasadSponsors] =
+  const [closingRow, galleryResult, feedbackResult, membersResult, tasksResult, scheduleResult, prasad] =
     await Promise.all([
-      supabase
-        .from("event_closing")
-        .select("event_id,headline,message,is_closed,closed_at,updated_at")
-        .eq("event_id", eventId)
-        .maybeSingle(),
+      fetchClosingRow(supabase, eventId),
       supabase
         .from("event_gallery_photos")
         .select("id,image_url,caption,album,sort_order,created_at")
@@ -166,10 +303,9 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
       supabase.from("event_members").select("user_id,role").eq("event_id", eventId),
       supabase.from("tasks").select("owner_name").eq("event_id", eventId),
       supabase.from("event_schedule").select("owner_name").eq("event_id", eventId),
-      fetchPrasadSponsors(supabase, eventId),
+      fetchPrasadCredits(supabase, eventId),
     ]);
 
-  if (closingResult.error) throw closingResult.error;
   if (galleryResult.error) throw galleryResult.error;
   if (feedbackResult.error) throw feedbackResult.error;
   if (membersResult.error) throw membersResult.error;
@@ -194,21 +330,29 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
     user?.full_name?.trim() || user?.email?.split("@")[0] || "Member";
   const usersById = new Map((users ?? []).map((user) => [user.id, user]));
 
-  const core = members
+  // The two hand-kept slices are sent back alongside the merged lists, so the
+  // editor knows which names it may remove (its own) and which are derived
+  // from a real row and would only come straight back.
+  const manualCore = asNames(closingRow.row.extra_core);
+  const manualVolunteers = asNames(closingRow.row.extra_volunteers);
+
+  const memberCore = members
     .filter((member) => member.role === "admin" || member.role === "committee")
     .map((member) => ({ name: displayName(usersById.get(member.user_id)), role: member.role }))
     .sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === "admin" ? -1 : 1))
     .map((member) => member.name);
 
+  // Admins-first, then alphabetical, is only the starting order: whatever the
+  // committee arranged for itself wins over it.
+  const core = inStoredOrder(withExtras(asNames(memberCore), manualCore), asNames(closingRow.row.core_order));
+
   // Volunteers are the people who actually owned something - a task or a
-  // slot on the schedule. Names only; the tables hold nothing else.
-  const volunteers = [
-    ...new Set(
-      [...(tasksResult.data ?? []), ...(scheduleResult.data ?? [])]
-        .map((row) => String(row.owner_name ?? "").trim())
-        .filter(Boolean),
-    ),
-  ].sort((a, b) => a.localeCompare(b));
+  // slot on the schedule - plus anybody added by hand. Names only; the tables
+  // hold nothing else. Alphabetical, because no ordering means anything here.
+  const volunteers = withExtras(
+    asNames([...(tasksResult.data ?? []), ...(scheduleResult.data ?? [])].map((row) => String(row.owner_name ?? ""))),
+    manualVolunteers,
+  ).sort((a, b) => a.localeCompare(b));
 
   const reviews = feedbackRows.map((row) => ({
     id: row.id,
@@ -232,15 +376,24 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
     : 0;
 
   sendJson(res, 200, {
-    closing: closingResult.data ?? {
+    closing: {
       event_id: eventId,
-      headline: "",
-      message: "",
-      is_closed: false,
-      closed_at: null,
-      updated_at: null,
+      headline: String(closingRow.row.headline ?? ""),
+      message: String(closingRow.row.message ?? ""),
+      is_closed: Boolean(closingRow.row.is_closed),
+      closed_at: (closingRow.row.closed_at as string | null) ?? null,
+      updated_at: (closingRow.row.updated_at as string | null) ?? null,
     },
-    credits: { core, volunteers, prasadSponsors },
+    credits: {
+      core,
+      volunteers,
+      prasad,
+      shoutouts: asShoutouts(closingRow.row.shoutouts),
+      manual: { core: manualCore, volunteers: manualVolunteers },
+      // False until 020 is run: the lists above are derived-only and the
+      // page says so instead of offering an editor whose save would 501.
+      editable: closingRow.ready,
+    },
     gallery: galleryResult.data ?? [],
     feedback: {
       average,
@@ -282,13 +435,36 @@ async function handleClosingWrite(
     updates.closed_at = closing ? new Date().toISOString() : null;
   }
 
+  // The four credit lists 020 adds. Cleaned here rather than trusted: the
+  // client sends what its editor collected, and jsonb will store anything.
+  const touchesCredits =
+    body.extraCore !== undefined ||
+    body.extraVolunteers !== undefined ||
+    body.coreOrder !== undefined ||
+    body.shoutouts !== undefined;
+
+  if (body.extraCore !== undefined) updates.extra_core = asNames(body.extraCore);
+  if (body.extraVolunteers !== undefined) updates.extra_volunteers = asNames(body.extraVolunteers);
+  if (body.coreOrder !== undefined) updates.core_order = asNames(body.coreOrder);
+  if (body.shoutouts !== undefined) updates.shoutouts = asShoutouts(body.shoutouts);
+
   const { data, error } = await supabase
     .from("event_closing")
     .upsert({ event_id: eventId, ...updates }, { onConflict: "event_id" })
-    .select("event_id,headline,message,is_closed,closed_at,updated_at")
+    .select(touchesCredits ? CLOSING_COLUMNS : CLOSING_COLUMNS_LEGACY)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Read degrades, write says so: a save carrying credits fails by name
+    // when 020 has not been run, rather than appearing to work.
+    if (touchesCredits && isMissingCreditColumns(error)) {
+      sendJson(res, 501, {
+        error: `The credits cannot be saved yet. Run ${CREDITS_MIGRATION} in Supabase, then try again.`,
+      });
+      return;
+    }
+    throw error;
+  }
   sendJson(res, 200, { closing: data });
 }
 

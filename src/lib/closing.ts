@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { extraCoreCommittee, extraVolunteers } from "@/data/credits";
+import { extraCoreCommittee, extraVolunteers, specialMentions } from "@/data/credits";
 import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 
@@ -31,17 +31,41 @@ export type EventReview = {
   author: { name: string; photoUrl: string | null };
 };
 
+/** One prasad, and who arranged it. Names only, never flat numbers: this
+ *  page can be read without signing in. */
+export type PrasadCredit = {
+  /** ISO date of the slot, so the page can label it "Day 3" itself. */
+  date: string;
+  slot: string;
+  item: string;
+  sponsors: string[];
+};
+
+/** Somebody who ran a whole strand of the celebration, printed under the
+ *  committee list rather than as a section of their own. */
+export type Shoutout = { name: string; role: string; note: string };
+
+export type ClosingCredits = {
+  /** The committee, in the order they arranged for themselves. Names only -
+   *  see the privacy note in api/_lib/closing.ts. */
+  core: string[];
+  /** Task and schedule owners plus anybody added by hand, alphabetical. */
+  volunteers: string[];
+  /** Every prasad with its sponsors, in the sequence it was served. */
+  prasad: PrasadCredit[];
+  shoutouts: Shoutout[];
+  /** The hand-kept slices of the two lists above - what the editor may
+   *  remove. Everything else is derived from a real row and would come
+   *  straight back. */
+  manual: { core: string[]; volunteers: string[] };
+  /** False until migration 020 has been run: the lists are derived-only and
+   *  the page offers no editor rather than one whose save would 501. */
+  editable: boolean;
+};
+
 export type ClosingPayload = {
   closing: ClosingRecord;
-  credits: {
-    /** Committee and admin members, admins first. Names only - see the
-     *  privacy note in api/_lib/closing.ts. */
-    core: string[];
-    volunteers: string[];
-    /** Whoever arranged a prasad, from `prasad_items`. Names only, never
-     *  flat numbers: this page can be read without signing in. */
-    prasadSponsors: string[];
-  };
+  credits: ClosingCredits;
   gallery: GalleryPhoto[];
   feedback: {
     average: number;
@@ -78,7 +102,7 @@ export function useEventClosing(eventId?: string) {
       const payload = await apiFetch<ClosingPayload>(`${CLOSING_PATH}&eventId=${encodeURIComponent(eventId!)}`, {
         requireAuth: false,
       });
-      return { ...payload, credits: mergeCredits(payload.credits) };
+      return { ...payload, credits: withSeedCredits(payload.credits) };
     },
     retry: false,
   });
@@ -86,6 +110,16 @@ export function useEventClosing(eventId?: string) {
   const saveNote = useMutation({
     mutationFn: (input: { headline: string; message: string }) =>
       apiFetch<{ closing: ClosingRecord }>(CLOSING_PATH, { method: "POST", body: { eventId, ...input } }),
+    onSuccess: invalidate,
+  });
+
+  const saveCredits = useMutation({
+    mutationFn: (input: {
+      extraCore: string[];
+      extraVolunteers: string[];
+      coreOrder: string[];
+      shoutouts: Shoutout[];
+    }) => apiFetch<{ closing: ClosingRecord }>(CLOSING_PATH, { method: "PATCH", body: { eventId, ...input } }),
     onSuccess: invalidate,
   });
 
@@ -132,6 +166,7 @@ export function useEventClosing(eventId?: string) {
     isError: query.isError,
     error: query.error as Error | null,
     saveNote,
+    saveCredits,
     setClosed,
     addPhoto,
     updatePhoto,
@@ -142,26 +177,61 @@ export function useEventClosing(eventId?: string) {
 }
 
 /**
- * The server's credits plus the hand-kept names in src/data/credits.ts.
- *
- * Applied once, inside the query, so that every consumer - the closing page,
- * the dashboard card, and the generated thank-you note's counts - sees the
- * same roll and cannot drift from each other. A name the data already carries
- * is not added twice; the match is case-insensitive and ignores repeated
- * spaces, which is as much as can be done without an account to key on.
+ * An empty closing payload, for demo mode and for before the server answers.
  */
-export function mergeCredits(credits: ClosingPayload["credits"]): ClosingPayload["credits"] {
+export function emptyCredits(volunteers: string[] = []): ClosingCredits {
+  return { core: [], volunteers, prasad: [], shoutouts: [], manual: { core: [], volunteers: [] }, editable: false };
+}
+
+/**
+ * The credits, with src/data/credits.ts standing in while nothing is stored.
+ *
+ * That file is a **seed, not the source of truth**: once an admin saves the
+ * credits from the page the stored lists win and the file is ignored, and the
+ * editor preloads the seed so the first save makes those names real. It is
+ * what keeps the page correct before migration 020 is run - and after it, on
+ * an event whose committee has not touched the editor yet.
+ *
+ * (Emptying a list back out therefore brings the seed back. Worth knowing,
+ * not worth a column to record "they meant nobody".)
+ */
+export function withSeedCredits(credits: ClosingCredits): ClosingCredits {
   return {
-    core: withExtraNames(credits.core, extraCoreCommittee),
-    volunteers: withExtraNames(credits.volunteers, extraVolunteers),
-    prasadSponsors: credits.prasadSponsors ?? [],
+    ...credits,
+    core: credits.manual.core.length ? credits.core : withExtraNames(credits.core, extraCoreCommittee),
+    volunteers: credits.manual.volunteers.length
+      ? credits.volunteers
+      : withExtraNames(credits.volunteers, extraVolunteers).sort((a, b) => a.localeCompare(b)),
+    shoutouts: credits.shoutouts.length ? credits.shoutouts : specialMentions,
+  };
+}
+
+/** "Ankita Nagar" -> "AN". Two letters at most, so an avatar never wraps. */
+export function initials(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "?"
+  );
+}
+
+/** What the credits editor starts from - the stored lists, or the seed while
+ *  those are empty, so a first save keeps the names already on the page. */
+export function manualCredits(credits: ClosingCredits) {
+  return {
+    core: credits.manual.core.length ? credits.manual.core : [...extraCoreCommittee],
+    volunteers: credits.manual.volunteers.length ? credits.manual.volunteers : [...extraVolunteers],
+    shoutouts: credits.shoutouts.length ? credits.shoutouts : specialMentions.map((entry) => ({ ...entry })),
   };
 }
 
 const nameKey = (name: string) => name.replace(/\s+/g, " ").trim().toLowerCase();
 
-/** `names`, in the order the server chose, then whichever extras are new. */
-function withExtraNames(names: string[], extras: string[]) {
+/** `names`, in the order they arrived, then whichever extras are new. */
+function withExtraNames(names: string[], extras: readonly string[]) {
   const seen = new Set(names.map(nameKey));
   const merged = [...names];
   for (const extra of extras) {

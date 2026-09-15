@@ -867,12 +867,20 @@ no `resource` is still the original create-an-event POST. `/api/events` was alre
 - The note, and every gallery write, need `requireEventCommittee`.
 - A review needs a signed-in user and is addressed by `(event_id, the caller's own
   user id)` - never an id the client sends - so nobody can edit anybody else's.
-- `credits.prasadSponsors` is read from `prasad_items` by `fetchPrasadSponsors()` in
-  the same file, **not** through `/api/event-schedule?resource=prasad`: that route
-  answers to the admin's visibility for the Prasad page (which seeds `restricted`)
-  while the closing page is public, so this is the names-only slice of the same data.
-  It degrades the way every prasad read does (the pre-019 `sponsor_contributor` /
-  `arranged_by` columns, then an empty list) rather than failing the whole page.
+- `credits.prasad` is read from `prasad_items` by `fetchPrasadCredits()` in the same
+  file, **not** through `/api/event-schedule?resource=prasad`: that route answers to
+  the admin's visibility for the Prasad page (which seeds `restricted`) while the
+  closing page is public, so this is the names-only slice of the same data. Each entry
+  is `{ date, slot, item, sponsors }` in the sequence it was served - the credits name
+  the prasad and its slot, not just the family, because "Sharma family" on its own says
+  nothing about what they did. The plain ISO date goes over the wire because only the
+  client knows which day of the event it is. It degrades the way every prasad read does
+  (the pre-019 `sponsor_contributor` / `arranged_by` columns, then an empty list)
+  rather than failing the whole page.
+- `PATCH` also takes `extraCore` / `extraVolunteers` / `coreOrder` / `shoutouts`,
+  cleaned server-side (trimmed, de-duplicated, capped) rather than trusted - jsonb
+  stores anything. A save carrying them returns **501 naming 020** when the columns
+  are missing, while a save of just the note still works.
 
 **Privacy:** the credits list returns **names only** - no email, no avatar, no role,
 and no flat - because this page is public and the ask was to credit people, not to
@@ -887,23 +895,53 @@ already show publicly (see the standing decision in the UI rules). Still no amou
 no contact, no payment reference. The server-built groups - committee, volunteers,
 prasad sponsors - carry no flat at all.
 
+### Credits that an admin edits
+
+Most of the honour roll is derived - committee from `event_members`, volunteers from
+task and schedule owners, contributors/sponsors/prasad from their own tables - but
+plenty of people did the work without ever being typed into any of those, and the
+committee list wants a **deliberate order**, not "admins first, then alphabetical".
+
+[020_closing_credits.sql](supabase/migrations/020_closing_credits.sql) adds four jsonb
+columns to `event_closing` (it needs 014 applied first): `extra_core`,
+`extra_volunteers`, `core_order` and `shoutouts`. jsonb rather than a child table for
+the same reason 019 did it for prasad - one row write, and reordering is the array's
+own order rather than a `sort_order` column to renumber. **Not run yet** - until it
+is, the lists are derived-only, `credits.editable` is false and a save returns 501
+naming it.
+
+- `core_order` is an array of **names**, not ids, and is forgiving both ways: a member
+  who joined after the list was last arranged sorts to the end rather than vanishing,
+  and a stale name in it is skipped.
+- [src/data/credits.ts](src/data/credits.ts) is now a **seed, not the source of
+  truth**. It stands in only while an event has nothing stored, and the editor
+  preloads it so the first save turns those names into real per-event rows.
+  `withSeedCredits()` / `manualCredits()` in `src/lib/closing.ts` are the two sides of
+  that. (Emptying a list back out brings the seed back - known, and not worth a column
+  to record "they meant nobody".)
+- `CreditsDialog` ([credits-dialog.tsx](src/features/closing/credits-dialog.tsx))
+  edits **one merged committee list**, not "derived" and "yours" side by side - that
+  split is an implementation detail an admin reordering the committee should not have
+  to know about. What it saves is the order of the whole list plus the subset that
+  exists only there. A derived name gets a "Member" label instead of a Remove button,
+  since deleting it would only bring it straight back. Reordering is up/down buttons,
+  not drag-and-drop, which is close to unusable on a phone. Volunteers are add/remove
+  only - alphabetical, because no order there means anything.
+
 ### Client structure
 
 - `useEventClosing(eventId)` ([src/lib/closing.ts](src/lib/closing.ts)) - the one query
   plus every mutation. `groupByAlbum` is the shared album grouping.
-- **Some names cannot be derived from any row**, so [src/data/credits.ts](src/data/credits.ts)
-  keeps them by hand - a plain file, not a table, the same arrangement as
-  `announcements.ts`: `extraCoreCommittee`, `extraVolunteers`, and `specialMentions`.
-  `mergeCredits()` in `src/lib/closing.ts` folds the first two into the server's lists
-  **inside the query**, so the closing page, the dashboard card and the generated
-  note's `coreCount` / `volunteerCount` can never disagree; a name the data already
-  carries is not added twice (matched case-insensitively). Note this file is **not
-  per-event** - every event shows these names.
-- `SpecialMentions` ([special-mentions.tsx](src/features/closing/special-mentions.tsx))
-  is the shout-out block above the credits: one column per person who ran a whole
-  strand of the celebration and would otherwise be one chip among two hundred
-  equal-sized ones. Deliberately no sheen or pulse - `ClosingStory` owns this page's
-  one looping element. Renders nothing when `specialMentions` is empty.
+- **The credits card is two shapes, deliberately.** The core committee is **one name
+  per line** in a bordered list with an initials avatar - they are a named, ordered
+  group an admin arranges by hand, and a wrapped bag of chips makes the fifth name look
+  like the fiftieth. Everybody else is equal-sized chips. The shout-outs print as a
+  tinted line **directly under the committee list**, not as a section of their own -
+  an earlier version gave them a whole card and it shouted louder than the committee it
+  was thanking.
+- Group order is committee, volunteers, prasad, **sponsors, then contributors**.
+- A chip's flat sits in its own tinted capsule rather than as grey text run on after
+  the name, which read as part of it.
 - The thank-you note is **generated from the event's own numbers** when the committee
   has not written one (`defaultClosingMessage` in
   [closing-copy.ts](src/features/closing/closing-copy.ts)), so the page is never a blank
