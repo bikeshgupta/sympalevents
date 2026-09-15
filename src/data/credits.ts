@@ -1,28 +1,29 @@
 /**
- * Names the app cannot work out for itself, for the closing page's credits.
+ * The **seed** for the closing page's credits - not the source of truth.
  *
- * A plain file, not a database table - the same arrangement as
- * src/data/announcements.ts. To credit somebody, add them here and deploy.
+ * The page builds most of its honour roll from real rows: the core committee
+ * from `event_members`, volunteers from whoever owns a task or a slot on the
+ * schedule, contributors and sponsors from their own tables, prasad sponsors
+ * from `prasad_items`. Plenty of people did the work without ever being typed
+ * into any of those, so an admin adds, removes and reorders names from the
+ * page itself - stored per event on `event_closing`
+ * ([020_closing_credits.sql](../../supabase/migrations/020_closing_credits.sql)).
  *
- * The closing page builds most of its honour roll from real rows: core
- * committee from `event_members`, volunteers from whoever owns a task or a
- * slot on the schedule, contributors and sponsors from their own tables,
- * prasad sponsors from `prasad_items`. These are the people who did the work
- * without ever being typed into any of those - so they are listed by hand
- * rather than left off.
+ * These lists stand in **only while nothing is stored** for an event -
+ * before that migration is run, and afterwards until a committee opens the
+ * editor. The editor preloads them, so the first save turns them into real,
+ * per-event rows and this file stops mattering for that event. See
+ * `withSeedCredits()` / `manualCredits()` in src/lib/closing.ts.
  *
- * Merged in by `mergeCredits()` in src/lib/closing.ts, which drops a name
- * that the data already carries (matched case-insensitively), so somebody
- * added here later does not appear twice once they turn up in a real row.
- *
- * Note this is **not per-event**: every event in the app shows these names,
- * the same way every event shows the same announcements.
+ * Being a seed, it is **not per-event**: every event with empty stored
+ * credits shows these names. That is the reason to save from the page rather
+ * than add names here.
  */
 
-/** Added to the "Core committee" group. */
+/** Seeds the hand-added part of the "Core committee" list. */
 export const extraCoreCommittee = ["Satish Singh", "Mohit Nagar", "Venkatesh Kakhandiki"];
 
-/** Added to the "Volunteers" group. */
+/** Seeds the hand-added part of the "Volunteers" list. */
 export const extraVolunteers = [
   "Prashant Chaudhary",
   "Priyanka Verma",
@@ -34,22 +35,22 @@ export const extraVolunteers = [
 
 export type SpecialMention = {
   name: string;
-  /** What they ran, in a couple of words - this is the headline of the card. */
+  /** What they ran, in a couple of words. */
   role: string;
-  /** One sentence saying what it actually took. */
+  /** One line saying what it actually took. */
   note: string;
 };
 
 /**
- * The shout-out block above the credits: somebody who carried a whole strand
- * of the celebration on their own and would otherwise be one chip in a list
- * of two hundred. Keep it to one or two - a page where everybody is singled
- * out singles nobody out.
+ * Seeds the shout-out line printed under the committee list: somebody who
+ * carried a whole strand of the celebration and would otherwise be one name
+ * among two hundred. Keep it to one or two - a page where everybody is
+ * singled out singles nobody out.
  */
 export const specialMentions: SpecialMention[] = [
   {
     name: "Ankita Nagar",
     role: "Cultural events",
-    note: "Put the whole cultural programme together - the line-up, the rehearsals, the running order on the night, and every performer chased, reassured and got on stage on time.",
+    note: "Ran the cultural programme end to end - the line-up, the rehearsals, and the running order on the night.",
   },
 ];
