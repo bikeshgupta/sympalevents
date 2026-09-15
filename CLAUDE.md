@@ -116,6 +116,20 @@ against Google's public keys and map the user into Supabase `app_users`.
   screen an admin might open up.
 - **Always gate mutating UI on `access.canEdit`**, and render a "View-only access"
   affordance rather than a disabled/hidden control with no explanation.
+- **Settings has a member roster**, above Member Access: everyone with a role on this
+  event (`GET /api/event-members?role=assigned`), each row with Manage (loads them into
+  the Member Access form below) and Remove. Removing deletes the `event_members` row
+  **and every `event_page_permissions` row with it** - leaving the grants behind would
+  hand a removed member view access to pages an admin had opened for them. Nothing they
+  recorded is touched; their contributions, expenses and comments are the event's
+  history, not their membership. The roster exists because approving a request was the
+  only visible way in and there was no visible way out: removal did exist, but as a
+  "Revoke Access" button at the bottom of a form behind a dropdown of *every* app user.
+- **`assertAdminRemains()` in [api/event-members.ts](api/event-members.ts) refuses to
+  remove or demote an event's last admin**, on both `DELETE` and the role-changing
+  `POST`. Nothing in this app can mint an admin for an existing event, so an event with
+  zero admins has no way back - Settings, member access and page visibility would be
+  locked for everyone, the person who did it included.
 
 ## Conventions
 

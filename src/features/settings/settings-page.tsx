@@ -43,6 +43,43 @@ type AccessRequest = {
 type RoleFilter = "all" | "unassigned" | "read_only" | "committee" | "admin";
 type EventRole = "read_only" | "committee" | "admin";
 
+const roleLabels: Record<EventRole, string> = {
+  admin: "Admin",
+  committee: "Committee",
+  read_only: "Read-only",
+};
+
+const roleBadgeStyles: Record<EventRole, string> = {
+  admin: "bg-primary/10 text-primary",
+  committee: "bg-sky-100 text-sky-800",
+  read_only: "bg-muted text-muted-foreground",
+};
+
+/** Admins first, then committee, then read-only. */
+function roleRank(role: EventRole | null) {
+  return role === "admin" ? 0 : role === "committee" ? 1 : 2;
+}
+
+function displayName(user: MemberUser) {
+  return user.full_name?.trim() || user.email.split("@")[0];
+}
+
+function displayUser(user: MemberUser) {
+  return user.full_name ? `${user.full_name} (${user.email})` : user.email;
+}
+
+/** "Priya Rao" -> "PR", so a row without a photo still has an anchor. */
+function initials(name: string) {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "?"
+  );
+}
+
 type MemberUser = {
   id: string;
   email: string;
@@ -76,6 +113,7 @@ export function SettingsPage() {
   const [eventMessage, setEventMessage] = useState<string | null>(null);
   const [accessMessage, setAccessMessage] = useState<string | null>(null);
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
+  const [rosterMessage, setRosterMessage] = useState<string | null>(null);
   const [pageAccess, setPageAccess] = useState<Record<string, AccessLevel>>(initialPageAccess);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -98,6 +136,23 @@ export function SettingsPage() {
         `/api/event-members?eventId=${selectedEventId}&role=${roleFilter}`,
       );
       return data.members;
+    },
+  });
+
+  // Everybody who actually holds a role on this event, as opposed to the
+  // dropdown below, which lists every person who has ever signed in.
+  const { data: roster = [], isLoading: isRosterLoading } = useQuery({
+    queryKey: ["event-members", selectedEventId, "assigned"],
+    enabled: Boolean(access.canEdit && selectedEventId),
+    queryFn: async () => {
+      const data = await apiFetch<{ members: MemberOption[] }>(
+        `/api/event-members?eventId=${selectedEventId}&role=assigned`,
+      );
+      return [...data.members].sort(
+        (left, right) =>
+          roleRank(left.role) - roleRank(right.role) ||
+          displayName(left.app_users).localeCompare(displayName(right.app_users)),
+      );
     },
   });
 
@@ -132,8 +187,54 @@ export function SettingsPage() {
     }));
   }
 
-  function displayUser(user: MemberUser) {
-    return user.full_name ? `${user.full_name} (${user.email})` : user.email;
+
+  /**
+   * Take somebody off this event.
+   *
+   * Deletes their `event_members` row and every per-page grant with it, which
+   * is what "no longer on the committee" has to mean - leaving the grants
+   * behind would hand a removed member view access to pages an admin had
+   * opened up for them. Nothing they recorded is touched: their
+   * contributions, expenses, tasks and comments are the event's history, not
+   * their membership.
+   *
+   * The server refuses to remove the last remaining admin, whatever this
+   * button does.
+   */
+  async function removeMember(member: MemberOption) {
+    const name = displayName(member.app_users);
+    const role = member.role ? roleLabels[member.role].toLowerCase() : "member";
+    if (
+      !window.confirm(
+        `Remove ${name} from this event? They lose their ${role} role and every page grant with it, and go back to being an ordinary signed-in visitor. Anything they recorded stays.`,
+      )
+    ) {
+      return;
+    }
+
+    setRosterMessage(`Removing ${name}...`);
+    try {
+      await apiFetch("/api/event-members", {
+        method: "DELETE",
+        body: { eventId: selectedEventId, userId: member.app_users.id },
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["event-members"] });
+      await queryClient.invalidateQueries({ queryKey: ["event-member"] });
+      await queryClient.invalidateQueries({ queryKey: ["event-access"] });
+      await queryClient.invalidateQueries({ queryKey: ["page-access"] });
+      setRosterMessage(`${name} removed.`);
+    } catch (error) {
+      setRosterMessage(error instanceof Error ? error.message : "Unable to remove this member");
+    }
+  }
+
+  /** Load somebody into the Member Access form below, role and grants and all. */
+  function manageMember(member: MemberOption) {
+    setRoleFilter("all");
+    setSelectedUserId(member.app_users.id);
+    setRosterMessage(null);
+    document.getElementById("member-access")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function reviewAccessRequest(requestId: string, action: "approve" | "reject") {
@@ -216,7 +317,9 @@ export function SettingsPage() {
 
   async function revokeAccess() {
     if (!selectedEventId || !selectedUserId) return;
-    setAccessMessage("Revoking access...");
+    const name = selectedMember ? displayName(selectedMember.member.app_users) : "this member";
+    if (!window.confirm(`Remove ${name} from this event? Their role and every page grant go with it.`)) return;
+    setAccessMessage("Removing...");
 
     try {
       await apiFetch("/api/event-members", {
@@ -233,9 +336,9 @@ export function SettingsPage() {
       await queryClient.invalidateQueries({ queryKey: ["event-member"] });
       setSelectedRole("read_only");
       setPageAccess(initialPageAccess);
-      setAccessMessage("Access revoked.");
+      setAccessMessage(`${name} removed from this event.`);
     } catch (error) {
-      setAccessMessage(error instanceof Error ? error.message : "Unable to revoke access");
+      setAccessMessage(error instanceof Error ? error.message : "Unable to remove this member");
     }
   }
 
@@ -316,7 +419,90 @@ export function SettingsPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Committee &amp; members</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Everyone with a role on this event. Approving a request adds somebody here; removing them here is how
+              they come off it.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {roster.length ? (
+              <ul className="overflow-hidden rounded-md border">
+                {roster.map((member) => {
+                  const name = displayName(member.app_users);
+                  const isYou = member.app_users.id === session?.user.appUserId;
+                  return (
+                    <li
+                      key={member.app_users.id}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2.5 last:border-b-0"
+                    >
+                      {member.app_users.photo_url ? (
+                        <img
+                          src={member.app_users.photo_url}
+                          alt=""
+                          className="h-9 w-9 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+                          aria-hidden="true"
+                        >
+                          {initials(name)}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {name}
+                          {isYou ? <span className="ml-1.5 text-xs text-muted-foreground">(you)</span> : null}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">{member.app_users.email}</p>
+                      </div>
+                      {member.role ? (
+                        <span
+                          className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
+                            roleBadgeStyles[member.role]
+                          }`}
+                        >
+                          {roleLabels[member.role]}
+                        </span>
+                      ) : null}
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => manageMember(member)}>
+                          Manage
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!access.canEdit}
+                          onClick={() => void removeMember(member)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {isRosterLoading ? "Loading members..." : "Nobody has a role on this event yet."}
+              </p>
+            )}
+            {rosterMessage ? <p className="text-sm text-muted-foreground">{rosterMessage}</p> : null}
+            <p className="text-xs text-muted-foreground">
+              Removing somebody takes their role and every page grant with it. Anything they recorded stays. The
+              event's last admin cannot be removed - make somebody else an admin first.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card id="member-access">
+          <CardHeader>
             <CardTitle>Member Access</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Add somebody to the event, change their role, and grant them individual pages.
+            </p>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={grantAccess}>
@@ -416,7 +602,7 @@ export function SettingsPage() {
                   disabled={!access.canEdit || !selectedEventId || !selectedUserId || !selectedMember?.member.role}
                   onClick={() => void revokeAccess()}
                 >
-                  Revoke Access
+                  Remove from event
                 </Button>
               </div>
             </form>

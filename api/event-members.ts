@@ -10,6 +10,52 @@ import {
 const validRoles = new Set(["admin", "committee", "read_only"]);
 const validAccessLevels = new Set(["none", "view", "edit"]);
 
+/**
+ * Refuse a change that would leave the event with no admin at all.
+ *
+ * An admin stepping down or being removed is perfectly normal - handing the
+ * committee over is the point. Being the *last* one is the problem: nothing
+ * else in this app can create an admin for an existing event, so an event
+ * with zero admins has no way back. Settings, member access and page
+ * visibility would all be locked for everyone, including the person who did
+ * it.
+ *
+ * `nextRole` is the role the target is being moved to, or null for removal.
+ */
+async function assertAdminRemains(
+  supabase: ReturnType<typeof assertServiceSupabase>,
+  eventId: string,
+  userId: string,
+  nextRole: string | null,
+) {
+  if (nextRole === "admin") return;
+
+  const { data: current, error } = await supabase
+    .from("event_members")
+    .select("role")
+    .eq("event_id", eventId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (current?.role !== "admin") return;
+
+  const { count, error: countError } = await supabase
+    .from("event_members")
+    .select("user_id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("role", "admin");
+  if (countError) throw countError;
+  if ((count ?? 0) > 1) return;
+
+  const failure = new Error(
+    nextRole
+      ? "This is the event's only admin. Make somebody else an admin first, then change this role."
+      : "This is the event's only admin. Make somebody else an admin first, then remove this one.",
+  );
+  Object.assign(failure, { statusCode: 409 });
+  throw failure;
+}
+
 export default async function handler(req: any, res: any) {
   try {
     if (req.method !== "GET" && req.method !== "POST" && req.method !== "DELETE") {
@@ -97,6 +143,9 @@ export default async function handler(req: any, res: any) {
         .filter((member) => {
           if (!role || role === "all") return true;
           if (role === "unassigned") return !member.role;
+          // Everyone who actually has a role on this event - the roster, as
+          // opposed to every person who has ever signed in to the app.
+          if (role === "assigned") return Boolean(member.role);
           return member.role === role;
         });
 
@@ -115,6 +164,7 @@ export default async function handler(req: any, res: any) {
       }
 
       await requireEventAdmin(eventId, appUser.id);
+      await assertAdminRemains(supabase, eventId, userId, null);
 
       const { error: permissionError } = await supabase
         .from("event_page_permissions")
@@ -170,6 +220,8 @@ export default async function handler(req: any, res: any) {
       sendJson(res, 404, { error: "Member must sign in with Google once before access can be granted" });
       return;
     }
+
+    await assertAdminRemains(supabase, eventId, targetUser.id, role);
 
     const { error: memberError } = await supabase.from("event_members").upsert(
       {
