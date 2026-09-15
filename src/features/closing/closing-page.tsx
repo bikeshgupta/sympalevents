@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ClosingFacts } from "@/features/closing/closing-copy";
 import { ClosingRatingStrip, ClosingStats, ClosingStory } from "@/features/closing/closing-summary";
+import { AuctionResults } from "@/features/closing/auction-results";
 import { CreditsDialog } from "@/features/closing/credits-dialog";
 import { CreditsSection, type CreditPerson } from "@/features/closing/credits-section";
 import { FeedbackSection } from "@/features/closing/feedback-section";
@@ -134,6 +135,8 @@ export function ClosingPage() {
           onToggle={(closed) => closing.setClosed.mutateAsync(closed)}
         />
       ) : null}
+
+      <AuctionResults auctions={closing.data?.auctions ?? []} />
 
       <CreditsSection
         credits={credits}

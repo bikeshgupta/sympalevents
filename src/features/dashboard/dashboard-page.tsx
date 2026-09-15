@@ -19,6 +19,7 @@ import { KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from
 import { AnimatedNumber } from "@/components/shared/animated-number";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClosingReviewsCard } from "@/features/closing/closing-reviews-card";
 import { ClosingDashboardCard } from "@/features/closing/closing-summary";
 import type { ClosingFacts } from "@/features/closing/closing-copy";
 import { AnnouncementsCard } from "@/features/dashboard/announcements-card";
@@ -43,7 +44,8 @@ import {
 } from "@/features/dashboard/dashboard-utils";
 import { parseAgenda } from "@/lib/agenda";
 import { gapLabel } from "@/lib/announcements";
-import { useEventClosing, type GalleryPhoto } from "@/lib/closing";
+import { formatRating, useEventClosing, type ClosingPayload, type GalleryPhoto } from "@/lib/closing";
+import { StarRating } from "@/features/closing/star-rating";
 import { useEventAccess } from "@/lib/event-access";
 import { useMyTasks } from "@/lib/tasks";
 import type { AppEvent, ContributionRow, EventPlanRow, SponsorRow } from "@/lib/event-data";
@@ -173,16 +175,23 @@ export function DashboardPage() {
         phase={phase}
         isLoading={isFetching}
         isClosed={isClosed}
+        feedback={closing.data?.feedback}
         source={data.source}
         fallbackReason={data.fallbackReason}
       />
+      {/* Once the celebration is closed the summary and what people wrote sit
+          side by side - "how did it go" is two questions, the committee's
+          answer and everybody else's. */}
       {isClosed ? (
-        <ClosingDashboardCard
-          closing={closing.data?.closing}
-          facts={closingFacts}
-          feedback={closing.data?.feedback}
-          isLoading={isFetching}
-        />
+        <section className="grid items-start gap-4 lg:grid-cols-[1.1fr_1fr]">
+          <ClosingDashboardCard
+            closing={closing.data?.closing}
+            facts={closingFacts}
+            feedback={closing.data?.feedback}
+            isLoading={isFetching}
+          />
+          <ClosingReviewsCard feedback={closing.data?.feedback} isLoading={closing.isLoading} />
+        </section>
       ) : null}
       <DashboardAuctions eventId={event.id} />
       <AnnouncementsCard event={event} now={now} />
@@ -204,6 +213,7 @@ function EventHero({
   phase,
   isLoading,
   isClosed,
+  feedback,
   source,
   fallbackReason,
 }: {
@@ -213,6 +223,7 @@ function EventHero({
   phase: EventPhase;
   isLoading: boolean;
   isClosed: boolean;
+  feedback?: ClosingPayload["feedback"];
   source: "supabase" | "demo";
   fallbackReason?: string;
 }) {
@@ -277,6 +288,24 @@ function EventHero({
             <h1 className="mt-3 text-3xl font-semibold leading-[1.1] tracking-tight [text-shadow:0_2px_4px_rgba(0,0,0,0.9),0_6px_24px_rgba(0,0,0,0.85)] sm:text-4xl lg:text-5xl">
               {event.name}
             </h1>
+
+            {/* How it was rated, right under the name, once it is over. On a
+                frosted plate rather than a text shadow: a number this small
+                has to clear the photo behind it, and dimming the whole scrim
+                to buy that would cost the image (see the UI rules, §2). */}
+            {isClosed && feedback?.count ? (
+              <div className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 backdrop-blur">
+                <StarRating
+                  value={feedback.average}
+                  size="sm"
+                  label={`Rated ${feedback.average.toFixed(1)} out of 5 from ${feedback.count} reviews`}
+                />
+                <span className="text-sm font-semibold tabular-nums">{formatRating(feedback.average)}</span>
+                <span className="text-xs text-white/80">
+                  {feedback.count} {feedback.count === 1 ? "review" : "reviews"}
+                </span>
+              </div>
+            ) : null}
 
             <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/90 [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_2px_12px_rgba(0,0,0,0.8)] sm:text-sm">
               <span className="inline-flex items-center gap-1.5">

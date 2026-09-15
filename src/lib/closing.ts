@@ -63,9 +63,26 @@ export type ClosingCredits = {
   editable: boolean;
 };
 
+/** An auction that finished, and what it went for. */
+export type AuctionResult = {
+  id: string;
+  title: string;
+  tag: string;
+  prize: string;
+  closesAt: string;
+  /** Null when nobody bid before it closed. */
+  winningAmount: number | null;
+  /** A name, never the flat - the closing page is public. */
+  winner: string | null;
+  bidCount: number;
+  bidderCount: number;
+};
+
 export type ClosingPayload = {
   closing: ClosingRecord;
   credits: ClosingCredits;
+  /** Published, non-cancelled auctions whose close time has passed. */
+  auctions: AuctionResult[];
   gallery: GalleryPhoto[];
   feedback: {
     average: number;

@@ -258,6 +258,92 @@ async function fetchPrasadCredits(supabase: Supabase, eventId: string): Promise<
     );
 }
 
+export type AuctionResult = {
+  id: string;
+  title: string;
+  tag: string;
+  prize: string;
+  closesAt: string;
+  /** Highest bid, or null when nobody bid before it closed. */
+  winningAmount: number | null;
+  /** Who placed it. A name, never the flat - see the privacy note above. */
+  winner: string | null;
+  bidCount: number;
+  bidderCount: number;
+};
+
+/**
+ * Auctions that actually finished, with what they went for.
+ *
+ * Only published, non-cancelled auctions whose `closes_at` has passed: an
+ * auction still running belongs on /auctions, and one the committee
+ * unpublished or cancelled is not a result to announce. An auction nobody
+ * bid on still appears, with `winningAmount` null - "it did not sell" is part
+ * of how the celebration went, and quietly dropping it would leave a
+ * committee wondering where it went.
+ *
+ * The winner's name is already public: the bid history and chart on
+ * /auctions need no token. Their flat is not carried over, the same as every
+ * other list on this page.
+ *
+ * Auctions are a whole feature an event may never use, so any failure here
+ * (including the tables not existing) leaves the section off rather than
+ * failing the closing page.
+ */
+async function fetchAuctionResults(supabase: Supabase, eventId: string, now: Date): Promise<AuctionResult[]> {
+  const auctions = await supabase
+    .from("auctions")
+    .select("id,title,tag,prize,closes_at,status,is_published")
+    .eq("event_id", eventId)
+    .order("closes_at", { ascending: false });
+
+  if (auctions.error) {
+    console.warn("Skipping the auction results on the closing page:", auctions.error.message);
+    return [];
+  }
+
+  const finished = (auctions.data ?? []).filter(
+    (row) =>
+      row.status !== "cancelled" &&
+      row.is_published !== false &&
+      row.closes_at &&
+      new Date(row.closes_at).getTime() <= now.getTime(),
+  );
+  if (!finished.length) return [];
+
+  const bids = await supabase
+    .from("auction_bids")
+    .select("auction_id,display_name,amount,user_id")
+    .in(
+      "auction_id",
+      finished.map((row) => row.id),
+    );
+
+  if (bids.error) {
+    console.warn("Skipping the auction bid totals on the closing page:", bids.error.message);
+  }
+
+  return finished.map((auction) => {
+    const own = (bids.data ?? []).filter((bid) => bid.auction_id === auction.id);
+    const top = own.reduce<{ amount: number; display_name: string | null } | null>(
+      (best, bid) => (!best || Number(bid.amount) > best.amount ? { amount: Number(bid.amount), display_name: bid.display_name } : best),
+      null,
+    );
+
+    return {
+      id: auction.id as string,
+      title: String(auction.title ?? "").trim(),
+      tag: String(auction.tag ?? "").trim(),
+      prize: String(auction.prize ?? "").trim(),
+      closesAt: String(auction.closes_at ?? ""),
+      winningAmount: top ? top.amount : null,
+      winner: top ? String(top.display_name ?? "").trim() || null : null,
+      bidCount: own.length,
+      bidderCount: new Set(own.map((bid) => bid.user_id)).size,
+    };
+  });
+}
+
 /**
  * The event's closing row, with the credit lists 020 adds when they exist.
  *
@@ -285,7 +371,7 @@ async function fetchClosingRow(supabase: Supabase, eventId: string) {
 async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiResponse, eventId: string) {
   const viewer = await optionalAppUser(req);
 
-  const [closingRow, galleryResult, feedbackResult, membersResult, tasksResult, scheduleResult, prasad] =
+  const [closingRow, galleryResult, feedbackResult, membersResult, tasksResult, scheduleResult, prasad, auctions] =
     await Promise.all([
       fetchClosingRow(supabase, eventId),
       supabase
@@ -304,6 +390,7 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
       supabase.from("tasks").select("owner_name").eq("event_id", eventId),
       supabase.from("event_schedule").select("owner_name").eq("event_id", eventId),
       fetchPrasadCredits(supabase, eventId),
+      fetchAuctionResults(supabase, eventId, new Date()),
     ]);
 
   if (galleryResult.error) throw galleryResult.error;
@@ -394,6 +481,7 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
       // page says so instead of offering an editor whose save would 501.
       editable: closingRow.ready,
     },
+    auctions,
     gallery: galleryResult.data ?? [],
     feedback: {
       average,

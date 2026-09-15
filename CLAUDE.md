@@ -881,6 +881,12 @@ no `resource` is still the original create-an-event POST. `/api/events` was alre
 - The note, and every gallery write, need `requireEventCommittee`.
 - A review needs a signed-in user and is addressed by `(event_id, the caller's own
   user id)` - never an id the client sends - so nobody can edit anybody else's.
+- `auctions` is the event's finished auctions - published, not cancelled, `closes_at`
+  passed - each with its top bid, the bidder's **name** (never their flat) and the bid
+  and bidder counts, built by `fetchAuctionResults()`. The winner's name is already
+  public: the bid history and chart on `/auctions` need no token. Any failure here
+  (including the tables not existing) leaves the section off rather than failing the
+  page, since auctions are a feature an event may never use.
 - `credits.prasad` is read from `prasad_items` by `fetchPrasadCredits()` in the same
   file, **not** through `/api/event-schedule?resource=prasad`: that route answers to
   the admin's visibility for the Prasad page (which seeds `restricted`) while the
@@ -970,6 +976,31 @@ naming it.
   folder (committee-only, decided explicitly - see the note in `api/uploads.ts`).
 - `GalleryPreview` on the dashboard is a window onto the same photos, not a second
   gallery to manage.
+- `AuctionResults` ([auction-results.tsx](src/features/closing/auction-results.tsx))
+  is one line per finished auction - what it went for and to whom - and nothing more:
+  the chart, the full bid history and the rules live on `/auctions` and always will.
+  An auction that closed with **no** bids still shows ("Closed without a bid"); that is
+  part of how the celebration went, and dropping it silently leaves a committee
+  wondering where it went. Renders nothing when the event ran no auctions.
+
+### The closed dashboard
+
+Once `is_closed` is on, three things beyond the section reorder (see above):
+
+- **The hero carries the rating under the event name** - stars, the average, the review
+  count - on a `bg-black/40 backdrop-blur` plate rather than a text shadow, because a
+  number that small has to clear the photo and dimming the scrim to buy that would cost
+  the image (UI rules §2).
+- **`ClosingDashboardCard` and `ClosingReviewsCard` sit side by side** in an
+  `items-start` grid at `lg`. `items-start` is load-bearing: stretched, the shorter
+  summary card left a card-height void under its buttons.
+- `ClosingReviewsCard` ([closing-reviews-card.tsx](src/features/closing/closing-reviews-card.tsx))
+  is the **comment** section, so it lists only reviews that have text - a bare five
+  stars with nothing said takes one of five slots and tells nobody anything. Sorted
+  highest-first by default with the most recent breaking the tie, and "Most recent" /
+  "Lowest rated" are offered because a summary nobody can turn over is a billboard, not
+  a review section. The star breakdown and every rating, text or not, stay on
+  `/closing`, which this card links to.
 
 ## Notices (print / PDF)
 
