@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { readAsDataUrl, shrinkImage, SENDABLE_IMAGE_TYPES } from "@/lib/images";
 import { useSession } from "@/lib/auth";
 
 /**
@@ -161,7 +162,6 @@ const BILL_MAX_BYTES = 3 * 1024 * 1024;
 const SEND_AS_IS_BYTES = 1024 * 1024;
 /** Long edge of a shrunk photo: enough to read a thermal till receipt. */
 const MAX_EDGE = 2000;
-const SENDABLE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export type PreparedBill = {
   dataUrl: string;
@@ -169,55 +169,6 @@ export type PreparedBill = {
   name: string;
   bytes: number;
 };
-
-function readAsDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("Couldn't read the file"));
-    reader.readAsDataURL(blob);
-  });
-}
-
-function loadImage(url: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () =>
-      reject(new Error("This photo's format can't be opened here. Take a screenshot of it, or choose a JPEG or PNG."));
-    image.src = url;
-  });
-}
-
-/** Re-encodes a photo as a JPEG no longer than MAX_EDGE on its long side.
- *  Browsers apply the camera's EXIF rotation when drawing, so it stays upright. */
-async function shrinkImage(file: File) {
-  const url = URL.createObjectURL(file);
-  try {
-    const image = await loadImage(url);
-    const scale = Math.min(1, MAX_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
-    const width = Math.max(1, Math.round(image.naturalWidth * scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * scale));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("This browser couldn't prepare the photo. Try a different browser.");
-
-    // Paint the page white first: JPEG has no transparency, and a transparent
-    // PNG screenshot would otherwise come out black. (Pixel data, not theme.)
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, width, height);
-    context.drawImage(image, 0, 0, width, height);
-
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-    if (!blob) throw new Error("This browser couldn't prepare the photo. Try a different browser.");
-    return blob;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 
 /**
  * Gets a bill ready to send. Phone photos are routinely 3-8MB, so anything
@@ -241,14 +192,11 @@ export async function prepareBill(file: File): Promise<PreparedBill> {
     return { dataUrl: await readAsDataUrl(file), isPdf: false, name: file.name, bytes: file.size };
   }
 
-  const shrunk = await shrinkImage(file);
+  const shrunk = await shrinkImage(file, MAX_EDGE);
   if (shrunk.size > BILL_MAX_BYTES) {
     throw new Error("That photo is still too large after shrinking it. Try a screenshot of the bill instead.");
   }
   return { dataUrl: await readAsDataUrl(shrunk), isPdf: false, name: file.name, bytes: shrunk.size };
 }
 
-export function formatFileSize(bytes: number) {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+export { formatFileSize } from "@/lib/images";

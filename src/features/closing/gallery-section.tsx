@@ -1,18 +1,24 @@
-import { Images, Pencil, Trash2, Upload } from "lucide-react";
+import { Images, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
 import { FormEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { groupByAlbum, type GalleryPhoto } from "@/lib/closing";
+import { PhotoViewer, type PhotoSocialActions } from "@/features/closing/photo-viewer";
+import { galleryReactions, groupByAlbum, type GalleryPhoto } from "@/lib/closing";
+import { prepareGalleryPhoto, formatFileSize } from "@/lib/images";
 import { useImageUpload } from "@/lib/uploads";
 
-type GalleryActions = {
+type GalleryActions = PhotoSocialActions & {
   add: (input: { imageUrl: string; caption: string; album: string }) => Promise<unknown>;
   update: (input: { photoId: string; caption: string; album: string }) => Promise<unknown>;
   remove: (photoId: string) => Promise<unknown>;
 };
+
+/** What one person may add to one event. Mirrors MAX_PHOTOS_PER_PERSON in
+ *  api/_lib/closing.ts, which is what actually enforces it. */
+const PHOTOS_PER_PERSON = 10;
 
 /**
  * The celebration photographs.
@@ -31,12 +37,16 @@ export function GallerySection({
   photos,
   eventId,
   canManage,
+  signedIn,
   actions,
   isLoading,
 }: {
   photos: GalleryPhoto[];
   eventId?: string;
   canManage: boolean;
+  /** Anybody signed in may add a photograph - this is the society's album,
+   *  not the committee's noticeboard. */
+  signedIn: boolean;
   actions: GalleryActions;
   isLoading: boolean;
 }) {
@@ -45,6 +55,13 @@ export function GallerySection({
   const [viewing, setViewing] = useState<GalleryPhoto | null>(null);
   const albums = groupByAlbum(photos);
   const knownAlbums = [...new Set(photos.map((photo) => photo.album.trim()).filter(Boolean))];
+  const mine = photos.filter((photo) => photo.mine).length;
+  const roomLeft = PHOTOS_PER_PERSON - mine;
+  const socialReady = photos.length === 0 || photos[0].social;
+
+  // The viewer keeps its own copy in state, so it has to follow the list when
+  // a reaction or comment lands and the gallery refetches.
+  const viewingLive = viewing ? (photos.find((photo) => photo.id === viewing.id) ?? viewing) : null;
 
   return (
     <Card>
@@ -59,17 +76,24 @@ export function GallerySection({
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {photos.length ? `${photos.length} from the celebration.` : "Moments from the celebration."}
+              {signedIn ? ` You have added ${mine} of ${PHOTOS_PER_PERSON}.` : ""}
             </p>
           </div>
-          {canManage ? (
-            <Button size="sm" onClick={() => setUploadOpen(true)}>
+          {signedIn ? (
+            <Button size="sm" onClick={() => setUploadOpen(true)} disabled={roomLeft <= 0}>
               <Upload className="h-4 w-4" aria-hidden="true" />
-              Add photo
+              {roomLeft > 0 ? "Add photo" : "Limit reached"}
             </Button>
           ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {!socialReady ? (
+          <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            Reactions and comments need <code>supabase/migrations/021_gallery_social.sql</code> to be run in Supabase.
+            The photographs below are unaffected.
+          </p>
+        ) : null}
         {isLoading ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((slot) => (
@@ -103,7 +127,7 @@ export function GallerySection({
                         </figcaption>
                       ) : null}
                     </button>
-                    {canManage ? (
+                    {canManage || photo.mine ? (
                       <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100 sm:opacity-70">
                         <Button
                           size="icon"
@@ -120,7 +144,8 @@ export function GallerySection({
                           className="h-9 w-9"
                           aria-label="Remove photo"
                           onClick={async () => {
-                            if (!window.confirm("Remove this photo from the closing page?")) return;
+                            if (!window.confirm("Remove this photo from the closing page? Its comments go with it."))
+                              return;
                             await actions.remove(photo.id);
                           }}
                         >
@@ -128,6 +153,7 @@ export function GallerySection({
                         </Button>
                       </div>
                     ) : null}
+                    <PhotoTally photo={photo} />
                   </figure>
                 ))}
               </div>
@@ -136,24 +162,25 @@ export function GallerySection({
         ) : (
           <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
             No photographs yet.{" "}
-            {canManage
-              ? "Add them with a short caption - the mandap, the cultural evening, the team behind it."
-              : "The committee will add them here soon."}
+            {signedIn
+              ? "Add yours with a short caption - the mandap, the cultural evening, the team behind it."
+              : "Sign in to add yours."}
           </div>
         )}
       </CardContent>
 
-      {canManage ? (
+      {signedIn ? (
         <PhotoUploadDialog
           open={uploadOpen}
           onOpenChange={setUploadOpen}
           eventId={eventId}
           knownAlbums={knownAlbums}
+          roomLeft={roomLeft}
           onSave={actions.add}
         />
       ) : null}
 
-      {canManage && editing ? (
+      {editing ? (
         <PhotoCaptionDialog
           photo={editing}
           knownAlbums={knownAlbums}
@@ -162,28 +189,49 @@ export function GallerySection({
         />
       ) : null}
 
-      <Dialog open={Boolean(viewing)} onOpenChange={(open) => !open && setViewing(null)}>
-        <DialogContent className="max-w-3xl p-0">
-          <DialogHeader className="sr-only">
-            <DialogTitle>{viewing?.caption || "Photograph"}</DialogTitle>
-          </DialogHeader>
-          {viewing ? (
-            <figure className="relative">
-              <img
-                src={viewing.image_url}
-                alt={viewing.caption || "Celebration photograph"}
-                className="max-h-[75vh] w-full rounded-lg object-contain"
-              />
-              {viewing.caption ? (
-                <figcaption className="font-display absolute inset-x-0 bottom-0 rounded-b-lg bg-gradient-to-t from-black/85 to-transparent px-4 pb-3 pt-10 text-base text-white">
-                  {viewing.caption}
-                </figcaption>
-              ) : null}
-            </figure>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      {viewingLive ? (
+        <PhotoViewer
+          photo={viewingLive}
+          signedIn={signedIn}
+          actions={actions}
+          onOpenChange={(open) => !open && setViewing(null)}
+        />
+      ) : null}
     </Card>
+  );
+}
+
+/**
+ * The strip under a tile: how it went down, at a glance.
+ *
+ * Deliberately not the full picker - that is in the viewer. A four-button
+ * reaction row on every tile in a three-across grid is a wall of controls,
+ * and tapping the photograph is the thing people already do.
+ */
+function PhotoTally({ photo }: { photo: GalleryPhoto }) {
+  if (!photo.social) return null;
+  const total = Object.values(photo.reactions).reduce((sum, count) => sum + count, 0);
+  if (!total && !photo.commentCount) return null;
+
+  const picked = galleryReactions.filter((reaction) => (photo.reactions[reaction.key] ?? 0) > 0);
+
+  return (
+    <div className="pointer-events-none absolute left-2 top-2 flex items-center gap-1.5">
+      {total ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-xs font-medium text-white backdrop-blur">
+          <span aria-hidden="true">{picked.map((reaction) => reaction.glyph).join("")}</span>
+          <span className="tabular-nums">{total}</span>
+          <span className="sr-only">reactions</span>
+        </span>
+      ) : null}
+      {photo.commentCount ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-xs font-medium text-white backdrop-blur">
+          <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="tabular-nums">{photo.commentCount}</span>
+          <span className="sr-only">comments</span>
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -207,42 +255,69 @@ function AlbumField({ defaultValue, knownAlbums }: { defaultValue?: string; know
   );
 }
 
+/**
+ * Adding a photograph.
+ *
+ * The file is **always re-encoded on the device** before it goes anywhere -
+ * see `prepareGalleryPhoto`. A phone camera produces 3-8MB; nothing on this
+ * page ever shows more than about 1600px of it, and everybody looking at the
+ * gallery would be downloading the difference. The dialog says what it did,
+ * because a silently altered file is a surprise.
+ */
 function PhotoUploadDialog({
   open,
   onOpenChange,
   eventId,
   knownAlbums,
+  roomLeft,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   eventId?: string;
   knownAlbums: string[];
+  roomLeft: number;
   onSave: GalleryActions["add"];
 }) {
   const upload = useImageUpload();
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [prepared, setPrepared] = useState<{ file: File; bytes: number; originalBytes: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
     setPreview(null);
+    setPrepared(null);
     setError(null);
     if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function pick(file: File | undefined) {
+    setPrepared(null);
+    setPreview(null);
+    setError(null);
+    if (!file) return;
+
+    try {
+      const ready = await prepareGalleryPhoto(file);
+      setPrepared(ready);
+      setPreview(URL.createObjectURL(ready.file));
+    } catch (prepareError) {
+      setError(prepareError instanceof Error ? prepareError.message : "Couldn't read that photo");
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const file = fileRef.current?.files?.[0];
     const pastedUrl = String(formData.get("imageUrl") ?? "").trim();
 
-    if (!file && !pastedUrl) {
+    if (!prepared && !pastedUrl) {
       setError("Choose a photo to upload, or paste an image URL");
       return;
     }
-    if (file && !eventId) {
+    if (prepared && !eventId) {
       setError("Pick an event before uploading");
       return;
     }
@@ -250,7 +325,9 @@ function PhotoUploadDialog({
     setSaving(true);
     setError(null);
     try {
-      const imageUrl = file ? await upload.mutateAsync({ file, eventId: eventId!, folder: "closing" }) : pastedUrl;
+      const imageUrl = prepared
+        ? await upload.mutateAsync({ file: prepared.file, eventId: eventId!, folder: "closing" })
+        : pastedUrl;
       await onSave({
         imageUrl,
         caption: String(formData.get("caption") ?? "").trim(),
@@ -286,15 +363,22 @@ function PhotoUploadDialog({
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               className="h-auto py-2"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                setPreview(file ? URL.createObjectURL(file) : null);
-              }}
+              onChange={(event) => void pick(event.target.files?.[0])}
             />
-            <p className="text-xs text-muted-foreground">JPEG, PNG, WEBP or GIF, up to 4MB. Or paste a URL below.</p>
+            <p className="text-xs text-muted-foreground">
+              JPEG, PNG or WEBP. Large photos are shrunk on your phone before they are sent, so the gallery stays quick
+              for everybody. You can add {roomLeft} more. Or paste a URL below.
+            </p>
           </div>
           {preview ? (
-            <img src={preview} alt="" className="max-h-48 w-full rounded-md border object-contain" />
+            <>
+              <img src={preview} alt="" className="max-h-48 w-full rounded-md border object-contain" />
+              {prepared && prepared.bytes < prepared.originalBytes ? (
+                <p className="text-xs text-muted-foreground">
+                  Shrunk from {formatFileSize(prepared.originalBytes)} to {formatFileSize(prepared.bytes)}.
+                </p>
+              ) : null}
+            </>
           ) : null}
           <div className="space-y-2">
             <Label htmlFor="imageUrl">Image URL</Label>

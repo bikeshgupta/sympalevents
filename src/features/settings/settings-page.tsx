@@ -229,6 +229,37 @@ export function SettingsPage() {
     }
   }
 
+  /**
+   * Correct somebody's name.
+   *
+   * Names on this event go out over the committee's name - the credits on the
+   * closing page, the duty roster, the prasad list - and Google's idea of
+   * somebody's name is often an initial or the wrong order. The person can
+   * always set it back themselves from the header menu.
+   */
+  async function renameMember(member: MemberOption) {
+    const current = displayName(member.app_users);
+    const next = window.prompt(`Name for ${member.app_users.email}`, current);
+    if (next === null) return;
+    const trimmed = next.replace(/\s+/g, " ").trim();
+    if (!trimmed || trimmed === current) return;
+
+    setRosterMessage(`Renaming ${current}...`);
+    try {
+      await apiFetch("/api/event-members", {
+        method: "PATCH",
+        body: { eventId: selectedEventId, userId: member.app_users.id, fullName: trimmed },
+      });
+      await queryClient.invalidateQueries({ queryKey: ["event-members"] });
+      await queryClient.invalidateQueries({ queryKey: ["event-member"] });
+      await queryClient.invalidateQueries({ queryKey: ["event-closing"] });
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      setRosterMessage(`Now shown as ${trimmed}.`);
+    } catch (error) {
+      setRosterMessage(error instanceof Error ? error.message : "Unable to rename this member");
+    }
+  }
+
   /** Load somebody into the Member Access form below, role and grants and all. */
   function manageMember(member: MemberOption) {
     setRoleFilter("all");
@@ -467,6 +498,15 @@ export function SettingsPage() {
                         </span>
                       ) : null}
                       <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!access.canEdit}
+                          onClick={() => void renameMember(member)}
+                        >
+                          Rename
+                        </Button>
                         <Button type="button" variant="outline" size="sm" onClick={() => manageMember(member)}>
                           Manage
                         </Button>
@@ -491,8 +531,10 @@ export function SettingsPage() {
             )}
             {rosterMessage ? <p className="text-sm text-muted-foreground">{rosterMessage}</p> : null}
             <p className="text-xs text-muted-foreground">
-              Removing somebody takes their role and every page grant with it. Anything they recorded stays. The
-              event's last admin cannot be removed - make somebody else an admin first.
+              Names start from the person's Google account and can be corrected here - they can also change their own
+              from the account menu in the header. Removing somebody takes their role and every page grant with it.
+              Anything they recorded stays. The event's last admin cannot be removed - make somebody else an admin
+              first.
             </p>
           </CardContent>
         </Card>

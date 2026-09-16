@@ -1,9 +1,10 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import { ChevronsUpDown, LogOut, UserPen } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
 import { NavDrawer } from "@/components/layout/nav-drawer";
+import { ProfileNameDialog } from "@/components/layout/profile-name-dialog";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
@@ -24,6 +25,7 @@ export function AppLayout() {
   const { events, selectedEventId, setSelectedEventId, isLoading: isEventLoading } = useEventContext();
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
+  const [editingName, setEditingName] = useState(false);
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
   // With no event there is nobody to have set visibility - the app is on the
@@ -153,6 +155,16 @@ export function AppLayout() {
                     <button
                       type="button"
                       className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-muted"
+                      onClick={() => setEditingName(true)}
+                    >
+                      <UserPen className="h-4 w-4" />
+                      Edit your name
+                    </button>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-muted"
                       onClick={() => void signOut()}
                     >
                       <LogOut className="h-4 w-4" />
@@ -169,7 +181,19 @@ export function AppLayout() {
               <Link to="/login">Sign in</Link>
             </Button>
           )}
-          <NavDrawer items={visibleNavItems} session={session} userName={userName} />
+          <NavDrawer
+            items={visibleNavItems}
+            session={session}
+            userName={userName}
+            onEditName={() => setEditingName(true)}
+          />
+          {session && editingName ? (
+            <ProfileNameDialog
+              currentName={session.user.name ?? ""}
+              email={session.user.email}
+              onOpenChange={setEditingName}
+            />
+          ) : null}
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-5 lg:px-6">
           {requestMessage ? (

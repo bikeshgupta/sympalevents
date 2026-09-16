@@ -40,6 +40,25 @@ const MAX_NAMES_PER_LIST = 200;
 const MAX_SHOUTOUTS = 6;
 
 const CREDITS_MIGRATION = "supabase/migrations/020_closing_credits.sql";
+const GALLERY_MIGRATION = "supabase/migrations/021_gallery_social.sql";
+
+/** How many photographs one person may add to one event's gallery.
+ *  Per person, not per event: a cap on the gallery would let one phone's
+ *  camera roll fill it before anybody else got a look in. */
+const MAX_PHOTOS_PER_PERSON = 10;
+const MAX_COMMENT_BODY = 600;
+/** Checked here rather than by a constraint, so adding one is a deploy. */
+const REACTIONS = new Set(["heart", "clap", "pray", "laugh"]);
+
+/** 021 has not been run: the reaction and comment tables are missing. */
+function isMissingGallerySocial(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    ["42P01", "PGRST205", "PGRST200"].includes(error.code ?? "") ||
+    /event_gallery_reactions|event_gallery_comments/.test(message)
+  );
+}
 
 /** The closing row, with the hand-kept credit lists 020 adds. */
 const CLOSING_COLUMNS =
@@ -129,6 +148,14 @@ export async function handleEventClosing(req: ApiRequest, res: ApiResponse) {
     const resource = String(req.query?.resource ?? "");
 
     if (req.method === "GET") {
+      // One photograph's thread, fetched when somebody opens it rather than
+      // shipped with the whole gallery - see the note on shapeGallery.
+      const photoId = String(req.query?.photoId ?? "");
+      if (resource === "gallery" && photoId) {
+        await sendPhotoComments(supabase, req, res, photoId);
+        return;
+      }
+
       const eventId = String(req.query?.eventId ?? "");
       if (!eventId) {
         sendJson(res, 400, { error: "eventId is required" });
@@ -345,6 +372,71 @@ async function fetchAuctionResults(supabase: Supabase, eventId: string, now: Dat
 }
 
 /**
+ * Each photograph with who added it, how people reacted, and how many things
+ * they said about it.
+ *
+ * Counts and one "which did I pick", never the reaction rows themselves -
+ * a gallery of fifty photographs would otherwise carry every tap anybody had
+ * ever made on it. Comments are a **count** here for the same reason; the
+ * thread itself is fetched when somebody opens that photograph, the same way
+ * a collapsed task card makes no comment request.
+ *
+ * `social: false` (021 not run) is not an error: the gallery still lists, the
+ * reacting and commenting controls are simply not offered.
+ */
+async function shapeGallery(
+  supabase: Supabase,
+  photos: Array<Record<string, unknown>>,
+  viewerId: string | null,
+  nameOf: (userId: string) => string,
+) {
+  const base = photos.map((photo) => ({
+    id: photo.id as string,
+    image_url: (photo.image_url as string) ?? "",
+    caption: (photo.caption as string) ?? "",
+    album: (photo.album as string) ?? "",
+    sort_order: Number(photo.sort_order ?? 0),
+    created_at: (photo.created_at as string) ?? "",
+    uploader: photo.created_by ? nameOf(photo.created_by as string) : "",
+    mine: Boolean(viewerId && photo.created_by === viewerId),
+    reactions: {} as Record<string, number>,
+    myReaction: null as string | null,
+    commentCount: 0,
+    social: true,
+  }));
+
+  if (!base.length) return base;
+  const ids = base.map((photo) => photo.id);
+
+  const [reactions, comments] = await Promise.all([
+    supabase.from("event_gallery_reactions").select("photo_id,user_id,emoji").in("photo_id", ids),
+    supabase.from("event_gallery_comments").select("photo_id").in("photo_id", ids),
+  ]);
+
+  if (isMissingGallerySocial(reactions.error) || isMissingGallerySocial(comments.error)) {
+    console.warn(`The gallery reaction/comment tables are missing. Run ${GALLERY_MIGRATION}.`);
+    return base.map((photo) => ({ ...photo, social: false }));
+  }
+  if (reactions.error) throw reactions.error;
+  if (comments.error) throw comments.error;
+
+  const byId = new Map(base.map((photo) => [photo.id, photo]));
+  for (const row of reactions.data ?? []) {
+    const photo = byId.get(row.photo_id as string);
+    if (!photo) continue;
+    const emoji = String(row.emoji ?? "");
+    photo.reactions[emoji] = (photo.reactions[emoji] ?? 0) + 1;
+    if (viewerId && row.user_id === viewerId) photo.myReaction = emoji;
+  }
+  for (const row of comments.data ?? []) {
+    const photo = byId.get(row.photo_id as string);
+    if (photo) photo.commentCount += 1;
+  }
+
+  return base;
+}
+
+/**
  * The event's closing row, with the credit lists 020 adds when they exist.
  *
  * Read degrades, write says so - the same shape as every other migration in
@@ -376,7 +468,7 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
       fetchClosingRow(supabase, eventId),
       supabase
         .from("event_gallery_photos")
-        .select("id,image_url,caption,album,sort_order,created_at")
+        .select("id,image_url,caption,album,sort_order,created_at,created_by")
         .eq("event_id", eventId)
         .order("album", { ascending: true })
         .order("sort_order", { ascending: true })
@@ -407,7 +499,14 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
   // is public the same way the dashboard is, and the ask was to credit
   // people, not to publish a directory. A review carries its author's avatar
   // because that person chose to post it under their own name.
-  const userIds = [...new Set([...members.map((row) => row.user_id), ...feedbackRows.map((row) => row.user_id)])];
+  const photoRows = galleryResult.data ?? [];
+  const userIds = [
+    ...new Set([
+      ...members.map((row) => row.user_id),
+      ...feedbackRows.map((row) => row.user_id),
+      ...photoRows.map((row) => row.created_by).filter(Boolean),
+    ]),
+  ] as string[];
   const { data: users, error: usersError } = userIds.length
     ? await supabase.from("app_users").select("id,full_name,email,photo_url").in("id", userIds)
     : { data: [], error: null };
@@ -482,7 +581,7 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
       editable: closingRow.ready,
     },
     auctions,
-    gallery: galleryResult.data ?? [],
+    gallery: await shapeGallery(supabase, photoRows, viewer?.id ?? null, (id) => displayName(usersById.get(id))),
     feedback: {
       average,
       count: reviews.length,
@@ -556,6 +655,80 @@ async function handleClosingWrite(
   sendJson(res, 200, { closing: data });
 }
 
+/**
+ * Reading one photograph's comments. Public, like the rest of the closing
+ * page - anybody who can see the photograph can read what was said about it.
+ */
+async function sendPhotoComments(supabase: Supabase, req: ApiRequest, res: ApiResponse, photoId: string) {
+  const viewer = await optionalAppUser(req);
+
+  const { data, error } = await supabase
+    .from("event_gallery_comments")
+    .select("id,user_id,body,created_at")
+    .eq("photo_id", photoId)
+    .order("created_at", { ascending: true });
+
+  if (isMissingGallerySocial(error)) {
+    sendJson(res, 200, { comments: [], social: false });
+    return;
+  }
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const userIds = [...new Set(rows.map((row) => row.user_id))];
+  const { data: users, error: usersError } = userIds.length
+    ? await supabase.from("app_users").select("id,full_name,email,photo_url").in("id", userIds)
+    : { data: [], error: null };
+  if (usersError) throw usersError;
+  const usersById = new Map((users ?? []).map((user) => [user.id, user]));
+
+  sendJson(res, 200, {
+    social: true,
+    comments: rows.map((row) => {
+      const user = usersById.get(row.user_id);
+      return {
+        id: row.id,
+        body: row.body,
+        createdAt: row.created_at,
+        mine: Boolean(viewer && row.user_id === viewer.id),
+        author: {
+          name: user?.full_name?.trim() || user?.email?.split("@")[0] || "Member",
+          photoUrl: user?.photo_url ?? null,
+        },
+      };
+    }),
+  });
+}
+
+/** The photograph, and whether this caller is allowed to change it. */
+async function loadOwnedPhoto(supabase: Supabase, photoId: string, userId: string) {
+  const { data, error } = await supabase
+    .from("event_gallery_photos")
+    .select("event_id,created_by")
+    .eq("id", photoId)
+    .single();
+  if (error) throw error;
+
+  if (data.created_by === userId) return data;
+  // Not theirs: only the committee may touch somebody else's photograph.
+  await requireEventCommittee(data.event_id, userId);
+  return data;
+}
+
+function galleryNotReady() {
+  const failure = new Error(`This needs ${GALLERY_MIGRATION} to be run in Supabase first.`);
+  Object.assign(failure, { statusCode: 501 });
+  return failure;
+}
+
+/**
+ * Adding, editing and removing a photograph, plus reacting and commenting.
+ *
+ * **Any signed-in person may add one** - this is the society's album, not the
+ * committee's noticeboard - capped at MAX_PHOTOS_PER_PERSON each. Editing and
+ * removing stay with whoever added it, or the committee, who still have to be
+ * able to take something down.
+ */
 async function handleGalleryWrite(
   supabase: Supabase,
   res: ApiResponse,
@@ -563,6 +736,95 @@ async function handleGalleryWrite(
   body: Record<string, unknown>,
   method: string,
 ) {
+  const action = String(body.action ?? "");
+
+  if (action === "react" || action === "comment") {
+    const photoId = String(body.photoId ?? "");
+    if (!photoId) {
+      sendJson(res, 400, { error: "photoId is required" });
+      return;
+    }
+
+    // Anybody who may see the photograph may react to it or say something -
+    // that is the whole point - so this checks only that it exists.
+    const { error: photoError } = await supabase
+      .from("event_gallery_photos")
+      .select("id")
+      .eq("id", photoId)
+      .single();
+    if (photoError) throw photoError;
+
+    if (action === "react") {
+      const emoji = String(body.emoji ?? "");
+      // An empty emoji is "take mine back": tapping the one you already
+      // picked removes it rather than leaving no way out.
+      if (!emoji) {
+        const { error } = await supabase
+          .from("event_gallery_reactions")
+          .delete()
+          .eq("photo_id", photoId)
+          .eq("user_id", userId);
+        if (isMissingGallerySocial(error)) throw galleryNotReady();
+        if (error) throw error;
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+      if (!REACTIONS.has(emoji)) {
+        sendJson(res, 400, { error: "Unknown reaction" });
+        return;
+      }
+      const { error } = await supabase
+        .from("event_gallery_reactions")
+        .upsert({ photo_id: photoId, user_id: userId, emoji }, { onConflict: "photo_id,user_id" });
+      if (isMissingGallerySocial(error)) throw galleryNotReady();
+      if (error) throw error;
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    const text = String(body.body ?? "").trim().slice(0, MAX_COMMENT_BODY);
+    if (!text) {
+      sendJson(res, 400, { error: "Write something first" });
+      return;
+    }
+    const { data, error } = await supabase
+      .from("event_gallery_comments")
+      .insert({ photo_id: photoId, user_id: userId, body: text })
+      .select("id")
+      .single();
+    if (isMissingGallerySocial(error)) throw galleryNotReady();
+    if (error) throw error;
+    sendJson(res, 201, { commentId: data.id });
+    return;
+  }
+
+  // Deleting a comment: your own, or the committee taking one down.
+  if (method === "DELETE" && body.commentId !== undefined) {
+    const commentId = String(body.commentId ?? "");
+    const { data: comment, error: commentError } = await supabase
+      .from("event_gallery_comments")
+      .select("id,user_id,photo_id")
+      .eq("id", commentId)
+      .single();
+    if (isMissingGallerySocial(commentError)) throw galleryNotReady();
+    if (commentError) throw commentError;
+
+    if (comment.user_id !== userId) {
+      const { data: photo, error: photoError } = await supabase
+        .from("event_gallery_photos")
+        .select("event_id")
+        .eq("id", comment.photo_id)
+        .single();
+      if (photoError) throw photoError;
+      await requireEventCommittee(photo.event_id, userId);
+    }
+
+    const { error } = await supabase.from("event_gallery_comments").delete().eq("id", commentId);
+    if (error) throw error;
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   if (method === "POST") {
     const eventId = String(body.eventId ?? "");
     const imageUrl = String(body.imageUrl ?? "").trim();
@@ -570,7 +832,20 @@ async function handleGalleryWrite(
       sendJson(res, 400, { error: "eventId and imageUrl are required" });
       return;
     }
-    await requireEventCommittee(eventId, userId);
+
+    const { count, error: countError } = await supabase
+      .from("event_gallery_photos")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("created_by", userId);
+    if (countError) throw countError;
+
+    if ((count ?? 0) >= MAX_PHOTOS_PER_PERSON) {
+      sendJson(res, 409, {
+        error: `You have added ${MAX_PHOTOS_PER_PERSON} photographs already. Remove one to make room for another.`,
+      });
+      return;
+    }
 
     const { data, error } = await supabase
       .from("event_gallery_photos")
@@ -596,14 +871,7 @@ async function handleGalleryWrite(
     return;
   }
 
-  const { data: existing, error: existingError } = await supabase
-    .from("event_gallery_photos")
-    .select("event_id")
-    .eq("id", photoId)
-    .single();
-
-  if (existingError) throw existingError;
-  await requireEventCommittee(existing.event_id, userId);
+  await loadOwnedPhoto(supabase, photoId, userId);
 
   if (method === "DELETE") {
     const { error } = await supabase.from("event_gallery_photos").delete().eq("id", photoId);

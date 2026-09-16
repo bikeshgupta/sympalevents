@@ -21,6 +21,19 @@ import { formatCurrency } from "@/lib/utils";
  * sign-in - but their flat is not carried over here, the same as every other
  * list on this page.
  */
+/**
+ * The line under the heading.
+ *
+ * "1 of 1 went under the hammer" is a fraction nobody needed: with a single
+ * auction the count carries no information, so it says what happened instead.
+ */
+function summaryLine(total: number, sold: number, raised: number) {
+  if (!sold) return total === 1 ? "Nobody bid before it closed." : "Nobody bid before these closed.";
+  if (total === 1) return `Went under the hammer for ${formatCurrency(raised)}.`;
+  if (sold === total) return `All ${total} went under the hammer for ${formatCurrency(raised)} in all.`;
+  return `${sold} of ${total} went under the hammer for ${formatCurrency(raised)} in all.`;
+}
+
 export function AuctionResults({ auctions }: { auctions: AuctionResult[] }) {
   if (!auctions.length) return null;
 
@@ -36,11 +49,7 @@ export function AuctionResults({ auctions }: { auctions: AuctionResult[] }) {
           </span>
           <div>
             <CardTitle>{auctions.length === 1 ? "The auction" : "The auctions"}</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {sold
-                ? `${sold} of ${auctions.length} went under the hammer for ${formatCurrency(raised)} in all.`
-                : "Nobody bid before these closed."}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{summaryLine(auctions.length, sold, raised)}</p>
           </div>
         </div>
       </CardHeader>

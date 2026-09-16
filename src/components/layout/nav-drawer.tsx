@@ -1,5 +1,5 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { LogIn, LogOut, Menu, X } from "lucide-react";
+import { LogIn, LogOut, Menu, UserPen, X } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -29,10 +29,14 @@ export function NavDrawer({
   items,
   session,
   userName,
+  onEditName,
 }: {
   items: typeof navItems;
   session: AuthSession | null | undefined;
   userName: string;
+  /** Opens the name editor, which the layout owns so the header dropdown and
+   *  this drawer share one dialog rather than a copy each. */
+  onEditName: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -82,12 +86,23 @@ export function NavDrawer({
                   {(userName[0] ?? "U").toUpperCase()}
                 </span>
               )}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{userName}</p>
                 {session.user.email ? (
                   <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
                 ) : null}
               </div>
+              <button
+                type="button"
+                aria-label="Edit your name"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => {
+                  close();
+                  onEditName();
+                }}
+              >
+                <UserPen className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           ) : (
             <div className="space-y-2 border-b px-4 py-3">
