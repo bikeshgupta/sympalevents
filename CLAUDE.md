@@ -196,6 +196,22 @@ against Google's public keys and map the user into Supabase `app_users`.
   picture ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). It shows the
   signed-in account first (or a Sign in button), then every page, then Sign out.
 
+**Every navigation starts at the top.** React Router does not do that by itself - it
+swaps the route's element and leaves the window where it was, so a link followed from
+halfway down the dashboard dropped you halfway down the next screen. `AppLayout` calls
+`useScrollToTopOnNavigate()` ([src/lib/scroll.ts](src/lib/scroll.ts)), which fires on
+`pathname` alone; the browser still restores its own position on back/forward.
+
+**A `#section` link is the page's own job.** `useHashTarget(ready)` in the same file
+scrolls the element into view and moves focus to it - so a keyboard or screen-reader
+user arrives where the eye does - and is deliberately **gated on the page's data having
+settled**: the sections above a target grow as their queries land, so scrolling any
+earlier lands right and then drifts. It runs inside a `requestAnimationFrame` because a
+child's effects fire before its parent's, and without the frame the layout's jump to the
+top would land last. A target needs `id`, `tabIndex={-1}` and `scroll-mt-20` (the header
+is `sticky h-16`). Today: `/closing#reviews` from the dashboard's review card, and
+`/closing#photographs` from its gallery preview.
+
 **The fixed bottom bar is gone**, and so is the `pb-20` the layout reserved for it.
 With thirteen pages that bar showed about four at a time behind a sideways scroll,
 gave no hint the rest existed, and cost the last ~80px of every screen. Do not

@@ -64,7 +64,8 @@ export function GallerySection({
   const viewingLive = viewing ? (photos.find((photo) => photo.id === viewing.id) ?? viewing) : null;
 
   return (
-    <Card>
+    // The dashboard's gallery preview links straight here with #photographs.
+    <Card id="photographs" tabIndex={-1} className="scroll-mt-20 focus-visible:outline-none">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

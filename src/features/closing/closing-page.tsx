@@ -13,6 +13,7 @@ import { GallerySection } from "@/features/closing/gallery-section";
 import { formatEventWeekday, getEventDays } from "@/features/dashboard/dashboard-utils";
 import { useSession } from "@/lib/auth";
 import { emptyCredits, useEventClosing, withSeedCredits } from "@/lib/closing";
+import { useHashTarget } from "@/lib/scroll";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
@@ -61,6 +62,11 @@ export function ClosingPage() {
   const canManage = eventAccess?.role === "admin" || eventAccess?.role === "committee";
   const closing = useEventClosing(selectedEventId ?? data.event.id);
   const [editingCredits, setEditingCredits] = useState(false);
+
+  // Arriving from the dashboard's "All N reviews" or its gallery preview.
+  // Gated on the query settling: the sections above the target grow as their
+  // data lands, so scrolling any earlier lands right and then drifts.
+  useHashTarget(!closing.isLoading && !isFetching);
 
   const contributors = useMemo(() => creditPeople(data.contributions), [data.contributions]);
   const sponsors = useMemo(() => creditPeople(data.sponsors), [data.sponsors]);

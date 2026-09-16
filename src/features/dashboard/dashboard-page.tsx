@@ -1313,7 +1313,7 @@ function GalleryPreview({ photos }: { photos: GalleryPhoto[] }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>Gallery</CardTitle>
           {photos.length ? (
-            <Link to="/closing" className="text-sm font-medium text-primary underline underline-offset-2">
+            <Link to="/closing#photographs" className="text-sm font-medium text-primary underline underline-offset-2">
               See all {photos.length}
             </Link>
           ) : null}
@@ -1325,7 +1325,7 @@ function GalleryPreview({ photos }: { photos: GalleryPhoto[] }) {
             {preview.map((photo) => (
               <Link
                 key={photo.id}
-                to="/closing"
+                to="/closing#photographs"
                 className="group relative overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <img
@@ -1351,7 +1351,7 @@ function GalleryPreview({ photos }: { photos: GalleryPhoto[] }) {
               <p className="text-sm font-medium">No event images yet.</p>
               <p className="text-sm text-muted-foreground">
                 Committee members add them on the{" "}
-                <Link to="/closing" className="font-medium text-primary underline underline-offset-2">
+                <Link to="/closing#photographs" className="font-medium text-primary underline underline-offset-2">
                   Closing page
                 </Link>
                 , with a caption for each.
