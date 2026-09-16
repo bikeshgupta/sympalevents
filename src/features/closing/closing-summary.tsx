@@ -1,7 +1,6 @@
-import { CalendarCheck2, HandCoins, HeartHandshake, Pencil, Sparkles, Star, Users } from "lucide-react";
+import { Pencil, Sparkles, Star } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
-import { AnimatedNumber } from "@/components/shared/animated-number";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,9 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { closingText, type ClosingFacts } from "@/features/closing/closing-copy";
 import { StarRating } from "@/features/closing/star-rating";
-import { formatCurrencyCompact } from "@/features/dashboard/dashboard-utils";
 import { formatRating, type ClosingPayload } from "@/lib/closing";
-import { formatCurrency } from "@/lib/utils";
 
 /**
  * The thank-you note. Every event gets one whether or not anybody writes it,
@@ -154,76 +151,32 @@ function ClosingNoteDialog({
   );
 }
 
-/** The celebration in numbers. Loading shows a dash, never a zero. */
-export function ClosingStats({ facts, isLoading }: { facts: ClosingFacts; isLoading: boolean }) {
-  const total = facts.contributionReceived + facts.sponsorshipReceived;
-  const tiles = [
-    { label: "Days celebrated", value: facts.dayCount, icon: CalendarCheck2, format: (value: number) => String(value) },
-    { label: "Contributors", value: facts.contributorCount, icon: Users, format: (value: number) => String(value) },
-    { label: "Sponsors", value: facts.sponsorCount, icon: HeartHandshake, format: (value: number) => String(value) },
-    {
-      label: "Raised together",
-      value: total,
-      icon: HandCoins,
-      format: formatCurrencyCompact,
-      title: formatCurrency(total),
-    },
-  ];
-
-  // One row at every width, like every page's StatGrid: on a phone the icon
-  // goes and the label sits under the number, so four tiles fit a row.
-  return (
-    <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
-      {tiles.map((tile, index) => {
-        const Icon = tile.icon;
-        return (
-          <div
-            key={tile.label}
-            className="flex min-w-0 flex-col-reverse justify-end rounded-lg border bg-gradient-to-br from-background to-muted/40 px-2 py-2 sm:flex-col sm:justify-start sm:p-3"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-xs font-medium leading-tight text-muted-foreground">{tile.label}</p>
-              <span className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary sm:flex">
-                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-              </span>
-            </div>
-            {isLoading ? (
-              <p className="text-lg font-semibold text-muted-foreground sm:mt-2 sm:text-xl">…</p>
-            ) : (
-              <AnimatedNumber
-                value={tile.value}
-                format={tile.format}
-                duration={800 + index * 100}
-                className="block truncate text-lg font-semibold tracking-tight tabular-nums sm:mt-2 sm:text-xl"
-                title={tile.title}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /**
  * The dashboard's version, shown once the committee marks the event closed:
- * the note in short, the headline numbers and the rating, with the rest of
- * the story a tap away. It sits above the money cards - after the event,
- * "how did it go" matters more than "what is still unfunded".
+ * the thank-you note and the rating, with the photographs and the reviews a
+ * tap away. It sits above the money cards - after the event, "how did it go"
+ * matters more than "what is still unfunded".
+ *
+ * It prints the note **in full**, not a first paragraph and a "read more".
+ * The note is the thing the committee wrote for everybody to read, and the
+ * dashboard is where everybody lands; truncating it on the one screen that
+ * gets opened every day made the closing page a place you had to be sent to.
+ *
+ * The four count tiles that used to sit under it are gone with the same
+ * reasoning as on /closing: the note already says "3 families contributed, 3
+ * sponsors backed us" in its own words, and now that all of it shows, the
+ * tiles were repeating the paragraph directly above them.
  */
 export function ClosingDashboardCard({
   closing,
   facts,
   feedback,
-  isLoading,
 }: {
   closing?: ClosingPayload["closing"];
   facts: ClosingFacts;
   feedback?: ClosingPayload["feedback"];
-  isLoading: boolean;
 }) {
   const text = closingText(closing, facts);
-  const firstParagraph = text.message.split(/\n{2,}/)[0];
 
   return (
     <Card className="relative overflow-hidden">
@@ -250,18 +203,20 @@ export function ClosingDashboardCard({
 
         <div>
           <h2 className="font-display text-xl leading-tight sm:text-2xl">{text.headline}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{firstParagraph}</p>
+          <div className="mt-2 space-y-2.5 text-sm leading-relaxed text-muted-foreground">
+            {text.message.split(/\n{2,}/).map((paragraph, index) => (
+              <p key={`${index}-${paragraph.slice(0, 12)}`}>{paragraph}</p>
+            ))}
+          </div>
         </div>
 
-        <ClosingStats facts={facts} isLoading={isLoading} />
-
-        <div className="flex flex-wrap items-center gap-3">
+        {/* One link, not two. Both used to say "read the story" in different
+            words, which was fair when the note was truncated here; now that
+            the whole of it is above, what is left on /closing is the rest. */}
+        <div>
           <Button asChild size="sm">
-            <Link to="/closing">Read the full story</Link>
+            <Link to="/closing">Credits, photographs and reviews</Link>
           </Button>
-          <Link to="/closing" className="text-sm font-medium text-primary underline underline-offset-2">
-            Photos and reviews
-          </Link>
         </div>
       </CardContent>
     </Card>

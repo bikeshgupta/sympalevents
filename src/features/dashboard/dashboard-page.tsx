@@ -188,7 +188,6 @@ export function DashboardPage() {
             closing={closing.data?.closing}
             facts={closingFacts}
             feedback={closing.data?.feedback}
-            isLoading={isFetching}
           />
           <ClosingReviewsCard feedback={closing.data?.feedback} isLoading={closing.isLoading} />
         </section>

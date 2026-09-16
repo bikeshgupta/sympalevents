@@ -156,9 +156,8 @@ against Google's public keys and map the user into Supabase `app_users`.
 - Icons are `lucide-react`, sized `h-4 w-4` in buttons/labels and `h-5 w-5` in card headers.
 - **Stat tiles: `StatGrid` + `StatCard`, one row at every width** — see UI rules §5.
   `StatCard` used to have a roomy default and an opt-in `compact` variant; the roomy
-  one stacked tiles one per row on a phone, so it was removed and every page (and
-  the closing page's `ClosingStats`) now uses the compact row Contributions
-  introduced. There is no `compact` prop any more.
+  one stacked tiles one per row on a phone, so it was removed and every page now uses
+  the compact row Contributions introduced. There is no `compact` prop any more.
 - Table screens compose `useFilteredSortedRows` + `SortableHeader` + `ColumnFilter` +
   `TableToolbar` from [src/features/shared/table-tools.tsx](src/features/shared/table-tools.tsx).
   Add a screen's columns as a `TableColumn<T>[]` const at module scope.
@@ -976,13 +975,21 @@ naming it.
   has not written one (`defaultClosingMessage` in
   [closing-copy.ts](src/features/closing/closing-copy.ts)), so the page is never a blank
   box and never credits the wrong people. Clearing the message box goes back to it.
-- `ClosingStory` / `ClosingStats` / `ClosingDashboardCard` / `ClosingRatingStrip` all
-  live in [closing-summary.tsx](src/features/closing/closing-summary.tsx) - the
-  dashboard card and the page share them so the two never drift. **`ClosingStats` is no
-  longer on `/closing` itself**: the generated note above it already says "3 families
-  contributed, 3 sponsors backed us" in words, so the page said the same thing twice
-  before getting to the people. The dashboard card keeps the tiles, where only the
-  note's first paragraph shows and they are the numbers rather than an echo.
+- `ClosingStory` / `ClosingDashboardCard` / `ClosingRatingStrip` all live in
+  [closing-summary.tsx](src/features/closing/closing-summary.tsx) - the dashboard card
+  and the page share them so the two never drift.
+- **There are no count tiles on either surface any more, and `ClosingStats` is gone.**
+  The generated note already says "3 families contributed, 3 sponsors backed us" in its
+  own words, so the tiles repeated the paragraph directly above them. They came off
+  `/closing` first; once the dashboard card started printing the **whole** note rather
+  than its first paragraph, the same objection applied there. Do not reintroduce them
+  without asking - this was a direct instruction, twice.
+- **The dashboard card prints the note in full**, not a first paragraph and a "read
+  more". The note is what the committee wrote for everybody, and the dashboard is where
+  everybody lands; truncating it on the one screen opened every day made the closing
+  page somewhere you had to be sent. Its single button therefore says what is actually
+  still over there - credits, photographs and reviews - rather than the two links to the
+  same place it used to carry.
 - Captions print **over the bottom of their own photo** on a gradient, in `.font-display`
   (the Playfair face the countdown uses, without the tabular figures) - a deliberate
   ask, not a styling accident.
