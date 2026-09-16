@@ -4,7 +4,7 @@ import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ClosingFacts } from "@/features/closing/closing-copy";
-import { ClosingRatingStrip, ClosingStats, ClosingStory } from "@/features/closing/closing-summary";
+import { ClosingRatingStrip, ClosingStory } from "@/features/closing/closing-summary";
 import { AuctionResults } from "@/features/closing/auction-results";
 import { CreditsDialog } from "@/features/closing/credits-dialog";
 import { CreditsSection, type CreditPerson } from "@/features/closing/credits-section";
@@ -124,9 +124,12 @@ export function ClosingPage() {
         onSave={(input) => closing.saveNote.mutateAsync(input)}
       />
 
+      {/* The four count tiles used to sit here. They restated what the note
+          above already says in words - "3 families contributed, 3 sponsors
+          backed us" - so the page said the same thing twice before getting to
+          the people. The dashboard's summary card keeps them: there only the
+          first paragraph shows, so there they are the numbers, not an echo. */}
       <ClosingRatingStrip feedback={closing.data?.feedback} />
-
-      <ClosingStats facts={facts} isLoading={isFetching} />
 
       {canManage ? (
         <CloseEventControl
@@ -161,10 +164,14 @@ export function ClosingPage() {
         eventId={selectedEventId ?? data.event.id}
         canManage={canManage}
         isLoading={closing.isLoading}
+        signedIn={Boolean(session?.user)}
         actions={{
           add: (input) => closing.addPhoto.mutateAsync(input),
           update: (input) => closing.updatePhoto.mutateAsync(input),
           remove: (photoId) => closing.deletePhoto.mutateAsync(photoId),
+          react: (input) => closing.reactToPhoto.mutateAsync(input),
+          comment: (input) => closing.addComment.mutateAsync(input),
+          deleteComment: (input) => closing.deleteComment.mutateAsync(input),
         }}
       />
 

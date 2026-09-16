@@ -12,6 +12,14 @@ export type ClosingRecord = {
   updated_at: string | null;
 };
 
+/** One reaction per person per photograph; picking a second replaces it. */
+export const galleryReactions = [
+  { key: "heart", glyph: "❤️", label: "Love this" },
+  { key: "clap", glyph: "👏", label: "Well done" },
+  { key: "pray", glyph: "🙏", label: "Blessed" },
+  { key: "laugh", glyph: "😂", label: "Made me laugh" },
+] as const;
+
 export type GalleryPhoto = {
   id: string;
   image_url: string;
@@ -19,6 +27,24 @@ export type GalleryPhoto = {
   album: string;
   sort_order: number;
   created_at: string;
+  /** Who added it, by name. Empty for rows added before uploads were open. */
+  uploader: string;
+  /** True when the viewer added it, which is what lets them edit or remove it. */
+  mine: boolean;
+  reactions: Record<string, number>;
+  myReaction: string | null;
+  commentCount: number;
+  /** False until migration 021: the photograph still shows, reacting and
+   *  commenting are simply not offered. */
+  social: boolean;
+};
+
+export type PhotoComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+  author: { name: string; photoUrl: string | null };
 };
 
 export type EventReview = {
@@ -166,6 +192,32 @@ export function useEventClosing(eventId?: string) {
     onSuccess: invalidate,
   });
 
+  const reactToPhoto = useMutation({
+    // An empty emoji takes your reaction back, so tapping the one you already
+    // picked is the way out rather than a separate control.
+    mutationFn: (input: { photoId: string; emoji: string }) =>
+      apiFetch<{ ok: true }>(GALLERY_PATH, { method: "POST", body: { action: "react", ...input } }),
+    onSuccess: invalidate,
+  });
+
+  const addComment = useMutation({
+    mutationFn: (input: { photoId: string; body: string }) =>
+      apiFetch<{ commentId: string }>(GALLERY_PATH, { method: "POST", body: { action: "comment", ...input } }),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["gallery-comments", variables.photoId] });
+      invalidate();
+    },
+  });
+
+  const deleteComment = useMutation({
+    mutationFn: (input: { commentId: string; photoId: string }) =>
+      apiFetch<{ ok: true }>(GALLERY_PATH, { method: "DELETE", body: { commentId: input.commentId } }),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["gallery-comments", variables.photoId] });
+      invalidate();
+    },
+  });
+
   const saveReview = useMutation({
     mutationFn: (input: { rating: number; comment: string }) =>
       apiFetch<{ review: unknown }>(FEEDBACK_PATH, { method: "POST", body: { eventId, ...input } }),
@@ -188,6 +240,9 @@ export function useEventClosing(eventId?: string) {
     addPhoto,
     updatePhoto,
     deletePhoto,
+    reactToPhoto,
+    addComment,
+    deleteComment,
     saveReview,
     deleteReview,
   };
@@ -258,6 +313,28 @@ function withExtraNames(names: string[], extras: readonly string[]) {
     merged.push(extra.trim());
   }
   return merged;
+}
+
+/**
+ * One photograph's comment thread, fetched only when it is open.
+ *
+ * A gallery of fifty photographs makes **zero** comment requests until
+ * somebody opens one - the counts on the tiles ride along with the gallery
+ * itself. Same arrangement as `useTaskComments`.
+ */
+export function useGalleryComments(photoId: string | null, enabled: boolean) {
+  const { data: session } = useSession();
+
+  return useQuery({
+    queryKey: ["gallery-comments", photoId, session?.user.appUserId ?? "guest"],
+    enabled: Boolean(photoId) && enabled,
+    queryFn: () =>
+      apiFetch<{ comments: PhotoComment[]; social: boolean }>(
+        `${GALLERY_PATH}&photoId=${encodeURIComponent(photoId!)}`,
+        { requireAuth: false },
+      ),
+    retry: false,
+  });
 }
 
 /** Photos grouped by album, in the order the albums first appear. */

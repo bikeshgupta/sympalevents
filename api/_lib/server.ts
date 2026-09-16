@@ -80,30 +80,45 @@ export async function requireAppUser(req: any) {
     throw error;
   }
 
+  // `full_name` is deliberately NOT in here. It used to be, set from the
+  // Google profile on every single authenticated request - which meant a name
+  // somebody corrected in this app was overwritten again within seconds, and
+  // silently. Google's name seeds the row once, below, and after that the name
+  // belongs to the person it names (PATCH /api/me). Their photo and email do
+  // still follow the Google account; those are not ours to hold stale.
   const profile = {
     firebase_uid: decoded.uid,
     email,
-    full_name: decoded.name ?? email,
     photo_url: decoded.picture ?? null,
     updated_at: new Date().toISOString(),
   };
 
+  const columns = "id,firebase_uid,email,full_name,photo_url";
+
   let result = await supabase
     .from("app_users")
     .upsert(profile, { onConflict: "firebase_uid" })
-    .select("id,firebase_uid,email,full_name,photo_url")
+    .select(columns)
     .single();
 
   if (result.error && result.error.code === "23505") {
-    result = await supabase
-      .from("app_users")
-      .update(profile)
-      .eq("email", email)
-      .select("id,firebase_uid,email,full_name,photo_url")
-      .single();
+    result = await supabase.from("app_users").update(profile).eq("email", email).select(columns).single();
   }
 
   if (result.error) throw result.error;
+
+  // Seed the name on the very first sign-in, and repair a row that somehow has
+  // none. One extra write per account, ever - not one per request.
+  if (!String(result.data.full_name ?? "").trim()) {
+    const seeded = await supabase
+      .from("app_users")
+      .update({ full_name: decoded.name ?? email })
+      .eq("id", result.data.id)
+      .select(columns)
+      .single();
+    if (seeded.error) throw seeded.error;
+    result = seeded;
+  }
 
   return {
     firebaseUser: decoded,

@@ -43,6 +43,10 @@ const EXT_BY_MIME: Record<string, string> = {
 // "auctions" it is committee-only, decided explicitly rather than inherited.
 const ALLOWED_FOLDERS = new Set(["auctions", "closing"]);
 
+/** Must match MAX_PHOTOS_PER_PERSON in api/_lib/closing.ts, which enforces
+ *  the same cap on the row insert. */
+const MAX_PHOTOS_PER_PERSON = 10;
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
     if (req.method !== "POST") {
@@ -67,10 +71,31 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    // Every current folder is a committee-only upload. When a folder with a
-    // different permission model is added, branch on `folder` here instead
-    // of loosening this for everyone.
-    await requireEventCommittee(eventId, appUser.id);
+    // Two permission models now, branched on the folder rather than loosened
+    // for everyone:
+    //
+    //   auctions  committee only - an auction's image goes out over the
+    //             committee's name, on a page anybody can read.
+    //   closing   any signed-in person, because the gallery is the society's
+    //             album. Capped per person, and checked here as well as on
+    //             the row insert: without this, somebody could fill the
+    //             bucket with files that never become photographs.
+    if (folder === "closing") {
+      const { count, error: countError } = await supabase
+        .from("event_gallery_photos")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .eq("created_by", appUser.id);
+      if (countError) throw countError;
+      if ((count ?? 0) >= MAX_PHOTOS_PER_PERSON) {
+        sendJson(res, 409, {
+          error: `You have added ${MAX_PHOTOS_PER_PERSON} photographs already. Remove one to make room for another.`,
+        });
+        return;
+      }
+    } else {
+      await requireEventCommittee(eventId, appUser.id);
+    }
 
     const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
     if (!match) {

@@ -114,6 +114,14 @@ against Google's public keys and map the user into Supabase `app_users`.
   transfer. Contact details and payment references stay off anything set to `public`.
   See the Privacy section of the UI rules before putting a new personal field on a
   screen an admin might open up.
+- **A person's display name is theirs.** `requireAppUser` no longer rewrites
+  `app_users.full_name` from the Google profile on every request - it used to, which
+  meant a corrected name was silently overwritten within seconds. Google's name seeds
+  the row on first sign-in (and repairs a blank one); after that `PATCH /api/me` is the
+  only thing that changes it, from the account menu in the header or the drawer. An
+  admin may also correct a member's name from the Settings roster
+  (`PATCH /api/event-members`), because the credits and rosters go out over the
+  committee's name. Email and photo still follow the Google account.
 - **Always gate mutating UI on `access.canEdit`**, and render a "View-only access"
   affordance rather than a disabled/hidden control with no explanation.
 - **Settings has a member roster**, above Member Access: everyone with a role on this
@@ -557,8 +565,10 @@ an auction-only detail.
   checked server-side — the client cannot write to an arbitrary storage path. Add a new
   entry there (and decide its own permission check, see next point) before wiring up a
   second upload surface.
-- **Permission:** every folder currently requires `event_members.role` of `admin` or
-  `committee`, via the same `requireEventCommittee()` now shared in
+- **Permission: two models now, branched on the folder.** `auctions` is committee-only;
+  `closing` is any signed-in person, with the per-person photo cap checked there too
+  (see "The gallery is the society's album" under Closing page). Committee-only goes
+  through the same `requireEventCommittee()` shared in
   [api/_lib/server.ts](api/_lib/server.ts) (also used by `api/auctions.ts` — it used to
   be a local copy there; promoted to the shared file when uploads needed the identical
   check, to avoid a second copy drifting out of sync). **When event-photo upload is
@@ -968,7 +978,11 @@ naming it.
   box and never credits the wrong people. Clearing the message box goes back to it.
 - `ClosingStory` / `ClosingStats` / `ClosingDashboardCard` / `ClosingRatingStrip` all
   live in [closing-summary.tsx](src/features/closing/closing-summary.tsx) - the
-  dashboard card and the page share them so the two never drift.
+  dashboard card and the page share them so the two never drift. **`ClosingStats` is no
+  longer on `/closing` itself**: the generated note above it already says "3 families
+  contributed, 3 sponsors backed us" in words, so the page said the same thing twice
+  before getting to the people. The dashboard card keeps the tiles, where only the
+  note's first paragraph shows and they are the numbers rather than an echo.
 - Captions print **over the bottom of their own photo** on a gradient, in `.font-display`
   (the Playfair face the countdown uses, without the tabular figures) - a deliberate
   ask, not a styling accident.
@@ -976,6 +990,39 @@ naming it.
   folder (committee-only, decided explicitly - see the note in `api/uploads.ts`).
 - `GalleryPreview` on the dashboard is a window onto the same photos, not a second
   gallery to manage.
+
+### The gallery is the society's album, not the committee's noticeboard
+
+[021_gallery_social.sql](supabase/migrations/021_gallery_social.sql) adds
+`event_gallery_reactions` (one row per person per photo - picking a second replaces
+the first, which is what the primary key says) and `event_gallery_comments`
+(append-only, no edit UI). RLS on with zero policies, same reasoning as every other
+table. **Not run yet** - until it is, photographs still list, an amber banner names it,
+and reacting or commenting returns 501.
+
+- **Any signed-in person may add a photograph**, capped at **10 each**. Per person, not
+  per event: a cap on the gallery would let one phone's camera roll fill it before
+  anybody else got a look in. Enforced on the row insert *and* in `api/uploads.ts`,
+  because without the second check somebody could fill the bucket with files that never
+  become photographs.
+- Editing a caption or removing a photograph stays with **whoever added it, or the
+  committee** (`loadOwnedPhoto`). Reacting and commenting need only a sign-in - reading
+  both is public, like the rest of the page.
+- **Photos are always re-encoded on the device** (`prepareGalleryPhoto` in
+  [src/lib/images.ts](src/lib/images.ts), 1600px long edge, JPEG). Unlike `prepareBill`,
+  which sends anything under 1MB untouched: a gallery is many photos from many people
+  looked at on phones, and nothing on the page ever shows more than ~1600px. The dialog
+  says what it did, because a silently altered file is a surprise. `src/lib/images.ts`
+  is shared by this and the expense bills - `shrinkImage` used to be private to
+  `expenses.ts`.
+- **Comment counts ride with the gallery; threads do not.** Fifty collapsed photographs
+  make zero comment requests - `useGalleryComments(photoId)` fetches one thread when
+  its viewer opens, via `GET /api/events?resource=gallery&photoId=...`. Same arrangement
+  as `useTaskComments`.
+- `PhotoViewer` ([photo-viewer.tsx](src/features/closing/photo-viewer.tsx)) holds the
+  full-size photo, the four-reaction picker and the thread. The **tiles carry only a
+  tally** (`PhotoTally`) - a four-button reaction row on every tile in a three-across
+  grid is a wall of controls, and tapping the photograph is what people already do.
 - `AuctionResults` ([auction-results.tsx](src/features/closing/auction-results.tsx))
   is one line per finished auction - what it went for and to whom - and nothing more:
   the chart, the full bid history and the rules live on `/auctions` and always will.

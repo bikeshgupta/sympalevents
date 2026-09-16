@@ -58,7 +58,7 @@ async function assertAdminRemains(
 
 export default async function handler(req: any, res: any) {
   try {
-    if (req.method !== "GET" && req.method !== "POST" && req.method !== "DELETE") {
+    if (req.method !== "GET" && req.method !== "POST" && req.method !== "PATCH" && req.method !== "DELETE") {
       sendJson(res, 405, { error: "Method not allowed" });
       return;
     }
@@ -150,6 +150,37 @@ export default async function handler(req: any, res: any) {
         });
 
       sendJson(res, 200, { members });
+      return;
+    }
+
+    // An admin correcting somebody's name. Separate from the role/permissions
+    // POST below on purpose: that one rewrites every page grant from the form
+    // it was submitted with, and a rename must not have to carry all of that.
+    //
+    // An admin may do this because the names on this event - the credits, the
+    // task board, the prasad roster - go out over the committee's name, and
+    // "Rohan D." as Google spells it is theirs to correct. The person can
+    // always set it back themselves via PATCH /api/me.
+    if (req.method === "PATCH") {
+      const body = await getRequestBody(req);
+      const eventId = String(body.eventId ?? "");
+      const userId = String(body.userId ?? "");
+      const fullName = String(body.fullName ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+
+      if (!eventId || !userId || !fullName) {
+        sendJson(res, 400, { error: "eventId, userId and a name are required" });
+        return;
+      }
+
+      await requireEventAdmin(eventId, appUser.id);
+
+      const { error } = await supabase
+        .from("app_users")
+        .update({ full_name: fullName, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+
+      if (error) throw error;
+      sendJson(res, 200, { ok: true });
       return;
     }
 
