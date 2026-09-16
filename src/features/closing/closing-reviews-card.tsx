@@ -112,7 +112,7 @@ export function ClosingReviewsCard({
         )}
 
         <Link
-          to="/closing"
+          to="/closing#reviews"
           className="mt-auto inline-block text-sm font-medium text-primary underline underline-offset-2"
         >
           {feedback?.count ? `All ${feedback.count} reviews` : "Write the first review"}

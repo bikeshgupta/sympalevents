@@ -10,6 +10,7 @@ import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
+import { useScrollToTopOnNavigate } from "@/lib/scroll";
 import { useEventData } from "@/lib/event-data";
 import { cn } from "@/lib/utils";
 import { navItems } from "./nav-items";
@@ -25,6 +26,8 @@ export function AppLayout() {
   const { events, selectedEventId, setSelectedEventId, isLoading: isEventLoading } = useEventContext();
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
+
+  useScrollToTopOnNavigate();
   const [editingName, setEditingName] = useState(false);
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));

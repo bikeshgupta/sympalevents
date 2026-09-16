@@ -35,7 +35,9 @@ export function FeedbackSection({
   const others = feedback.reviews.filter((review) => !review.isMine);
 
   return (
-    <Card>
+    // The dashboard links straight here with #reviews. tabIndex lets focus
+    // land with the scroll; scroll-mt-20 clears the sticky header.
+    <Card id="reviews" tabIndex={-1} className="scroll-mt-20 focus-visible:outline-none">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
