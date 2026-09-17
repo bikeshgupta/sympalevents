@@ -187,9 +187,11 @@ function SignInToComment() {
  * for the same row on the screen everybody lands on is how two of them end up
  * disagreeing.
  *
- * It asks for words as well as stars, unlike the full form, because this card
- * lists only reviews that have text: a rating posted here with nothing said
- * would vanish into the average and read as if the button had not worked.
+ * **Stars alone are enough.** Words are optional, as they are on the full
+ * form - a rating posted with nothing said still counts towards the average.
+ * It only lands nowhere *visible*, because this card lists written reviews
+ * only, so the helper line under the box says so rather than the form
+ * refusing to submit.
  */
 function ReviewComposer({ onSubmit }: { onSubmit: (input: { rating: number; comment: string }) => Promise<unknown> }) {
   const [rating, setRating] = useState(0);
@@ -201,10 +203,6 @@ function ReviewComposer({ onSubmit }: { onSubmit: (input: { rating: number; comm
     event.preventDefault();
     if (!rating) {
       setError("Pick a rating between 1 and 5 stars.");
-      return;
-    }
-    if (!comment.trim()) {
-      setError("Say a line or two - that is what shows up here.");
       return;
     }
 
@@ -231,10 +229,13 @@ function ReviewComposer({ onSubmit }: { onSubmit: (input: { rating: number; comm
         rows={2}
         maxLength={1500}
         disabled={saving}
-        placeholder="What you will remember about it"
+        placeholder="What you will remember about it (optional)"
         onChange={(event) => setComment(event.target.value)}
         className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
       />
+      <p className="text-xs text-muted-foreground">
+        Stars on their own are fine - they count towards the rating. Only written ones are listed below.
+      </p>
       {error ? <p className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">{error}</p> : null}
       <Button type="submit" size="sm" disabled={saving}>
         {saving ? "Posting..." : "Post review"}

@@ -1088,9 +1088,11 @@ Once `is_closed` is on, three things beyond the section reorder (see above):
   whole form, the star breakdown and a delete button beside it, and that is `/closing`;
   a second control for the same row on the screen everybody lands on is how two of them
   end up disagreeing. When they have reviewed, the card says so and points at the
-  closing page instead. Unlike the full form it asks for **words as well as stars**,
-  because this card lists only reviews with text - a rating posted here with nothing
-  said would vanish into the average and read as if the button had not worked.
+  closing page instead. **Stars alone are enough**, the same as the full form - a
+  rating with nothing said still counts towards the average, it just lands nowhere
+  visible here, since this card lists written reviews only. The helper line under the
+  box says that rather than the form refusing to submit; requiring words was tried
+  first and rejected.
 
 ## Notices (print / PDF)
 
