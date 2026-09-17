@@ -1065,6 +1065,9 @@ Once `is_closed` is on, three things beyond the section reorder (see above):
   `items-start` grid at `lg`. `items-start` is load-bearing: stretched, the shorter
   summary card left a card-height void under its buttons.
 - `ClosingReviewsCard` ([closing-reviews-card.tsx](src/features/closing/closing-reviews-card.tsx))
+  - headed **"In their words"**, and with no subtitle under it: that line read "Top 1 of
+  1 written review", a fraction that says nothing until there are enough of them to be
+  a selection, and the card already shows its own loading and empty states below -
   is the **comment** section, so it lists only reviews that have text - a bare five
   stars with nothing said takes one of five slots and tells nobody anything. Sorted
   highest-first by default with the most recent breaking the tie, and "Most recent" /

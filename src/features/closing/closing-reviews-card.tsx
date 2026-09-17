@@ -71,18 +71,11 @@ export function ClosingReviewsCard({
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <MessageSquareQuote className="h-4 w-4" aria-hidden="true" />
             </span>
-            <div>
-              <CardTitle>What people said</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {isLoading
-                  ? "Loading reviews…"
-                  : written.length
-                    ? `Top ${Math.min(TOP_COUNT, written.length)} of ${written.length} written ${
-                        written.length === 1 ? "review" : "reviews"
-                      }.`
-                    : "Nobody has written one yet."}
-              </p>
-            </div>
+            {/* No subtitle. It read "Top 1 of 1 written review" - a fraction
+                that says nothing until there are enough of them to be a
+                selection, and the card is already headed and already shows
+                its own loading and empty states below. */}
+            <CardTitle>In their words</CardTitle>
           </div>
           {written.length > 1 ? (
             <div>
