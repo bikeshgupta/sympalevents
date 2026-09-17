@@ -1,4 +1,4 @@
-import { MessageSquareQuote } from "lucide-react";
+import { LogIn, MessageSquareQuote } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,16 @@ const sortLabels: Record<SortKey, string> = {
 };
 
 const TOP_COUNT = 5;
+
+/**
+ * The anchor this card answers to.
+ *
+ * One constant for both the `id` and the path a signed-out visitor is sent
+ * back to, so the two cannot drift apart. `DashboardPage` is this card's only
+ * caller, which is why the path is written out here rather than passed in.
+ */
+export const reviewsAnchor = "in-their-words";
+const returnPath = `/dashboard#${reviewsAnchor}`;
 
 /**
  * What people wrote, next to the closing summary on the dashboard.
@@ -64,7 +74,9 @@ export function ClosingReviewsCard({
   }, [written, sort]);
 
   return (
-    <Card className="flex flex-col">
+    // tabIndex + scroll-mt-20 so `useHashTarget` can land focus here under the
+    // sticky header - see src/lib/scroll.ts.
+    <Card id={reviewsAnchor} tabIndex={-1} className="flex scroll-mt-20 flex-col focus-visible:outline-none">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -101,6 +113,7 @@ export function ClosingReviewsCard({
 
       <CardContent className="flex flex-1 flex-col gap-3">
         {canWrite ? <ReviewComposer onSubmit={onSubmit} /> : null}
+        {!signedIn ? <SignInToComment /> : null}
 
         {isLoading ? (
           <div className="h-24 animate-pulse rounded-lg bg-muted" />
@@ -124,14 +137,44 @@ export function ClosingReviewsCard({
               You have reviewed this celebration. Edit or delete it on the closing page.
             </p>
           ) : null}
-          {feedback?.count || !canWrite ? (
-            <Link to="/closing#reviews" className="inline-block text-sm font-medium text-primary underline underline-offset-2">
-              {feedback?.count ? `All ${feedback.count} reviews` : "Leave the first review"}
+          {feedback?.count ? (
+            <Link
+              to="/closing#reviews"
+              className="inline-block text-sm font-medium text-primary underline underline-offset-2"
+            >
+              All {feedback.count} reviews
             </Link>
           ) : null}
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * The signed-out version of the composer: the same invitation, one step
+ * further back.
+ *
+ * It sends them to `/login` carrying this card's own anchor as the return
+ * path, so signing in puts them back here with the write box open rather than
+ * on whatever `/dashboard` happens to show at the top. The promise in the
+ * copy is the reason to carry it - "you will come straight back" is only worth
+ * saying if it is true.
+ */
+function SignInToComment() {
+  return (
+    <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+      <p className="text-sm font-medium">Been part of it? Add your comment.</p>
+      <p className="text-sm text-muted-foreground">
+        Sign in to rate the celebration and leave a few lines. You will come straight back here.
+      </p>
+      <Button asChild size="sm">
+        <Link to="/login" state={{ from: returnPath }}>
+          <LogIn className="h-4 w-4" aria-hidden="true" />
+          Sign in to comment
+        </Link>
+      </Button>
+    </div>
   );
 }
 
