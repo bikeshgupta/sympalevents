@@ -47,6 +47,7 @@ import { gapLabel } from "@/lib/announcements";
 import { formatRating, useEventClosing, type ClosingPayload, type GalleryPhoto } from "@/lib/closing";
 import { StarRating } from "@/features/closing/star-rating";
 import { useEventAccess } from "@/lib/event-access";
+import { useHashTarget } from "@/lib/scroll";
 import { useMyTasks } from "@/lib/tasks";
 import type { AppEvent, ContributionRow, EventPlanRow, SponsorRow } from "@/lib/event-data";
 import { useEventData } from "@/lib/event-data";
@@ -106,6 +107,10 @@ export function DashboardPage() {
   // decides when the celebration is closed, because that is when the note and
   // the photographs are ready to lead the page.
   const isClosed = Boolean(closing.data?.closing.is_closed);
+
+  // Coming back from signing in to leave a review: #in-their-words puts them
+  // on the card they clicked from, with the write box open.
+  useHashTarget(!closing.isLoading && !isFetching);
   const closingFacts: ClosingFacts = {
     eventName: event.name,
     location: event.location,

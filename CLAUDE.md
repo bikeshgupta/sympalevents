@@ -209,8 +209,9 @@ settled**: the sections above a target grow as their queries land, so scrolling 
 earlier lands right and then drifts. It runs inside a `requestAnimationFrame` because a
 child's effects fire before its parent's, and without the frame the layout's jump to the
 top would land last. A target needs `id`, `tabIndex={-1}` and `scroll-mt-20` (the header
-is `sticky h-16`). Today: `/closing#reviews` from the dashboard's review card, and
-`/closing#photographs` from its gallery preview.
+is `sticky h-16`). Today: `/closing#reviews` from the dashboard's review card,
+`/closing#photographs` from its gallery preview, and `/dashboard#in-their-words`, which
+`/login` returns a signed-out commenter to.
 
 **The fixed bottom bar is gone**, and so is the `pb-20` the layout reserved for it.
 With thirteen pages that bar showed about four at a time behind a sideways scroll,
@@ -1074,6 +1075,13 @@ Once `is_closed` is on, three things beyond the section reorder (see above):
   "Lowest rated" are offered because a summary nobody can turn over is a billboard, not
   a review section. The star breakdown and every rating, text or not, stay on
   `/closing`, which this card links to.
+- **A signed-out visitor gets the same invitation, one step back.** `SignInToComment`
+  sends them to `/login` carrying this card's own anchor as `state.from`
+  (`/dashboard#in-their-words`), so signing in puts them back on the card they clicked
+  from with the write box open, not at the top of the dashboard. `reviewsAnchor` is one
+  exported constant used for both the `id` and that path, so the two cannot drift; the
+  dashboard calls `useHashTarget` to land it. The copy promises they will come straight
+  back, which is only worth saying because the return path makes it true.
 - **It carries the composer too - writing a review needs no redirect.** `ReviewComposer`
   sits at the top of that card for a signed-in person who has not written one, and
   **vanishes the moment they have**: there is no edit here on purpose. Editing needs the
