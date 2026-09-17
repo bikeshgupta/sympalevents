@@ -189,7 +189,12 @@ export function DashboardPage() {
             facts={closingFacts}
             feedback={closing.data?.feedback}
           />
-          <ClosingReviewsCard feedback={closing.data?.feedback} isLoading={closing.isLoading} />
+          <ClosingReviewsCard
+            feedback={closing.data?.feedback}
+            isLoading={closing.isLoading}
+            signedIn={Boolean(session?.user)}
+            onSubmit={(input) => closing.saveReview.mutateAsync(input)}
+          />
         </section>
       ) : null}
       <DashboardAuctions eventId={event.id} />
