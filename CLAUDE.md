@@ -1071,6 +1071,15 @@ Once `is_closed` is on, three things beyond the section reorder (see above):
   "Lowest rated" are offered because a summary nobody can turn over is a billboard, not
   a review section. The star breakdown and every rating, text or not, stay on
   `/closing`, which this card links to.
+- **It carries the composer too - writing a review needs no redirect.** `ReviewComposer`
+  sits at the top of that card for a signed-in person who has not written one, and
+  **vanishes the moment they have**: there is no edit here on purpose. Editing needs the
+  whole form, the star breakdown and a delete button beside it, and that is `/closing`;
+  a second control for the same row on the screen everybody lands on is how two of them
+  end up disagreeing. When they have reviewed, the card says so and points at the
+  closing page instead. Unlike the full form it asks for **words as well as stars**,
+  because this card lists only reviews with text - a rating posted here with nothing
+  said would vanish into the average and read as if the button had not worked.
 
 ## Notices (print / PDF)
 

@@ -1,8 +1,10 @@
 import { MessageSquareQuote } from "lucide-react";
-import { useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StarRating } from "@/features/closing/star-rating";
+import { Label } from "@/components/ui/label";
+import { StarRating, StarRatingInput } from "@/features/closing/star-rating";
 import { formatEventTimestamp } from "@/features/dashboard/dashboard-utils";
 import { initials, type ClosingPayload, type EventReview } from "@/lib/closing";
 
@@ -32,11 +34,19 @@ const TOP_COUNT = 5;
 export function ClosingReviewsCard({
   feedback,
   isLoading,
+  signedIn,
+  onSubmit,
 }: {
   feedback?: ClosingPayload["feedback"];
   isLoading: boolean;
+  signedIn: boolean;
+  onSubmit: (input: { rating: number; comment: string }) => Promise<unknown>;
 }) {
   const [sort, setSort] = useState<SortKey>("highest");
+  // Write it here, not over on /closing. Gone the moment there is one to
+  // show: a second review is not a thing anybody has, and editing the one
+  // they do have belongs on the page that can also delete it.
+  const canWrite = signedIn && feedback && !feedback.mine;
 
   const written = useMemo(
     () => (feedback?.reviews ?? []).filter((review) => review.comment.trim()),
@@ -97,6 +107,8 @@ export function ClosingReviewsCard({
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col gap-3">
+        {canWrite ? <ReviewComposer onSubmit={onSubmit} /> : null}
+
         {isLoading ? (
           <div className="h-24 animate-pulse rounded-lg bg-muted" />
         ) : top.length ? (
@@ -111,14 +123,87 @@ export function ClosingReviewsCard({
           </p>
         )}
 
-        <Link
-          to="/closing#reviews"
-          className="mt-auto inline-block text-sm font-medium text-primary underline underline-offset-2"
-        >
-          {feedback?.count ? `All ${feedback.count} reviews` : "Write the first review"}
-        </Link>
+        <div className="mt-auto space-y-1">
+          {feedback?.mine ? (
+            // Says where editing lives, rather than offering a second control
+            // for it here. One row, one place to change it.
+            <p className="text-sm text-muted-foreground">
+              You have reviewed this celebration. Edit or delete it on the closing page.
+            </p>
+          ) : null}
+          {feedback?.count || !canWrite ? (
+            <Link to="/closing#reviews" className="inline-block text-sm font-medium text-primary underline underline-offset-2">
+              {feedback?.count ? `All ${feedback.count} reviews` : "Leave the first review"}
+            </Link>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Leaving a review without going anywhere.
+ *
+ * Only ever shown to somebody who has not written one - there is no edit here
+ * on purpose. Editing and deleting need the whole form, the star breakdown
+ * and a delete button beside them, and that is `/closing`; a second control
+ * for the same row on the screen everybody lands on is how two of them end up
+ * disagreeing.
+ *
+ * It asks for words as well as stars, unlike the full form, because this card
+ * lists only reviews that have text: a rating posted here with nothing said
+ * would vanish into the average and read as if the button had not worked.
+ */
+function ReviewComposer({ onSubmit }: { onSubmit: (input: { rating: number; comment: string }) => Promise<unknown> }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!rating) {
+      setError("Pick a rating between 1 and 5 stars.");
+      return;
+    }
+    if (!comment.trim()) {
+      setError("Say a line or two - that is what shows up here.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      // On success the review becomes `mine` and this whole block unmounts.
+      await onSubmit({ rating, comment: comment.trim() });
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Unable to save your review");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="space-y-2 rounded-lg border bg-muted/30 p-3" onSubmit={handleSubmit}>
+      <Label htmlFor="dashboard-review" className="text-sm font-medium">
+        Been part of it? Say how it went.
+      </Label>
+      <StarRatingInput value={rating} onChange={setRating} disabled={saving} />
+      <textarea
+        id="dashboard-review"
+        value={comment}
+        rows={2}
+        maxLength={1500}
+        disabled={saving}
+        placeholder="What you will remember about it"
+        onChange={(event) => setComment(event.target.value)}
+        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      />
+      {error ? <p className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">{error}</p> : null}
+      <Button type="submit" size="sm" disabled={saving}>
+        {saving ? "Posting..." : "Post review"}
+      </Button>
+    </form>
   );
 }
 
