@@ -778,6 +778,14 @@ draw.
   tile — which means it shows from `sm` up only (tile notes are hidden on phones);
   on a phone the Pending tab's count is the signal. The table is `hidden lg:block`;
   below `lg` the same rows render as cards.
+- **The exact rupee total lives in the ledger card, not the tile.** The Total tile is
+  compact (`₹11.5K`) because a full "₹1,23,456" does not fit a quarter of a phone, and
+  its `valueTitle` only helps somebody with a mouse to hover — which is no help at all
+  on the device most of this gets read on. So a `formatCurrency` line sits between the
+  `TableToolbar` and the rows, summing **`table.rows`**: it follows the status tab, the
+  search and the column filters, and reads "Total spent" when nothing is filtered out
+  and "Total shown" when something is. What a view adds up to is the question somebody
+  reconciling a ledger is actually asking.
 - No new serverless function: GET, and settle/unsettle as `PATCH { action }`, fold
   into `api/expenses.ts`. The count is still 12.
 

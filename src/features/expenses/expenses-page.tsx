@@ -149,6 +149,18 @@ export function ExpensesPage() {
     };
   }, [expenses]);
 
+  /**
+   * The exact rupee total of the rows actually on screen.
+   *
+   * The Total tile is compact (`₹11.5K`) because a full "₹1,23,456" does not
+   * fit a quarter of a phone, and its `valueTitle` only helps somebody with a
+   * mouse to hover. So the precise figure lives here instead, where it also
+   * follows the status tab, the search and the column filters - "what does
+   * this view add up to" is the question somebody reconciling a ledger is
+   * actually asking.
+   */
+  const shownTotal = useMemo(() => table.rows.reduce((sum, row) => sum + row.amount, 0), [table.rows]);
+
   const categories = useMemo(() => {
     const own = Array.from(new Set(expenses.map((row) => row.category.trim()).filter(Boolean))).sort();
     return [...own, ...starterCategories.filter((category) => !own.some((item) => item.toLowerCase() === category.toLowerCase()))];
@@ -311,6 +323,15 @@ export function ExpensesPage() {
           onClearFilters={table.clearFilters}
           sortNote={table.isDefaultSort ? "Newest first" : undefined}
         />
+
+        {isLoading ? null : (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b bg-muted/40 px-4 py-2.5">
+            <span className="text-sm text-muted-foreground">
+              {table.rows.length === expenses.length ? "Total spent" : "Total shown"}
+            </span>
+            <span className="text-base font-semibold tabular-nums">{formatCurrency(shownTotal)}</span>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="space-y-2 p-3" aria-busy="true">
