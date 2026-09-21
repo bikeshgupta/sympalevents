@@ -10,6 +10,8 @@ import { ClosingPage } from "@/features/closing/closing-page";
 import { ContributionsPage } from "@/features/contributions/contributions-page";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
 import { ExpensesPage } from "@/features/expenses/expenses-page";
+import { FixturesPage } from "@/features/fixtures/fixtures-page";
+import { TeamsPage } from "@/features/teams/teams-page";
 import { EventPlanPage } from "@/features/event-plan/event-plan-page";
 import { PrasadPage } from "@/features/prasad/prasad-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
@@ -40,6 +42,8 @@ export function App() {
           <Route path="/volunteers" element={<PlaceholderPage title="Volunteers" />} />
           <Route path="/events" element={<Navigate to="/event-plan" replace />} />
           <Route path="/event-plan" element={<EventPlanPage />} />
+          <Route path="/teams" element={<TeamsPage />} />
+          <Route path="/fixtures" element={<FixturesPage />} />
           <Route path="/contacts" element={<PlaceholderPage title="Contacts" />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

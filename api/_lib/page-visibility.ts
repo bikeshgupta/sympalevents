@@ -28,6 +28,10 @@ export const eventPageKeys = [
   "volunteers",
   "event-plan",
   "contacts",
+  // Sports modules. Off by default for every other kind of event - see
+  // defaultEnabled below and src/data/event-templates.ts.
+  "teams",
+  "fixtures",
   "closing",
 ] as const;
 
@@ -67,6 +71,15 @@ export function isAlwaysOnPage(pageKey: string) {
 }
 
 /** The app's own name for a module, when an event has not renamed it. */
+/**
+ * Modules that are OFF unless an event's template turned them on.
+ *
+ * Every other module defaults to on, which is what keeps every event that
+ * predates 024 behaving exactly as it did. These two arrived after, and a
+ * festival should not grow a fixture list because somebody deployed.
+ */
+const defaultDisabledPages = new Set<string>(["teams", "fixtures"]);
+
 export const defaultPageLabels: Record<string, string> = {
   dashboard: "Dashboard",
   contributions: "Contributions",
@@ -79,6 +92,8 @@ export const defaultPageLabels: Record<string, string> = {
   volunteers: "Volunteers",
   "event-plan": "Events",
   contacts: "Contacts",
+  teams: "Teams",
+  fixtures: "Fixtures",
   closing: "Closing",
 };
 
@@ -166,7 +181,11 @@ export async function fetchEventModules(eventId: string): Promise<Record<string,
           // A module with no row at all is on: that is how every event that
           // predates 024 behaves, and how an event created by a code path
           // that does not seed behaves.
-          isEnabled: isAlwaysOnPage(pageKey) ? true : row?.is_enabled !== false,
+          isEnabled: isAlwaysOnPage(pageKey)
+            ? true
+            : row?.is_enabled !== undefined && row?.is_enabled !== null
+              ? row.is_enabled !== false
+              : !defaultDisabledPages.has(pageKey),
           label: labelOverride ?? defaultPageLabels[pageKey] ?? pageKey,
           labelOverride,
         } satisfies EventModule,

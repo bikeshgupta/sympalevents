@@ -1,3 +1,4 @@
+import { handleSports } from "./_lib/fixtures.js";
 import { handlePrasad } from "./_lib/prasad.js";
 import { fetchSchedule, isMissingSubEventsColumn } from "./_lib/schedule.js";
 import {
@@ -98,8 +99,17 @@ function assertAgendaStorable(payload: ReturnType<typeof schedulePayload>) {
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
-    if (String(req.query?.resource ?? "") === "prasad") {
+    const resource = String(req.query?.resource ?? "");
+
+    if (resource === "prasad") {
       await handlePrasad(req, res);
+      return;
+    }
+
+    // A fixture is a scheduled thing, and there is no room for a thirteenth
+    // function under api/ - see api/_lib/fixtures.ts.
+    if (resource === "teams" || resource === "fixtures") {
+      await handleSports(req, res);
       return;
     }
 
