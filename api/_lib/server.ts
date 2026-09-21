@@ -126,6 +126,24 @@ export async function requireAppUser(req: any) {
   };
 }
 
+/**
+ * The caller when there is one, and null when there is not - for a route that
+ * serves a page an admin may have opened to anyone. A token that is present
+ * but unreadable is treated as absent rather than as an error, so an expired
+ * session degrades a public page to its signed-out view instead of breaking it.
+ */
+export async function optionalAppUser(req: { headers?: { authorization?: string } }) {
+  const authHeader = String(req.headers?.authorization ?? "");
+  if (!authHeader.startsWith("Bearer ")) return null;
+  try {
+    const { appUser } = await requireAppUser(req);
+    return appUser;
+  } catch (error) {
+    console.warn("Ignoring an unreadable token on a public read:", error);
+    return null;
+  }
+}
+
 export async function requireEventAdmin(eventId: string, userId: string) {
   const supabase = assertServiceSupabase();
   const { data, error } = await supabase

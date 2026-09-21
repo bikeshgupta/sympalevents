@@ -11,7 +11,7 @@ import {
 } from "@/data/demo";
 import { apiFetch } from "@/lib/api";
 import { useEventContext } from "@/lib/event-context";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { isSupabaseConfigured } from "@/lib/supabase";
 
 export type DataSource = "supabase" | "demo";
 
@@ -116,20 +116,6 @@ export type EventPlanRow = {
   notes: string;
 };
 
-type EventScheduleRecord = {
-  id?: string;
-  day?: string | null;
-  activity_date?: string | null;
-  activity?: string | null;
-  sub_events?: string | null;
-  start_time?: string | null;
-  end_time?: string | null;
-  location?: string | null;
-  expected_attendance?: number | string | null;
-  owner_name?: string | null;
-  status?: string | null;
-  notes?: string | null;
-};
 
 type EventData = {
   source: DataSource;
@@ -164,18 +150,19 @@ function eventDataWithTaskPolicy(data: EventData, includeTasks: boolean): EventD
   return includeTasks ? data : { ...data, tasks: [] };
 }
 
+/**
+ * The event a write should land on when the calling page has no selection in
+ * hand. It asks the server for the events this person is actually a member of
+ * - it used to be `select id from events order by start_date limit 1` against
+ * the browser client, which on a shared deployment is "the earliest event in
+ * the entire database", belonging to whichever society signed up first.
+ */
 export async function getFirstEventId() {
-  if (!supabase) throw new Error("Supabase is not configured");
-
-  const { data, error } = await supabase
-    .from("events")
-    .select("id")
-    .order("start_date", { ascending: true })
-    .limit(1)
-    .single();
-
-  if (error) throw error;
-  return data.id as string;
+  const { events } = await apiFetch<{ events: { id: string }[] }>("/api/events?resource=mine");
+  if (!events.length) {
+    throw new Error("You are not a member of any event yet. Ask an admin to add you, or create one in Settings.");
+  }
+  return events[0].id;
 }
 
 function dateRange(startDate: string, endDate: string) {
@@ -191,35 +178,41 @@ function dateRange(startDate: string, endDate: string) {
   return `${formatter.format(start)} - ${formatter.format(end)}`;
 }
 
-async function fetchEventSchedule(eventId: string) {
-  if (!supabase) return { data: [], error: null };
+/** What `GET /api/events?resource=data` returns. The server does the reading,
+ *  the joining and the per-page privacy; this shape is already display-ready
+ *  apart from the two locale-dependent bits added below. */
+type EventDataResponse = {
+  event: {
+    id: string;
+    name: string;
+    location: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+  };
+  financials: EventData["financials"];
+  contributions: ContributionRow[];
+  sponsors: SponsorRow[];
+  budgets: BudgetRow[];
+  tasks: TaskRow[];
+  expenses: ExpenseRow[];
+  eventPlan: EventPlanRow[];
+};
 
-  try {
-    const { schedule } = await apiFetch<{ schedule: EventScheduleRecord[] }>(
-      `/api/event-schedule?eventId=${encodeURIComponent(eventId)}`,
-      { requireAuth: false },
-    );
-    return { data: schedule, error: null };
-  } catch (error) {
-    console.warn("Falling back to browser Supabase schedule read:", error);
-  }
-
-  const scheduleColumns =
-    "id,day,activity_date,activity,sub_events,start_time,end_time,location,expected_attendance,owner_name,status,notes";
-  const scheduleColumnsWithoutSubEvents =
-    "id,day,activity_date,activity,start_time,end_time,location,expected_attendance,owner_name,status,notes";
-
-  const result = await supabase.from("event_schedule").select(scheduleColumns).eq("event_id", eventId);
-
-  if (!result.error || !["42703", "PGRST204"].includes(result.error.code ?? "")) {
-    return result as { data: EventScheduleRecord[] | null; error: typeof result.error };
-  }
-
-  console.warn("event_schedule.sub_events is missing. Run migration 007_event_schedule_sub_events.sql to enable sub-events.");
-  const retryResult = await supabase.from("event_schedule").select(scheduleColumnsWithoutSubEvents).eq("event_id", eventId);
-  return retryResult as { data: EventScheduleRecord[] | null; error: typeof retryResult.error };
-}
-
+/**
+ * The single read path for screen data.
+ *
+ * It goes through `/api/events?resource=data` rather than the browser's
+ * Supabase client. That is not a refactor for tidiness: every RLS policy here
+ * is written against `auth.uid()`, which never resolves for a Firebase
+ * session, so the browser could only ever read through a policy that ignored
+ * who was asking - and the one it read through ignored which *event* was being
+ * asked about too. See api/_lib/event-data.ts.
+ *
+ * `requireAuth: false` because a public dashboard must still load for somebody
+ * with no account; the token is attached when there is one, and the server
+ * decides what comes back.
+ */
 export function useEventData(options: UseEventDataOptions = {}) {
   const { selectedEventId } = useEventContext();
   const includeTasks = options.includeTasks ?? true;
@@ -228,215 +221,55 @@ export function useEventData(options: UseEventDataOptions = {}) {
     queryKey: ["event-data", selectedEventId, { includeTasks }],
     initialData: eventDataWithTaskPolicy(demoData, includeTasks),
     queryFn: async (): Promise<EventData> => {
-      if (!isSupabaseConfigured || !supabase) {
+      if (!isSupabaseConfigured) {
         return {
           ...eventDataWithTaskPolicy(demoData, includeTasks),
           fallbackReason: "Supabase browser config is missing",
         };
       }
 
-      let eventQuery = supabase
-        .from("events")
-        .select("id,name,start_date,end_date,location")
-        .order("start_date", { ascending: true });
-
-      if (selectedEventId) {
-        eventQuery = eventQuery.eq("id", selectedEventId);
+      if (!selectedEventId) {
+        return {
+          ...eventDataWithTaskPolicy(demoData, includeTasks),
+          fallbackReason: "No event selected",
+        };
       }
 
-      const { data: events, error: eventError } = await eventQuery.limit(1);
+      try {
+        const payload = await apiFetch<EventDataResponse>(
+          `/api/events?resource=data&eventId=${encodeURIComponent(selectedEventId)}&includeTasks=${includeTasks}`,
+          { requireAuth: false },
+        );
 
-      if (eventError || !events?.length) {
-        const fallbackReason = eventError?.message ?? "No events found in Supabase";
+        return {
+          source: "supabase",
+          event: {
+            id: payload.event.id,
+            name: payload.event.name,
+            dates: dateRange(payload.event.startDate, payload.event.endDate),
+            location: payload.event.location,
+            startDate: payload.event.startDate,
+            endDate: payload.event.endDate,
+            timezone: "Asia/Kolkata",
+            heroImageUrl: null,
+            status: payload.event.status,
+          },
+          financials: payload.financials,
+          contributions: payload.contributions,
+          sponsors: payload.sponsors,
+          budgets: payload.budgets,
+          tasks: includeTasks ? payload.tasks : [],
+          expenses: payload.expenses,
+          eventPlan: payload.eventPlan,
+        };
+      } catch (error) {
+        const fallbackReason = error instanceof Error ? error.message : "Could not load this event";
         console.warn("Falling back to demo data:", fallbackReason);
         return {
           ...eventDataWithTaskPolicy(demoData, includeTasks),
           fallbackReason,
         };
       }
-
-      const eventRecord = events[0];
-      const eventId = eventRecord.id;
-
-      const [
-        residentsResult,
-        contributionsResult,
-        sponsorsResult,
-        budgetsResult,
-        expensesResult,
-        tasksResult,
-        scheduleResult,
-      ] =
-        await Promise.all([
-          supabase.from("residents").select("id,flat_no,resident_name,resident_type").eq("event_id", eventId),
-          supabase
-            .from("contributions")
-            .select("id,expected_amount,received_amount,received_date,payment_mode,status,resident_id,reference,created_at")
-            .eq("event_id", eventId),
-          supabase
-            .from("sponsors")
-            .select("id,sponsor_name,flat_no,contact,category,item_slot,committed_amount,received_amount,status,is_in_kind,payment_date,created_at")
-            .eq("event_id", eventId),
-          supabase
-            .from("budgets")
-            .select("id,category,item,estimated_qty,unit,unit_cost,actual_cost,funding_type,status")
-            .eq("event_id", eventId),
-          supabase
-            .from("expenses")
-            .select("id,expense_date,category,item,amount,paid_by,payment_mode,expense_type,sponsored,approved_by,notes")
-            .eq("event_id", eventId),
-          includeTasks
-            ? supabase.from("tasks").select("id,task,owner_name,priority,due_date,status").eq("event_id", eventId)
-            : Promise.resolve({ data: [], error: null }),
-          fetchEventSchedule(eventId),
-        ]);
-
-      const queryError =
-        residentsResult.error ??
-        contributionsResult.error ??
-        sponsorsResult.error ??
-        budgetsResult.error ??
-        expensesResult.error ??
-        tasksResult.error ??
-        scheduleResult.error;
-
-      if (queryError) {
-        console.warn("Falling back to demo data:", queryError.message);
-        return {
-          ...eventDataWithTaskPolicy(demoData, includeTasks),
-          fallbackReason: queryError.message,
-        };
-      }
-
-      const residentsById = new Map(
-        (residentsResult.data ?? []).map((resident) => [
-          resident.id,
-          {
-            flat: resident.flat_no ?? "-",
-            name: resident.resident_name ?? "-",
-            type: resident.resident_type ?? "-",
-          },
-        ]),
-      );
-
-      const contributions = (contributionsResult.data ?? []).map((row) => {
-        const resident = residentsById.get(row.resident_id ?? "");
-        return {
-          id: row.id,
-          residentId: row.resident_id ?? undefined,
-          flat: resident?.flat ?? "-",
-          name: resident?.name ?? "-",
-          type: resident?.type ?? "-",
-          expected: Number(row.expected_amount ?? 0),
-          received: Number(row.received_amount ?? 0),
-          paymentDate: row.received_date ?? "-",
-          status: row.status ?? "Pending",
-          mode: row.payment_mode ?? "-",
-          reference: row.reference ?? "",
-          createdAt: row.created_at ?? "",
-        };
-      });
-
-      const sponsors = (sponsorsResult.data ?? []).map((row) => ({
-        id: row.id,
-        name: row.sponsor_name ?? "-",
-        flat: row.flat_no ?? "",
-        contact: row.contact ?? "",
-        category: row.category ?? "-",
-        item: row.item_slot ?? "",
-        committed: Number(row.committed_amount ?? 0),
-        received: Number(row.received_amount ?? 0),
-        status: row.status ?? "Pending",
-        inKind: Boolean(row.is_in_kind),
-        paymentDate: row.payment_date ?? "",
-        createdAt: row.created_at ?? "",
-      }));
-
-      const budgets = (budgetsResult.data ?? []).map((row) => ({
-        id: row.id,
-        category: row.category ?? "-",
-        item: row.item ?? "-",
-        qty: Number(row.estimated_qty ?? 0),
-        unit: row.unit ?? "",
-        unitCost: Number(row.unit_cost ?? 0),
-        actual: Number(row.actual_cost ?? 0),
-        fundingType: row.funding_type ?? "",
-        status: row.status ?? "Planned",
-      }));
-
-      const tasks = (tasksResult.data ?? []).map((row) => ({
-        id: row.id,
-        task: row.task ?? "-",
-        owner: row.owner_name ?? "-",
-        priority: row.priority ?? "Medium",
-        due: row.due_date ?? "-",
-        status: row.status ?? "Not Started",
-      }));
-
-      const expenses = (expensesResult.data ?? []).map((row) => ({
-        id: row.id,
-        date: row.expense_date ?? "-",
-        category: row.category ?? "-",
-        item: row.item ?? "-",
-        amount: Number(row.amount ?? 0),
-        paidBy: row.paid_by ?? "",
-        mode: row.payment_mode ?? "",
-        type: row.expense_type ?? "",
-        sponsored: Boolean(row.sponsored),
-        approvedBy: row.approved_by ?? "",
-        notes: row.notes ?? "",
-      }));
-
-      const eventPlan = (scheduleResult.data ?? []).map((row) => ({
-        id: row.id,
-        day: row.day ?? "",
-        date: row.activity_date ?? "-",
-        activity: row.activity ?? "-",
-        subEvents: row.sub_events ?? "",
-        startTime: row.start_time ?? "",
-        endTime: row.end_time ?? "",
-        location: row.location ?? "",
-        attendance: Number(row.expected_attendance ?? 0),
-        owner: row.owner_name ?? "",
-        status: row.status ?? "Planned",
-        notes: row.notes ?? "",
-      }));
-
-      const totalBudget = budgets.reduce((sum, row) => sum + row.qty * row.unitCost, 0);
-      const actualExpenses = (expensesResult.data ?? []).reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
-      const contributionExpected = contributions.reduce((sum, row) => sum + row.expected, 0);
-      const contributionReceived = contributions.reduce((sum, row) => sum + row.received, 0);
-      const sponsorshipCommitted = sponsors.reduce((sum, row) => sum + row.committed, 0);
-      const sponsorshipReceived = sponsors.reduce((sum, row) => sum + row.received, 0);
-
-      return {
-        source: "supabase",
-        event: {
-          id: eventRecord.id,
-          name: eventRecord.name,
-          dates: dateRange(eventRecord.start_date, eventRecord.end_date),
-          location: eventRecord.location ?? "",
-          startDate: eventRecord.start_date,
-          endDate: eventRecord.end_date,
-          timezone: "Asia/Kolkata",
-          heroImageUrl: null,
-          status: "planning",
-        },
-        financials: {
-          totalBudget,
-          actualExpenses,
-          contributionExpected,
-          contributionReceived,
-          sponsorshipCommitted,
-          sponsorshipReceived,
-        },
-        contributions,
-        sponsors,
-        budgets,
-        tasks,
-        expenses,
-        eventPlan,
-      };
     },
   });
 }

@@ -1,4 +1,5 @@
 import { handleEventClosing } from "./_lib/closing.js";
+import { handleEventData } from "./_lib/event-data.js";
 import {
   assertServiceSupabase,
   getRequestBody,
@@ -8,15 +9,24 @@ import {
 } from "./_lib/server.js";
 
 /**
- * Event creation, plus the closing page's three resources dispatched by
- * `?resource=` (see api/_lib/closing.ts for why they live here rather than
- * in files of their own). A request with no `resource` is the original
- * create-an-event POST and behaves exactly as it always has.
+ * Event creation, plus the closing page's three resources and the composite
+ * event read, all dispatched by `?resource=` (see api/_lib/closing.ts and
+ * api/_lib/event-data.ts for why they live here rather than in files of their
+ * own - this project is at the Vercel function cap). A request with no
+ * `resource` is the original create-an-event POST.
  */
 export default async function handler(req: any, res: any) {
   const resource = String(req.query?.resource ?? "");
   if (resource === "closing" || resource === "gallery" || resource === "feedback") {
     return handleEventClosing(req, res);
+  }
+
+  if (resource === "data" || resource === "mine") {
+    try {
+      return await handleEventData(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
   }
 
   try {
