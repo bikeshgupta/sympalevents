@@ -1102,6 +1102,53 @@ Once `is_closed` is on, three things beyond the section reorder (see above):
   box says that rather than the form refusing to submit; requiring words was tried
   first and rejected.
 
+## Collection timeline (Contributions)
+
+The chart on `/contributions`, above the toolbar: resident contributions and
+sponsorships **stacked onto one running total**, day by day, against the event's
+budget - and a date picker that answers "where did we stand on that day, and how
+far short of the budget was that?".
+
+- **`collection-timeline-data.ts` is deliberately free of `recharts`.**
+  `buildCollectionSeries()` and `collectionStateOn()` are plain functions, so the
+  page renders its selected-day figures, its empty state and its undated-money
+  note while the chart chunk is still loading.
+  `collection-timeline-chart.tsx` is the only thing that imports `recharts`, and
+  it is `React.lazy`-loaded from `contributions-page.tsx` - a static import there
+  would drag ~385KB into the **main** bundle, since every route in `app.tsx` is
+  statically imported. Build output must keep showing a separate `AreaChart-*.js`
+  chunk.
+- **One point per day money actually arrived, on a numeric time axis.** Not one
+  point per calendar day: a mistyped year would otherwise generate thousands of
+  points. `XAxis type="number" scale="time"` keeps the gap between two collection
+  days drawn to scale, which a categorical axis would flatten. The tick formatter
+  reads the day back with `getDateInEventZone` - `toISOString().slice(0, 10)` on
+  an IST-midnight timestamp hands anyone west of India the previous day.
+- **Sponsors needed a date, so `useEventData` now selects two more columns**
+  (`sponsors.payment_date`, `sponsors.created_at` -> `SponsorRow.paymentDate` /
+  `createdAt`). **No migration** - both columns have existed since 001. The
+  sponsors form has never asked for a payment date, so on a live event it is
+  blank and the timeline falls back to the day the sponsorship was *recorded*.
+  If that matters, the fix is a Payment Date field on the sponsors form, not a
+  schema change.
+- **Money with no usable date is named, not dropped.** A contribution whose
+  `paymentDate` is `"-"` is in the page's Received tile but on no point, so the
+  card prints "Rs X across N records carries no date". A chart that quietly ends
+  below the tile above it reads as a bug.
+- **The budget reference line hides itself below 25% funded** - an unfunded
+  budget many times the collection flattens the series onto the floor. The
+  "still to raise" sentence under the figures carries the number either way, so
+  nothing is lost.
+- `--chart-contributions` / `--chart-sponsors` in
+  [globals.css](src/styles/globals.css) (and `chart.*` in `tailwind.config.ts`)
+  are the two series. They exist because a stacked chart needs two hues told
+  apart by hue *and* lightness and the palette had no second one - `--accent` is
+  a pale wash, `--secondary` is near-background. They are the app icon's own
+  teal-and-gold pairing. Nothing else uses them; do not repurpose them as a
+  general accent.
+- Only aggregate money is on this card - no name, flat, contact or reference -
+  so it is safe on a Contributions page an admin has set public.
+
 ## Notices (print / PDF)
 
 A committee prints things: the programme for the notice board, the prasad roster,

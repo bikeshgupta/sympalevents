@@ -68,6 +68,8 @@ export const sponsorRows = [
     received: 15000,
     status: "Received",
     inKind: false,
+    paymentDate: "2026-09-10",
+    createdAt: "2026-09-05T10:00:00Z",
   },
   {
     name: "WindChimes Cultural Group",
@@ -79,6 +81,8 @@ export const sponsorRows = [
     received: 5100,
     status: "Received",
     inKind: true,
+    paymentDate: "2026-09-15",
+    createdAt: "2026-09-08T10:00:00Z",
   },
   {
     name: "Rao Family",
@@ -90,6 +94,8 @@ export const sponsorRows = [
     received: 0,
     status: "Confirmed",
     inKind: false,
+    paymentDate: "",
+    createdAt: "2026-09-09T10:00:00Z",
   },
 ];
 

@@ -24,6 +24,17 @@
     --input: 42 20% 84%;
     --ring: 182 53% 24%;
     --radius: 0.5rem;
+
+    /*
+     * The two money series on the Contributions collection timeline. A
+     * stacked chart needs two hues that are told apart by hue *and*
+     * lightness, and nothing in the palette above offered a second one:
+     * `--accent` is a pale wash and `--secondary` is near-background. These
+     * are the app icon's own pairing - the brand teal and the warm gold of
+     * the six figures - so the chart still reads as this app.
+     */
+    --chart-contributions: 182 53% 24%;
+    --chart-sponsors: 38 74% 42%;
   }
 
   * {
