@@ -1,4 +1,5 @@
 import { resolvePageAccess } from "./page-visibility.js";
+import { fetchMySocieties } from "./societies.js";
 import { fetchSchedule } from "./schedule.js";
 import { assertServiceSupabase, optionalAppUser, sendJson } from "./server.js";
 
@@ -42,48 +43,84 @@ function queryValue(req: ApiRequest, key: string) {
 }
 
 /**
- * Every event this caller has a role on, newest first. Replaces the browser's
- * unfiltered `select * from events`, which listed every society's events and
- * auto-selected the earliest one in the whole database.
+ * Every event this caller can reach, newest first, each tagged with the
+ * society it belongs to.
  *
- * A signed-out visitor gets an empty list, not an error: they reach a public
- * event by its link (`?eventId=`), not by browsing.
+ * Two ways in, and they mean different things:
+ *   - a role on the event itself (`event_members`) - that is authority;
+ *   - membership of the event's society (`organization_members`) - that is
+ *     only discovery, and carries no role. What such a person may open is
+ *     still decided page by page by the admin's visibility settings.
+ *
+ * This replaces the browser's unfiltered `select * from events`, which listed
+ * every society's events and auto-selected the earliest one in the database.
+ * A signed-out visitor gets an empty list rather than an error: they reach a
+ * public event by its link (`?eventId=`), not by browsing.
  */
 async function handleMine(req: ApiRequest, res: ApiResponse) {
   const supabase = assertServiceSupabase();
   const viewer = await optionalAppUser(req);
 
   if (!viewer) {
-    sendJson(res, 200, { events: [] });
+    sendJson(res, 200, { events: [], societies: [] });
     return;
   }
 
-  const { data: memberships, error: membershipError } = await supabase
-    .from("event_members")
-    .select("event_id,role")
-    .eq("user_id", viewer.id);
+  const [{ data: memberships, error: membershipError }, societies] = await Promise.all([
+    supabase.from("event_members").select("event_id,role").eq("user_id", viewer.id),
+    fetchMySocieties(supabase, viewer.id),
+  ]);
 
   if (membershipError) throw membershipError;
 
-  const eventIds = (memberships ?? []).map((row) => row.event_id);
-  if (!eventIds.length) {
-    sendJson(res, 200, { events: [] });
-    return;
+  const roleByEvent = new Map((memberships ?? []).map((row) => [row.event_id as string, row.role as string]));
+  const societyList = societies ?? [];
+  const societyIds = societyList.map((society) => society.id);
+  const societyById = new Map(societyList.map((society) => [society.id, society]));
+
+  // Either filter alone is a valid way to reach an event, so they are two
+  // queries rather than one `or(...)` - PostgREST's `or` across a join and a
+  // column is exactly the kind of filter that quietly stops matching.
+  const [byMembership, bySociety] = await Promise.all([
+    roleByEvent.size
+      ? supabase
+          .from("events")
+          .select("id,name,start_date,end_date,location,organization_id")
+          .in("id", [...roleByEvent.keys()])
+      : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+    societyIds.length
+      ? supabase
+          .from("events")
+          .select("id,name,start_date,end_date,location,organization_id")
+          .in("organization_id", societyIds)
+      : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+  ]);
+
+  if (byMembership.error) throw byMembership.error;
+  if (bySociety.error) throw bySociety.error;
+
+  const merged = new Map<string, Record<string, unknown>>();
+  for (const row of [...(byMembership.data ?? []), ...(bySociety.data ?? [])]) {
+    merged.set(String(row.id), row);
   }
 
-  const roleByEvent = new Map((memberships ?? []).map((row) => [row.event_id, row.role]));
+  const events = [...merged.values()]
+    .map((row) => {
+      const society = societyById.get(String(row.organization_id ?? ""));
+      return {
+        id: row.id as string,
+        name: (row.name as string) ?? "",
+        start_date: row.start_date as string,
+        end_date: row.end_date as string,
+        location: (row.location as string) ?? null,
+        role: roleByEvent.get(String(row.id)) ?? null,
+        societyId: (row.organization_id as string) ?? null,
+        societyName: society?.name ?? null,
+      };
+    })
+    .sort((left, right) => String(right.start_date).localeCompare(String(left.start_date)));
 
-  const { data, error } = await supabase
-    .from("events")
-    .select("id,name,start_date,end_date,location")
-    .in("id", eventIds)
-    .order("start_date", { ascending: false });
-
-  if (error) throw error;
-
-  sendJson(res, 200, {
-    events: (data ?? []).map((event) => ({ ...event, role: roleByEvent.get(event.id) ?? null })),
-  });
+  sendJson(res, 200, { events, societies: societyList });
 }
 
 /**

@@ -1,8 +1,9 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronsUpDown, LogOut, UserPen } from "lucide-react";
+import { LogOut, UserPen } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
+import { EventSwitcher } from "@/components/layout/event-switcher";
 import { NavDrawer } from "@/components/layout/nav-drawer";
 import { ProfileNameDialog } from "@/components/layout/profile-name-dialog";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ export function AppLayout() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
-  const { events, selectedEventId, setSelectedEventId, isLoading: isEventLoading } = useEventContext();
+  const { selectedEvent, selectedEventId, isLoading: isEventLoading } = useEventContext();
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
 
@@ -91,27 +92,16 @@ export function AppLayout() {
       <div className="lg:pl-64">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur lg:px-6">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {events.length > 1 ? (
-                <select
-                  className="max-w-48 rounded-md border bg-background px-2 py-1 text-sm font-semibold outline-none"
-                  value={selectedEventId}
-                  onChange={(item) => setSelectedEventId(item.target.value)}
-                >
-                  {events.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <h1 className="truncate text-sm font-semibold lg:text-base">{event?.name ?? "SymPal Events"}</h1>
-              )}
-              <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <p className="truncate text-xs text-muted-foreground">
-              {event ? `${event.dates} · ${event.location}` : "Loading event"}
-            </p>
+            <EventSwitcher
+              eventName={event?.name ?? "SymPal Events"}
+              eventSubtitle={
+                selectedEvent?.societyName
+                  ? `${selectedEvent.societyName} · ${event?.dates ?? ""}`
+                  : event
+                    ? `${event.dates} · ${event.location}`
+                    : "Loading event"
+              }
+            />
           </div>
           <AnnouncementsBell event={event} />
           {canRequestCommitteeAccess ? (

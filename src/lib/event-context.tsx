@@ -11,11 +11,25 @@ export type EventOption = {
   location: string | null;
   /** This person's role on that event, so the switcher can label it. */
   role?: "admin" | "committee" | "read_only" | null;
+  societyId?: string | null;
+  societyName?: string | null;
+};
+
+export type SocietyOption = {
+  id: string;
+  name: string;
+  city: string;
+  logoUrl: string | null;
+  role: "admin" | "committee" | "read_only";
+  /** Admins only - it is a join credential, so the server withholds it. */
+  inviteCode: string | null;
 };
 
 type EventContextValue = {
   events: EventOption[];
+  societies: SocietyOption[];
   selectedEventId?: string;
+  selectedEvent?: EventOption;
   setSelectedEventId: (eventId: string) => void;
   isLoading: boolean;
 };
@@ -72,16 +86,18 @@ export function EventProvider({ children }: { children: ReactNode }) {
    * society's events, and the effect below then auto-selected the earliest of
    * them, which is to say a stranger's.
    */
-  const { data: events = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["my-events", session?.user.appUserId ?? "guest"],
     enabled: !isSessionLoading,
-    queryFn: async () => {
-      const { events: mine } = await apiFetch<{ events: EventOption[] }>("/api/events?resource=mine", {
+    initialData: { events: [], societies: [] } as { events: EventOption[]; societies: SocietyOption[] },
+    queryFn: () =>
+      apiFetch<{ events: EventOption[]; societies: SocietyOption[] }>("/api/events?resource=mine", {
         requireAuth: false,
-      });
-      return mine;
-    },
+      }),
   });
+
+  const events = data.events;
+  const societies = data.societies;
 
   useEffect(() => {
     if (!events.length) return;
@@ -96,14 +112,16 @@ export function EventProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       events,
+      societies,
       selectedEventId,
+      selectedEvent: events.find((event) => event.id === selectedEventId),
       setSelectedEventId: (eventId: string) => {
         setSelectedEventIdState(eventId);
         rememberEventId(eventId);
       },
       isLoading: isLoading || isSessionLoading,
     }),
-    [events, selectedEventId, isLoading, isSessionLoading],
+    [events, societies, selectedEventId, isLoading, isSessionLoading],
   );
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
