@@ -54,6 +54,16 @@ export type SponsorRow = {
   received: number;
   status: string;
   inKind: boolean;
+  /**
+   * When the sponsorship money came in. The column has always existed but the
+   * sponsors form never asked for it, so on a live event this is usually blank
+   * - which is why `createdAt` is read alongside it as a fallback. Both are
+   * here for the Contributions collection timeline; nothing renders them as a
+   * column.
+   */
+  paymentDate: string;
+  /** Row creation timestamp - the timeline's fallback date for a sponsor. */
+  createdAt: string;
 };
 
 export type BudgetRow = {
@@ -265,7 +275,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
             .eq("event_id", eventId),
           supabase
             .from("sponsors")
-            .select("id,sponsor_name,flat_no,contact,category,item_slot,committed_amount,received_amount,status,is_in_kind")
+            .select("id,sponsor_name,flat_no,contact,category,item_slot,committed_amount,received_amount,status,is_in_kind,payment_date,created_at")
             .eq("event_id", eventId),
           supabase
             .from("budgets")
@@ -338,6 +348,8 @@ export function useEventData(options: UseEventDataOptions = {}) {
         received: Number(row.received_amount ?? 0),
         status: row.status ?? "Pending",
         inKind: Boolean(row.is_in_kind),
+        paymentDate: row.payment_date ?? "",
+        createdAt: row.created_at ?? "",
       }));
 
       const budgets = (budgetsResult.data ?? []).map((row) => ({

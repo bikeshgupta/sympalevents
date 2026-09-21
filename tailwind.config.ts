@@ -31,6 +31,12 @@ export default {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        // The Contributions collection timeline's two series. See the note
+        // next to these variables in globals.css.
+        chart: {
+          collected: "hsl(var(--chart-collected))",
+          budget: "hsl(var(--chart-budget))",
+        },
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",

@@ -1,17 +1,22 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CirclePlus, Download, HandCoins, Home, Wallet } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { CirclePlus, Download, HandCoins, Home, TrendingUp, Wallet } from "lucide-react";
+import { FormEvent, lazy, Suspense, useMemo, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { FormField } from "@/components/shared/form-field";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ContributionRow, getFirstEventId, useEventData } from "@/lib/event-data";
+import { ContributionRow, SponsorRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
 import { supabase } from "@/lib/supabase";
-import { formatCurrencyCompact } from "@/features/dashboard/dashboard-utils";
+import {
+  buildCollectionSeries,
+  collectionStateOn,
+  type CollectionDayState,
+} from "@/features/contributions/collection-timeline-data";
+import { formatCurrencyCompact, formatEventWeekday } from "@/features/dashboard/dashboard-utils";
 import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
@@ -23,6 +28,18 @@ import {
   TableToolbar,
   useFilteredSortedRows,
 } from "@/features/shared/table-tools";
+
+/**
+ * `recharts` is ~385KB and this is the only thing on Contributions that wants
+ * it, so it stays behind its own chunk - the same boundary the auction details
+ * panel keeps. A static import here would drag it into the main bundle for
+ * every visitor on every screen.
+ */
+const CollectionTimelineChart = lazy(() =>
+  import("@/features/contributions/collection-timeline-chart").then((mod) => ({
+    default: mod.CollectionTimelineChart,
+  })),
+);
 
 function todayDateInputValue() {
   return new Date().toISOString().slice(0, 10);
@@ -38,7 +55,15 @@ function formatPaymentDate(value: string) {
   if (!value || value === "-") return "—";
   const parsed = new Date(`${value}T00:00:00+05:30`);
   if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(parsed);
+  // Parsed at midnight IST, so it has to be read back in IST too - without the
+  // timeZone the browser's own zone reformats it and anyone west of India sees
+  // the previous day, which the collection timeline above would then contradict.
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
 }
 
 function rowKey(row: ContributionRow, index: number) {
@@ -244,6 +269,13 @@ export function ContributionsPage() {
         />
       </StatGrid>
 
+      <CollectionTimeline
+        contributions={contributionRows}
+        sponsors={data.sponsors}
+        totalBudget={data.financials.totalBudget}
+        isLoading={isFetching}
+      />
+
       <PageTools
         inline
         searchValue={contributionTable.search}
@@ -372,6 +404,202 @@ export function ContributionsPage() {
           ) : null}
         </table>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * How the collection grew, and where it stood on any one day.
+ *
+ * Contributions and sponsorships stack onto a single running total, against
+ * the event's budget, because "have we raised enough" is one question and not
+ * two. Picking a date answers the committee's other question - what came in
+ * that day, what we had by then, and how far short of the budget that left us.
+ *
+ * The chart itself is lazy: it is the only thing on this page that needs
+ * `recharts`, and everything around it (the day's figures, the empty state)
+ * renders from `buildCollectionSeries` while that chunk loads.
+ */
+function CollectionTimeline({
+  contributions,
+  sponsors,
+  totalBudget,
+  isLoading,
+}: {
+  contributions: ContributionRow[];
+  sponsors: SponsorRow[];
+  totalBudget: number;
+  isLoading: boolean;
+}) {
+  const series = useMemo(() => buildCollectionSeries(contributions, sponsors), [contributions, sponsors]);
+  const points = series.points;
+  const latestDate = points.length ? points[points.length - 1].date : "";
+  // Null means "follow the latest collection day", so the panel keeps up as
+  // money comes in instead of pinning itself to whatever was latest on mount.
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const selectedDate = pickedDate ?? latestDate;
+  const state = useMemo(
+    () => (points.length ? collectionStateOn(points, selectedDate, totalBudget) : null),
+    [points, selectedDate, totalBudget],
+  );
+
+  return (
+    <Card>
+      <CardHeader className="gap-1 p-4 pb-2 sm:p-5 sm:pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" aria-hidden="true" />
+            Collection Timeline
+          </CardTitle>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-chart-collected" aria-hidden="true" />
+              Collected
+            </span>
+            {totalBudget > 0 ? (
+              <span className="flex items-center gap-1.5">
+                {/* Dashed, matching the line it labels. */}
+                <span
+                  className="h-0.5 w-4 rounded-sm bg-chart-budget"
+                  style={{
+                    background:
+                      "repeating-linear-gradient(90deg, hsl(var(--chart-budget)) 0 5px, transparent 5px 9px)",
+                  }}
+                  aria-hidden="true"
+                />
+                Budget
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground sm:text-sm">
+          Contributions and sponsorships added up day by day, against the budget. Pick a date to see where
+          the collection stood.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3 p-4 pt-0 sm:p-5 sm:pt-0">
+        {isLoading && !points.length ? (
+          <div className="h-48 animate-pulse rounded-md bg-muted sm:h-64" aria-hidden="true" />
+        ) : !points.length ? (
+          <div className="rounded-md bg-muted p-6 text-center">
+            <p className="text-sm font-medium">Nothing collected yet.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The timeline draws itself once a contribution or a sponsorship is recorded with a date.
+            </p>
+          </div>
+        ) : (
+          <>
+            <Suspense fallback={<div className="h-48 animate-pulse rounded-md bg-muted sm:h-64" aria-hidden="true" />}>
+              <CollectionTimelineChart
+                points={points}
+                totalBudget={totalBudget}
+                selectedDate={selectedDate}
+                onSelectDate={setPickedDate}
+              />
+            </Suspense>
+
+            <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="collection-date">
+                  State on
+                </label>
+                <input
+                  id="collection-date"
+                  type="date"
+                  className="h-10 rounded-md border bg-background px-3 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={selectedDate}
+                  min={points[0].date}
+                  max={latestDate}
+                  onChange={(event) => setPickedDate(event.target.value || null)}
+                />
+              </div>
+              {pickedDate && pickedDate !== latestDate ? (
+                <Button variant="outline" onClick={() => setPickedDate(null)}>
+                  Latest
+                </Button>
+              ) : null}
+              <p className="hidden flex-1 text-right text-xs text-muted-foreground sm:block">
+                Tapping the chart picks a day too.
+              </p>
+            </div>
+
+            {state ? <CollectionDayFigures state={state} totalBudget={totalBudget} /> : null}
+
+            {series.undated > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {formatCurrency(series.undated)} across {series.undatedRows}{" "}
+                {series.undatedRows === 1 ? "record" : "records"} carries no date, so it is in the page totals
+                above but not on this chart.
+              </p>
+            ) : null}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * The selected day in four figures. One row at every width, like the page's
+ * stat tiles - the point of this strip is comparing the four, and stacking
+ * them on a phone turns one glance into a scroll.
+ */
+function CollectionDayFigures({ state, totalBudget }: { state: CollectionDayState; totalBudget: number }) {
+  const ahead = state.shortfall <= 0;
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-muted-foreground">
+        On {formatEventWeekday(state.date)}
+      </p>
+      <div className="mt-1.5 grid grid-cols-4 gap-2">
+        <DayFigure label="Came in" shortLabel="In" value={state.onDay} />
+        <DayFigure label="Contributions" shortLabel="Contrib." value={state.contributions} />
+        <DayFigure label="Sponsors" shortLabel="Spons." value={state.sponsors} />
+        <DayFigure
+          label="Collected"
+          shortLabel="Total"
+          value={state.total}
+          note={totalBudget > 0 ? `${state.percentOfBudget}% of budget` : undefined}
+        />
+      </div>
+      {totalBudget > 0 ? (
+        <p className="mt-2 rounded-md bg-muted px-3 py-2 text-xs sm:text-sm">
+          Against a budget of{" "}
+          <span className="font-medium tabular-nums">{formatCurrency(totalBudget)}</span>, that left{" "}
+          <span className={`font-semibold tabular-nums ${ahead ? "text-primary" : "text-destructive"}`}>
+            {formatCurrency(Math.abs(state.shortfall))}
+          </span>{" "}
+          {ahead ? "raised above the budget." : "still to raise."}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function DayFigure({
+  label,
+  shortLabel,
+  value,
+  note,
+}: {
+  label: string;
+  shortLabel: string;
+  value: number;
+  note?: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-md border px-2 py-1.5">
+      <p className="truncate text-sm font-semibold tabular-nums sm:text-base" title={formatCurrency(value)}>
+        {formatCurrencyCompact(value)}
+      </p>
+      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">
+        <span aria-hidden="true" className="sm:hidden">
+          {shortLabel}
+        </span>
+        <span className="sr-only sm:not-sr-only">{label}</span>
+      </p>
+      {note ? <p className="hidden truncate text-[11px] text-muted-foreground sm:block">{note}</p> : null}
     </div>
   );
 }
