@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
+import { SocietyCard } from "@/features/settings/society-card";
 import { useEventData } from "@/lib/event-data";
 import { configurablePageKeys, pageLabels, usePageAccess, usePageVisibility } from "@/lib/page-access";
 
@@ -358,6 +359,7 @@ export function SettingsPage() {
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
+        <SocietyCard />
         <Card>
           <CardHeader>
             <CardTitle>Create Event</CardTitle>

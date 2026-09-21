@@ -54,6 +54,8 @@ export default async function handler(req: any, res: any) {
     const { appUser } = await requireAppUser(req);
     const body = await getRequestBody(req);
 
+    await assertUnderCreationCap(supabase, appUser.id);
+
     // An event belongs to a society. When the caller names one, they have to
     // be entitled to add an event to it; when they do not, a society is made
     // for them with the event's own name and they become its admin - which an
@@ -114,6 +116,8 @@ async function resolveSociety(
     Object.assign(denied, { statusCode: 403 });
     throw denied;
   }
+
+  await assertUnderSocietyCap(supabase, userId);
 
   const { data: society, error: societyError } = await supabase
     .from("organizations")
@@ -226,5 +230,58 @@ async function seedModules(
       "Could not seed this event's modules - run supabase/migrations/015 and 024. The event was still created.",
       error,
     );
+  }
+}
+
+/**
+ * How much one account may create.
+ *
+ * Anyone signed in can create an event - that is the point of a shared app,
+ * and there is no approval queue to put them through. But nothing bounded it
+ * either, and an open create endpoint on a public signup is a way to fill
+ * somebody else's database. These numbers are far above what a real committee
+ * needs and only exist to stop a script.
+ */
+const MAX_EVENTS_PER_ADMIN = 40;
+const MAX_SOCIETIES_PER_ADMIN = 10;
+
+async function assertUnderCreationCap(supabase: ReturnType<typeof assertServiceSupabase>, userId: string) {
+  const { count, error } = await supabase
+    .from("event_members")
+    .select("event_id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("role", "admin");
+
+  // A counting failure must not block a legitimate first event; the cap is a
+  // brake, not an authorization check.
+  if (error) {
+    console.warn("Could not count this account's events; letting the create through.", error);
+    return;
+  }
+
+  if ((count ?? 0) >= MAX_EVENTS_PER_ADMIN) {
+    const denied = new Error(
+      `This account already runs ${MAX_EVENTS_PER_ADMIN} events. Ask an admin of the society you want to add to, or close an old event first.`,
+    );
+    Object.assign(denied, { statusCode: 429 });
+    throw denied;
+  }
+}
+
+async function assertUnderSocietyCap(supabase: ReturnType<typeof assertServiceSupabase>, userId: string) {
+  const { count, error } = await supabase
+    .from("organization_members")
+    .select("organization_id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("role", "admin");
+
+  if (error) return;
+
+  if ((count ?? 0) >= MAX_SOCIETIES_PER_ADMIN) {
+    const denied = new Error(
+      `This account already runs ${MAX_SOCIETIES_PER_ADMIN} societies. Add this event to one of them instead.`,
+    );
+    Object.assign(denied, { statusCode: 429 });
+    throw denied;
   }
 }
