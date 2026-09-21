@@ -453,17 +453,28 @@ function CollectionTimeline({
           </CardTitle>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-chart-contributions" aria-hidden="true" />
-              Contributions
+              <span className="h-2.5 w-2.5 rounded-sm bg-chart-collected" aria-hidden="true" />
+              Collected
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-chart-sponsors" aria-hidden="true" />
-              Sponsors
-            </span>
+            {totalBudget > 0 ? (
+              <span className="flex items-center gap-1.5">
+                {/* Dashed, matching the line it labels. */}
+                <span
+                  className="h-0.5 w-4 rounded-sm bg-chart-budget"
+                  style={{
+                    background:
+                      "repeating-linear-gradient(90deg, hsl(var(--chart-budget)) 0 5px, transparent 5px 9px)",
+                  }}
+                  aria-hidden="true"
+                />
+                Budget
+              </span>
+            ) : null}
           </div>
         </div>
         <p className="text-xs text-muted-foreground sm:text-sm">
-          Contributions and sponsorships added up day by day. Pick a date to see where the collection stood.
+          Contributions and sponsorships added up day by day, against the budget. Pick a date to see where
+          the collection stood.
         </p>
       </CardHeader>
       <CardContent className="space-y-3 p-4 pt-0 sm:p-5 sm:pt-0">

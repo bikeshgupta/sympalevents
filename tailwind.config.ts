@@ -31,11 +31,11 @@ export default {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
-        // The Contributions collection timeline's two money series. See the
-        // note next to these variables in globals.css.
+        // The Contributions collection timeline's two series. See the note
+        // next to these variables in globals.css.
         chart: {
-          contributions: "hsl(var(--chart-contributions))",
-          sponsors: "hsl(var(--chart-sponsors))",
+          collected: "hsl(var(--chart-collected))",
+          budget: "hsl(var(--chart-budget))",
         },
         card: {
           DEFAULT: "hsl(var(--card))",
