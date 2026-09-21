@@ -12,6 +12,7 @@ import { TaskCard } from "@/features/tasks/task-card";
 import { TaskFormDialog } from "@/features/tasks/task-form-dialog";
 import { isOpenTask, useTaskBoard, type Task, type TaskInput, type TaskMember, type TaskStatus } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
+import { useVocabulary } from "@/lib/vocabulary";
 
 /**
  * The task board.
@@ -315,9 +316,10 @@ export function TasksPage() {
 }
 
 function PageHeading() {
+  const vocab = useVocabulary();
   return (
     <div>
-      <h2 className="text-2xl font-semibold">Tasks</h2>
+      <h2 className="text-2xl font-semibold">{vocab.labelFor("tasks")}</h2>
       <p className="text-sm text-muted-foreground">
         Who is doing what, by when - with the conversation on each task kept alongside it.
       </p>

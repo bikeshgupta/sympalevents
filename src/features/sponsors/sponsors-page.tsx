@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
+import { useVocabulary, withUnitColumn } from "@/lib/vocabulary";
 import { RowActions } from "@/features/shared/row-actions";
 import {
   ColumnFilter,
@@ -38,8 +39,12 @@ const sponsorColumns: TableColumn<SponsorRow>[] = [
 export function SponsorsPage() {
   const { data } = useEventData();
   const access = usePageAccess("sponsors");
+  const vocab = useVocabulary();
   const sponsorRows = data.sponsors;
-  const sponsorTable = useFilteredSortedRows(sponsorRows, sponsorColumns, "name");
+  // "Flat" is a housing society's word for it. A school's is House, a
+  // league's is Team - see src/lib/vocabulary.ts.
+  const columns = withUnitColumn(sponsorColumns, vocab.unit);
+  const sponsorTable = useFilteredSortedRows(sponsorRows, columns, "name");
   const committed = sponsorRows.reduce((sum, row) => sum + row.committed, 0);
   const received = sponsorRows.reduce((sum, row) => sum + row.received, 0);
 
@@ -48,7 +53,7 @@ export function SponsorsPage() {
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Sponsors</h2>
+            <h2 className="text-2xl font-semibold">{vocab.labelFor("sponsors")}</h2>
             <p className="text-sm text-muted-foreground">Manage monetary and in-kind sponsorship commitments.</p>
           </div>
           <DataSourceBadge source={data.source} reason={data.fallbackReason} />
@@ -70,7 +75,7 @@ export function SponsorsPage() {
         action={
           access.canEdit ? <CrudDialog title="Add Sponsor" triggerLabel="Add Sponsor" onSubmit={addSponsor}>
             <FormField label="Sponsor Name" name="name" required />
-            <FormField label="Flat No" name="flat" />
+            <FormField label={`${vocab.unit} No`} name="flat" />
             <FormField label="Contact" name="contact" />
             <FormField label="Category" name="category" defaultValue="Other" required />
             <FormField label="Item/Slot" name="item" />
@@ -102,7 +107,7 @@ export function SponsorsPage() {
         <table className="min-w-[1080px] w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
-              {sponsorColumns.map((column) => (
+              {columns.map((column) => (
                 <th key={column.key} className="px-4 py-3 font-medium">
                   <SortableHeader
                     label={column.label}
@@ -146,6 +151,7 @@ export function SponsorsPage() {
 }
 
 function SponsorActions({ sponsor }: { sponsor: SponsorRow }) {
+  const { unit } = useVocabulary();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -184,7 +190,7 @@ function SponsorActions({ sponsor }: { sponsor: SponsorRow }) {
           <form className="space-y-4" onSubmit={handleEdit}>
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="Sponsor Name" name="name" defaultValue={sponsor.name} required />
-              <FormField label="Flat No" name="flat" defaultValue={sponsor.flat} />
+              <FormField label={`${unit} No`} name="flat" defaultValue={sponsor.flat} />
               <FormField label="Contact" name="contact" defaultValue={sponsor.contact} />
               <FormField label="Category" name="category" defaultValue={sponsor.category} required />
               <FormField label="Item/Slot" name="item" defaultValue={sponsor.item} />

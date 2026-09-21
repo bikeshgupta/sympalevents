@@ -469,7 +469,7 @@ function HeroCountdown({
  * "up next" callout, then a vertical timeline - but each row now carries the
  * detail that made the old version too generic to plan an evening around:
  * how far through a live event we are, and the agenda inside it (puja start,
- * arti, pushpanjali, when the prasad counter opens and closes, the running
+ * the opening ceremony, when the refreshment counter opens and closes, the running
  * order of the cultural programme). Those come from `sub_events`, parsed by
  * src/lib/agenda.ts - no new columns.
  */

@@ -21,6 +21,7 @@ import { EventPlanRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { canPrintNotices } from "@/lib/notices";
 import { useEventContext } from "@/lib/event-context";
 import { usePageAccess } from "@/lib/page-access";
+import { useVocabulary } from "@/lib/vocabulary";
 
 function todayDateInputValue() {
   return new Date().toISOString().slice(0, 10);
@@ -73,6 +74,7 @@ function EventPlanFields({ plan }: { plan?: EventPlanRow }) {
 }
 
 export function EventPlanPage() {
+  const vocab = useVocabulary();
   const { data } = useEventData();
   const { selectedEventId } = useEventContext();
   const access = usePageAccess("event-plan");
@@ -88,8 +90,8 @@ export function EventPlanPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Events</h2>
-          <p className="text-sm text-muted-foreground">Plan event timings, owners, locations, and the agenda inside each event - puja, arti, pushpanjali, prasad, or a cultural running order. Everything here drives the dashboard timeline.</p>
+          <h2 className="text-2xl font-semibold">{vocab.labelFor("event-plan")}</h2>
+          <p className="text-sm text-muted-foreground">Plan timings, owners, locations, and the running order inside each one. Everything here drives the dashboard timeline.</p>
         </div>
         <DataSourceBadge source={data.source} reason={data.fallbackReason} />
       </div>

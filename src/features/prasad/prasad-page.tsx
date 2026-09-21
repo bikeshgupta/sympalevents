@@ -23,6 +23,7 @@ import {
   type PrasadPerson,
 } from "@/lib/prasad";
 import { cn } from "@/lib/utils";
+import { useVocabulary } from "@/lib/vocabulary";
 
 /**
  * Prasad, slot by slot. Three "manys" drive the whole screen:
@@ -72,6 +73,7 @@ function uniquePeople(items: PrasadItem[], pick: (item: PrasadItem) => PrasadPer
 }
 
 export function PrasadPage() {
+  const vocab = useVocabulary();
   const { data } = useEventData();
   const { selectedEventId } = useEventContext();
   const { query, create, update, remove } = usePrasadItems(selectedEventId);
@@ -172,7 +174,7 @@ export function PrasadPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Prasad</h2>
+          <h2 className="text-2xl font-semibold">{vocab.labelFor("prasad")}</h2>
           <p className="text-sm text-muted-foreground">
             Every slot can hold several prasad items, each with its own sponsors and the people handing it out.
           </p>

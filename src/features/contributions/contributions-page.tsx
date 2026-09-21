@@ -20,6 +20,7 @@ import { formatCurrencyCompact, formatEventWeekday } from "@/features/dashboard/
 import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
+import { useVocabulary, withUnitColumn } from "@/lib/vocabulary";
 import { RowActions } from "@/features/shared/row-actions";
 import {
   ColumnFilter,
@@ -93,7 +94,6 @@ const contributionColumns: TableColumn<ContributionRow>[] = [
 ];
 
 const hiddenColumnKeys = new Set(["reference", "createdAt"]);
-const visibleColumns = contributionColumns.filter((column) => !hiddenColumnKeys.has(column.key));
 const numericColumnKeys = new Set(["expected", "received"]);
 
 // Excel only reads UTF-8 CSV correctly when the file starts with a byte order mark.
@@ -104,8 +104,8 @@ function escapeCsvValue(value: string | number) {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-function exportContributionsToCsv(rows: ContributionRow[]) {
-  const headers = ["Flat", "Resident", "Type", "Expected", "Received", "Payment Date", "Mode", "Status", "Reference"];
+function exportContributionsToCsv(rows: ContributionRow[], unit: string) {
+  const headers = [unit, "Resident", "Type", "Expected", "Received", "Payment Date", "Mode", "Status", "Reference"];
   const bodyRows = rows.map((row) => [
     row.flat,
     row.name,
@@ -130,9 +130,10 @@ function exportContributionsToCsv(rows: ContributionRow[]) {
 }
 
 function ContributionFields({ contribution }: { contribution?: ContributionRow }) {
+  const { unit } = useVocabulary();
   return (
     <>
-      <FormField label="Flat No" name="flat" defaultValue={contribution?.flat} required />
+      <FormField label={`${unit} No`} name="flat" defaultValue={contribution?.flat} required />
       <FormField label="Resident Name" name="name" defaultValue={contribution?.name} required />
       <FormField label="Owner/Tenant" name="type" defaultValue={contribution?.type ?? "Owner"} />
       <FormField
@@ -175,8 +176,15 @@ function ContributionFields({ contribution }: { contribution?: ContributionRow }
 export function ContributionsPage() {
   const { data, isFetching } = useEventData();
   const access = usePageAccess("contributions");
+  const vocab = useVocabulary();
   const contributionRows = data.contributions;
-  const contributionTable = useFilteredSortedRows(contributionRows, contributionColumns, "createdAt", "desc");
+  // The unit column is "Flat" in a housing society and "Team" in a league;
+  // the key stays `flat` so sorting, filtering and the export are untouched.
+  const columns = withUnitColumn(contributionColumns, vocab.unit);
+  // `createdAt` sorts the list but is not a column anyone reads - see the
+  // TableToolbar sortNote below.
+  const visibleColumns = columns.filter((column) => !hiddenColumnKeys.has(column.key));
+  const contributionTable = useFilteredSortedRows(contributionRows, columns, "createdAt", "desc");
   const visibleRows = contributionTable.rows;
 
   const expected = contributionRows.reduce((sum, row) => sum + row.expected, 0);
@@ -197,7 +205,7 @@ export function ContributionsPage() {
           whole row on a phone before anything useful was on screen. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold sm:text-2xl">Contributions</h2>
+          <h2 className="text-xl font-semibold sm:text-2xl">{vocab.labelFor("contributions")}</h2>
           <p className="text-xs text-muted-foreground sm:text-sm">
             Track resident interest, expected amount, collections, and payment mode.
           </p>
@@ -206,7 +214,7 @@ export function ContributionsPage() {
           <DataSourceBadge source={data.source} reason={data.fallbackReason} isLoading={isFetching} />
           <Button
             variant="outline"
-            onClick={() => exportContributionsToCsv(visibleRows)}
+            onClick={() => exportContributionsToCsv(visibleRows, vocab.unit)}
             disabled={!visibleRows.length}
             title={
               contributionTable.hasActiveFilters
@@ -280,7 +288,7 @@ export function ContributionsPage() {
         inline
         searchValue={contributionTable.search}
         onSearchChange={contributionTable.setSearch}
-        searchPlaceholder="Search flat, resident…"
+        searchPlaceholder={`Search ${vocab.unitLower}, resident…`}
         searchLabel="Search contributions"
         action={
           access.canEdit ? (

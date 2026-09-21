@@ -27,10 +27,16 @@ export default async function handler(req: any, res: any) {
     // so the sidebar, the drawer, the route guard and Member Access all stop
     // mentioning them at once - they already filter on this one list.
     const modules = Object.values(await fetchEventModules(eventId)).filter((item) => item.isEnabled);
+    // The event's own words travel with its module list rather than with the
+    // screen data: every page already asks this route once, and the nav, the
+    // headings and the unit column all need the same answer before any row
+    // arrives. See src/lib/vocabulary.ts.
+    const vocabulary = await fetchEventVocabulary(eventId);
     const authHeader = String(req.headers.authorization ?? "");
 
     if (!authHeader.startsWith("Bearer ")) {
       sendJson(res, 200, {
+        ...vocabulary,
         role: null,
         pages: modules
           .filter((item) => item.visibility === "public")
@@ -69,6 +75,7 @@ export default async function handler(req: any, res: any) {
 
     if (role === "admin") {
       sendJson(res, 200, {
+        ...vocabulary,
         role,
         pages: [
           ...modules.map((item) => ({ pageKey: item.pageKey, label: item.label })),
@@ -110,8 +117,37 @@ export default async function handler(req: any, res: any) {
       })
       .filter(Boolean);
 
-    sendJson(res, 200, { role, pages });
+    sendJson(res, 200, { ...vocabulary, role, pages });
   } catch (error) {
     handleApiError(res, error);
   }
+}
+
+/**
+ * The event's type and the word it uses for a person's unit ("Flat", "Team").
+ *
+ * Both arrived with 024; until it is run every event reads as the festival it
+ * already was, with no unit label of its own.
+ */
+async function fetchEventVocabulary(eventId: string) {
+  const supabase = assertServiceSupabase();
+  const { data, error } = await supabase
+    .from("events")
+    .select("event_type,unit_label")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (error) {
+    const missingColumns =
+      ["42703", "PGRST204"].includes(error.code ?? "") ||
+      error.message?.includes("event_type") ||
+      error.message?.includes("unit_label");
+    if (!missingColumns) throw error;
+    return { eventType: "festival", unitLabel: null as string | null };
+  }
+
+  return {
+    eventType: (data?.event_type as string) ?? "festival",
+    unitLabel: (data?.unit_label as string | null) ?? null,
+  };
 }

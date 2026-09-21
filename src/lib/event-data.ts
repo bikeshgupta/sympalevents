@@ -25,6 +25,10 @@ export type AppEvent = {
   timezone: string;
   heroImageUrl?: string | null;
   status?: string;
+  /** festival | sports | cultural | mixed | custom - see migration 024. */
+  eventType?: string;
+  /** The word this event uses for a person's unit: Flat, House, Team. */
+  unitLabel?: string | null;
 };
 
 export type ContributionRow = {
@@ -189,6 +193,8 @@ type EventDataResponse = {
     startDate: string;
     endDate: string;
     status: string;
+    eventType?: string;
+    unitLabel?: string | null;
   };
   financials: EventData["financials"];
   contributions: ContributionRow[];
@@ -253,6 +259,8 @@ export function useEventData(options: UseEventDataOptions = {}) {
             timezone: "Asia/Kolkata",
             heroImageUrl: null,
             status: payload.event.status,
+            eventType: payload.event.eventType ?? "festival",
+            unitLabel: payload.event.unitLabel ?? null,
           },
           financials: payload.financials,
           contributions: payload.contributions,

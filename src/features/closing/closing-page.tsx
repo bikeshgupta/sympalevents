@@ -17,6 +17,7 @@ import { useHashTarget } from "@/lib/scroll";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
+import { useVocabulary } from "@/lib/vocabulary";
 
 /**
  * Everyone who gave something, by name and flat, one entry each.
@@ -55,6 +56,7 @@ function creditPeople(rows: Array<{ name: string; flat?: string }>): CreditPerso
  * admin or committee, enforced server-side in api/_lib/closing.ts.
  */
 export function ClosingPage() {
+  const vocab = useVocabulary();
   const { data, isFetching } = useEventData({ includeTasks: false });
   const { selectedEventId } = useEventContext();
   const { data: session } = useSession();
@@ -108,7 +110,7 @@ export function ClosingPage() {
     <div className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Closing</h2>
+          <h2 className="text-2xl font-semibold">{vocab.labelFor("closing")}</h2>
           <p className="text-sm text-muted-foreground">
             {data.event.name} - the summary, the people behind it, the photographs, and your reviews.
           </p>

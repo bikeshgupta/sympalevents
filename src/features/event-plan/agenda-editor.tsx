@@ -32,7 +32,7 @@ export function AgendaField({
         defaultValue={parseAgenda(defaultValue).join("\n")}
         rows={5}
         className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        placeholder={"Idol arrival and welcome at the gate\nSankalp and sthapana - Pandit ji leads\nPrasad counter opens"}
+        placeholder={"Welcome at the gate\nOpening ceremony\nRefreshment counter opens"}
       />
       <p className="text-xs text-muted-foreground">
         One point per line. Each line shows as a bullet under this event on the dashboard timeline.

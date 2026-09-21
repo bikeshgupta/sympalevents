@@ -21,6 +21,7 @@ import {
   type ReimbursementStatus,
 } from "@/lib/expenses";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useVocabulary } from "@/lib/vocabulary";
 
 /**
  * The expense ledger, and the out-of-pocket claim flow on top of it: a
@@ -112,6 +113,7 @@ function formatDate(date: string) {
 }
 
 export function ExpensesPage() {
+  const vocab = useVocabulary();
   const { data } = useEventData();
   const { data: session } = useSession();
   const { selectedEventId } = useEventContext();
@@ -222,7 +224,7 @@ export function ExpensesPage() {
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Expense Ledger</h2>
+            <h2 className="text-2xl font-semibold">{vocab.labelFor("expenses")}</h2>
             <p className="text-sm text-muted-foreground">
               What was spent, who paid, and whether they have been paid back.
             </p>

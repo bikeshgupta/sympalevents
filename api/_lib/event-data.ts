@@ -131,14 +131,31 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
  * an event exists.
  */
 async function loadEvent(supabase: SupabaseClient, eventId: string) {
-  const { data, error } = await supabase
+  const withTemplate = await supabase
+    .from("events")
+    .select("id,name,start_date,end_date,location,status,event_type,unit_label")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (!withTemplate.error) return withTemplate.data;
+
+  // `event_type` and `unit_label` arrived with 024. Until it is run the event
+  // still loads, as the festival every event was.
+  const missingColumns =
+    ["42703", "PGRST204"].includes(withTemplate.error.code ?? "") ||
+    withTemplate.error.message?.includes("event_type") ||
+    withTemplate.error.message?.includes("unit_label");
+
+  if (!missingColumns) throw withTemplate.error;
+
+  const legacy = await supabase
     .from("events")
     .select("id,name,start_date,end_date,location,status")
     .eq("id", eventId)
     .maybeSingle();
 
-  if (error) throw error;
-  return data;
+  if (legacy.error) throw legacy.error;
+  return legacy.data;
 }
 
 function denied(message: string, statusCode: number) {
@@ -368,6 +385,10 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
       startDate: event.start_date,
       endDate: event.end_date,
       status: event.status ?? "planning",
+      eventType: ("event_type" in event ? (event.event_type as string) : null) ?? "festival",
+      // The word this event uses for the unit a person belongs to - "Flat" in
+      // a housing society, "Team" in a league. Null means the app's default.
+      unitLabel: ("unit_label" in event ? (event.unit_label as string | null) : null) ?? null,
     },
     financials: {
       totalBudget,
