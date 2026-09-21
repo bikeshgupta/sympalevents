@@ -1,6 +1,9 @@
 import {
+  cleanModuleLabel,
   eventPageKeys,
+  fetchEventModules,
   fetchPageVisibility,
+  isAlwaysOnPage,
   isCommitteeOpenPage,
   normalizeVisibility,
   type PageVisibility,
@@ -53,7 +56,8 @@ function anonymousResult(visibility: PageVisibility): PageAccessResult {
 
 async function readVisibility(eventId: string, req: any, res: any) {
   const authHeader = String(req.headers.authorization ?? "");
-  const visibility = await fetchPageVisibility(eventId);
+  const modules = await fetchEventModules(eventId);
+  const visibility = Object.fromEntries(Object.values(modules).map((item) => [item.pageKey, item.visibility]));
 
   // The map itself is not a secret - it is what the nav and the route guard
   // need to know before a sign-in even happens. Only writing it is gated.
@@ -71,7 +75,10 @@ async function readVisibility(eventId: string, req: any, res: any) {
     canEdit = data?.role === "admin";
   }
 
-  sendJson(res, 200, { visibility, pageKeys: eventPageKeys, canEdit });
+  // `visibility` stays for callers that only ever wanted the map. `modules`
+  // is the fuller answer Settings needs: on/off and the event's own name for
+  // each one, alongside who may see it.
+  sendJson(res, 200, { visibility, modules: Object.values(modules), pageKeys: eventPageKeys, canEdit });
 }
 
 async function saveVisibility(req: any, res: any) {
@@ -85,15 +92,36 @@ async function saveVisibility(req: any, res: any) {
   const { appUser } = await requireAppUser(req);
   await requireEventAdmin(eventId, appUser.id);
 
+  // Two shapes, because two callers. Settings sends `modules` (on/off, name
+  // and visibility per page); anything that only cares who may look sends the
+  // older `visibility` map. A module left out of either is left alone.
+  const submittedModules = Array.isArray(body.modules) ? (body.modules as Record<string, unknown>[]) : null;
   const submitted = (body.visibility ?? {}) as Record<string, unknown>;
-  const rows = eventPageKeys
-    .filter((pageKey) => pageKey in submitted)
-    .map((pageKey) => ({
-      event_id: eventId,
-      page_key: pageKey,
-      visibility: normalizeVisibility(submitted[pageKey], pageKey),
-      updated_at: new Date().toISOString(),
-    }));
+
+  const rows = submittedModules
+    ? submittedModules
+        .filter((item) => (eventPageKeys as readonly string[]).includes(String(item.pageKey ?? "")))
+        .map((item) => {
+          const pageKey = String(item.pageKey);
+          return {
+            event_id: eventId,
+            page_key: pageKey,
+            visibility: normalizeVisibility(item.visibility, pageKey),
+            // The dashboard is every route's landing place; an event without
+            // one has no front door, so it cannot be switched off here.
+            is_enabled: isAlwaysOnPage(pageKey) ? true : item.isEnabled !== false,
+            label_override: cleanModuleLabel(item.labelOverride),
+            updated_at: new Date().toISOString(),
+          };
+        })
+    : eventPageKeys
+        .filter((pageKey) => pageKey in submitted)
+        .map((pageKey) => ({
+          event_id: eventId,
+          page_key: pageKey,
+          visibility: normalizeVisibility(submitted[pageKey], pageKey),
+          updated_at: new Date().toISOString(),
+        }));
 
   if (rows.length) {
     const supabase = assertServiceSupabase();
@@ -108,10 +136,26 @@ async function saveVisibility(req: any, res: any) {
       Object.assign(missing, { statusCode: 501 });
       throw missing;
     }
+    if (
+      error &&
+      (["42703", "PGRST204"].includes(error.code ?? "") ||
+        error.message?.includes("is_enabled") ||
+        error.message?.includes("label_override"))
+    ) {
+      const missing = new Error(
+        "Turning modules on and off needs supabase/migrations/024_event_modules.sql. Run it, then try again. Changing who can see a page still works.",
+      );
+      Object.assign(missing, { statusCode: 501 });
+      throw missing;
+    }
     if (error) throw error;
   }
 
-  sendJson(res, 200, { visibility: await fetchPageVisibility(eventId) });
+  const saved = await fetchEventModules(eventId);
+  sendJson(res, 200, {
+    visibility: Object.fromEntries(Object.values(saved).map((item) => [item.pageKey, item.visibility])),
+    modules: Object.values(saved),
+  });
 }
 
 export default async function handler(req: any, res: any) {

@@ -139,8 +139,24 @@ export function usePageAccess(pageKey: string) {
   };
 }
 
+/**
+ * One module of one event, as the server resolves it. `isEnabled` is a
+ * different question from `visibility` and both matter: a sports meet has no
+ * Prasad, which is not "Prasad, restricted" but a module the committee never
+ * turned on. See supabase/migrations/024_event_modules.sql.
+ */
+export type EventModule = {
+  pageKey: string;
+  visibility: PageVisibility;
+  isEnabled: boolean;
+  /** What this event calls it - the override if there is one, else the app's name. */
+  label: string;
+  labelOverride: string | null;
+};
+
 type VisibilityResponse = {
   visibility: Record<string, PageVisibility>;
+  modules?: EventModule[];
   pageKeys: string[];
   canEdit: boolean;
 };
@@ -178,5 +194,26 @@ export function usePageVisibility() {
     },
   });
 
-  return { query, save };
+  /**
+   * The fuller save: on/off, the event's own name for a module, and who may
+   * see it, all in one write. `save` above stays for the visibility-only
+   * callers. A project that has not run 024 gets a 501 naming it, and the
+   * visibility half still works.
+   */
+  const saveModules = useMutation({
+    mutationFn: (modules: Pick<EventModule, "pageKey" | "visibility" | "isEnabled" | "labelOverride">[]) =>
+      apiFetch<{ modules: EventModule[] }>("/api/page-access", {
+        method: "POST",
+        body: { eventId: selectedEventId, modules },
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["page-visibility"] }),
+        queryClient.invalidateQueries({ queryKey: ["page-access"] }),
+        queryClient.invalidateQueries({ queryKey: ["event-access"] }),
+      ]);
+    },
+  });
+
+  return { query, save, saveModules };
 }

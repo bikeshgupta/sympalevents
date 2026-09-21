@@ -5,6 +5,8 @@ import { useEventContext } from "@/lib/event-context";
 
 export type PageAccess = {
   pageKey: string;
+  /** What this event calls the module - the nav renders this, not a constant. */
+  label?: string;
   canView: boolean;
   canEdit: boolean;
   accessLevel: "none" | "view" | "edit";

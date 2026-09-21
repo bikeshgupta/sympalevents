@@ -53,6 +53,129 @@ export function defaultVisibilityFor(pageKey: string): PageVisibility {
 }
 
 /**
+ * Modules that cannot be switched off.
+ *
+ * The dashboard is where every route lands and what a bare link opens; an
+ * event without one has no front door. "settings" is not in `eventPageKeys`
+ * at all for the same family of reasons - it is the screen that controls the
+ * others.
+ */
+const alwaysOnPages = new Set<string>(["dashboard"]);
+
+export function isAlwaysOnPage(pageKey: string) {
+  return alwaysOnPages.has(pageKey);
+}
+
+/** The app's own name for a module, when an event has not renamed it. */
+export const defaultPageLabels: Record<string, string> = {
+  dashboard: "Dashboard",
+  contributions: "Contributions",
+  sponsors: "Sponsors",
+  budget: "Budget",
+  expenses: "Expense Ledger",
+  auctions: "Auctions",
+  prasad: "Prasad",
+  tasks: "Tasks",
+  volunteers: "Volunteers",
+  "event-plan": "Events",
+  contacts: "Contacts",
+  closing: "Closing",
+};
+
+export type EventModule = {
+  pageKey: string;
+  visibility: PageVisibility;
+  /** Whether this event has this module at all - see migration 024. */
+  isEnabled: boolean;
+  /** What this event calls it. Falls back to the app's own name. */
+  label: string;
+  /** Only set when the committee renamed it; the UI needs to tell them apart. */
+  labelOverride: string | null;
+};
+
+const MAX_LABEL = 28;
+
+export function cleanModuleLabel(value: unknown): string | null {
+  const label = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_LABEL);
+  return label || null;
+}
+
+/**
+ * 024 has not been run yet: no event has module rows with these columns, so
+ * every module reads as on and unrenamed and the app behaves exactly as it
+ * did. Same "read degrades, write says so" shape as `event_schedule.sub_events`.
+ */
+function isMissingModuleColumns(error: { code?: string; message?: string } | null) {
+  return Boolean(
+    error &&
+      (["42703", "PGRST204"].includes(error.code ?? "") ||
+        error.message?.includes("is_enabled") ||
+        error.message?.includes("label_override")),
+  );
+}
+
+function isMissingVisibilityTable(error: { code?: string; message?: string } | null) {
+  return Boolean(error && ["42P01", "PGRST205"].includes(error.code ?? ""));
+}
+
+/**
+ * Every module of one event, whether or not it has a stored row.
+ *
+ * This is the single answer to "what does this event have, what is it called,
+ * and who may look at it". `fetchPageVisibility` below is now a thin view over
+ * it, kept because several callers only ever wanted the visibility map.
+ */
+export async function fetchEventModules(eventId: string): Promise<Record<string, EventModule>> {
+  const supabase = assertServiceSupabase();
+
+  let stored = new Map<string, { visibility?: unknown; is_enabled?: unknown; label_override?: unknown }>();
+
+  const full = await supabase
+    .from("event_page_visibility")
+    .select("page_key,visibility,is_enabled,label_override")
+    .eq("event_id", eventId);
+
+  if (full.error && isMissingModuleColumns(full.error)) {
+    console.warn("event_page_visibility has no module columns. Run migration 024_event_modules.sql.");
+    const legacy = await supabase
+      .from("event_page_visibility")
+      .select("page_key,visibility")
+      .eq("event_id", eventId);
+    if (legacy.error && !isMissingVisibilityTable(legacy.error)) throw legacy.error;
+    stored = new Map((legacy.data ?? []).map((row) => [row.page_key as string, row]));
+  } else if (full.error && isMissingVisibilityTable(full.error)) {
+    console.warn("event_page_visibility is missing. Run migration 015_event_page_visibility.sql.");
+  } else if (full.error) {
+    throw full.error;
+  } else {
+    stored = new Map((full.data ?? []).map((row) => [row.page_key as string, row]));
+  }
+
+  return Object.fromEntries(
+    eventPageKeys.map((pageKey) => {
+      const row = stored.get(pageKey);
+      const labelOverride = cleanModuleLabel(row?.label_override);
+      return [
+        pageKey,
+        {
+          pageKey,
+          visibility: normalizeVisibility(row?.visibility, pageKey),
+          // A module with no row at all is on: that is how every event that
+          // predates 024 behaves, and how an event created by a code path
+          // that does not seed behaves.
+          isEnabled: isAlwaysOnPage(pageKey) ? true : row?.is_enabled !== false,
+          label: labelOverride ?? defaultPageLabels[pageKey] ?? pageKey,
+          labelOverride,
+        } satisfies EventModule,
+      ];
+    }),
+  );
+}
+
+/**
  * Pages that can never be anonymous, whatever is stored or submitted.
  *
  * "tasks" names people and carries their conversation with each other, so it
@@ -93,27 +216,12 @@ export function normalizeVisibility(value: unknown, pageKey: string): PageVisibi
 }
 
 /**
- * The event's full map, with every known page present. A missing table (the
- * migration has not been run yet) is treated as "no rows" rather than an
- * error, so the app keeps working on its previous defaults instead of
- * locking everyone out of every page.
+ * The event's visibility map, with every known page present. A thin view over
+ * `fetchEventModules` so there is one place that reads the table.
  */
 export async function fetchPageVisibility(eventId: string): Promise<Record<string, PageVisibility>> {
-  const supabase = assertServiceSupabase();
-  const { data, error } = await supabase
-    .from("event_page_visibility")
-    .select("page_key,visibility")
-    .eq("event_id", eventId);
-
-  if (error && !["42P01", "PGRST205"].includes(error.code ?? "")) throw error;
-  if (error) {
-    console.warn("event_page_visibility is missing. Run migration 015_event_page_visibility.sql.");
-  }
-
-  const stored = new Map((data ?? []).map((row) => [row.page_key, row.visibility]));
-  return Object.fromEntries(
-    eventPageKeys.map((pageKey) => [pageKey, normalizeVisibility(stored.get(pageKey), pageKey)]),
-  );
+  const modules = await fetchEventModules(eventId);
+  return Object.fromEntries(Object.values(modules).map((item) => [item.pageKey, item.visibility]));
 }
 
 export async function fetchPageVisibilityFor(eventId: string, pageKey: string): Promise<PageVisibility> {
@@ -128,7 +236,16 @@ export async function fetchPageVisibilityFor(eventId: string, pageKey: string): 
  * visibility; edit is always admin or an explicit "edit" grant.
  */
 export async function resolvePageAccess(eventId: string, userId: string | null, pageKey: string) {
-  const visibility = (await fetchPageVisibility(eventId))[pageKey] ?? defaultVisibilityFor(pageKey);
+  const modules = await fetchEventModules(eventId);
+  const module = modules[pageKey];
+  const visibility = module?.visibility ?? defaultVisibilityFor(pageKey);
+
+  // A module this event does not have is closed to everybody, the admin
+  // included. Turning it back on in Settings is the way in - not a grant.
+  if (module && !module.isEnabled) {
+    return { role: null, canView: false, canEdit: false };
+  }
+
   if (!userId) {
     return { role: null, canView: visibility === "public", canEdit: false };
   }

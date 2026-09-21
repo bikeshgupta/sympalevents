@@ -1,25 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
-import { FormField } from "@/components/shared/form-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
+import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
 import { useEventData } from "@/lib/event-data";
-import {
-  committeeOpenPageKeys,
-  configurablePageKeys,
-  pageLabels,
-  usePageAccess,
-  signInOnlyPageKeys,
-  usePageVisibility,
-  visibilityHints,
-  visibilityLabels,
-  visibilityOptionsFor,
-  type PageVisibility,
-} from "@/lib/page-access";
+import { configurablePageKeys, pageLabels, usePageAccess, usePageVisibility } from "@/lib/page-access";
 
 type AccessLevel = "none" | "view" | "edit";
 
@@ -108,9 +98,8 @@ export function SettingsPage() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const access = usePageAccess("settings");
-  const { selectedEventId, setSelectedEventId } = useEventContext();
+  const { selectedEventId } = useEventContext();
   const queryClient = useQueryClient();
-  const [eventMessage, setEventMessage] = useState<string | null>(null);
   const [accessMessage, setAccessMessage] = useState<string | null>(null);
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const [rosterMessage, setRosterMessage] = useState<string | null>(null);
@@ -286,35 +275,6 @@ export function SettingsPage() {
     }
   }
 
-  async function createEvent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!session) return;
-    const formData = new FormData(event.currentTarget);
-    setEventMessage("Creating event...");
-
-    try {
-      const { eventId } = await apiFetch<{ eventId: string }>("/api/events", {
-        method: "POST",
-        body: {
-          eventName: String(formData.get("eventName")),
-          startDate: String(formData.get("startDate")),
-          endDate: String(formData.get("endDate")),
-          location: String(formData.get("location") ?? ""),
-          description: String(formData.get("description") ?? ""),
-        },
-      });
-
-      await queryClient.invalidateQueries({ queryKey: ["events"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-      await queryClient.invalidateQueries({ queryKey: ["page-access"] });
-      setSelectedEventId(eventId);
-      setEventMessage("Event created. You are the event admin.");
-      event.currentTarget.reset();
-    } catch (error) {
-      setEventMessage(error instanceof Error ? error.message : "Unable to create event");
-      return;
-    }
-  }
 
   async function grantAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -402,18 +362,19 @@ export function SettingsPage() {
           <CardHeader>
             <CardTitle>Create Event</CardTitle>
           </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={createEvent}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField label="Event Name" name="eventName" required />
-                <FormField label="Location" name="location" />
-                <FormField label="Start Date" name="startDate" type="date" required />
-                <FormField label="End Date" name="endDate" type="date" required />
-                <FormField label="Description" name="description" />
-              </div>
-              {eventMessage ? <p className="text-sm text-muted-foreground">{eventMessage}</p> : null}
-              <Button type="submit" disabled={!session}>Create Event</Button>
-            </form>
+          <CardContent className="space-y-4">
+            {/* The five-field form that used to sit here created an event with
+                no modules at all, so nobody could tell what it had until they
+                scrolled down to this page's own Modules card. Creating an
+                event now starts from a template and ends on those switches. */}
+            <p className="text-sm text-muted-foreground">
+              Start from a festival, a sports meet, a cultural night or a blank slate, then turn modules on and off
+              before anybody sees it.
+            </p>
+            <Button asChild disabled={!session}>
+              <Link to="/new-event">New event</Link>
+            </Button>
+            {!session ? <p className="text-sm text-muted-foreground">Sign in to create an event.</p> : null}
           </CardContent>
         </Card>
 
@@ -651,101 +612,80 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        {access.canEdit ? <PageVisibilityCard /> : null}
+        {access.canEdit ? <ModulesCard /> : null}
       </div>
     </div>
   );
 }
 
 /**
- * Who can see each page of this event, set by the admin. Separate from Member
- * Access below it on purpose: this is the blanket rule for everyone, that one
- * is the exception list for a named person.
+ * What this event has, what it calls each thing, and who can open it.
+ *
+ * This is the Page Visibility card grown up. It sits in the same place and
+ * still answers the same question for every module, plus the two migration 024
+ * added: whether this event has the module at all, and what the committee
+ * calls it. A sports meet has no Prasad - that is not "Prasad, restricted",
+ * it is a module nobody turned on, and it should not appear in the nav or in
+ * Member Access either.
+ *
+ * The editor itself is shared with the create-event wizard, so the switches
+ * somebody saw when they made the event are the switches they come back to.
  */
-function PageVisibilityCard() {
+function ModulesCard() {
   const { selectedEventId } = useEventContext();
-  const { query, save } = usePageVisibility();
-  const [draft, setDraft] = useState<Record<string, PageVisibility> | null>(null);
+  const { query, saveModules } = usePageVisibility();
+  const [draft, setDraft] = useState<ModuleDraft[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const stored = query.data?.visibility;
-  // The server's map is the baseline; the draft only exists once the admin
+  const stored = query.data?.modules;
+  // The server's list is the baseline; the draft only exists once the admin
   // has actually changed something, so a refetch never stomps on typing.
-  const current = draft ?? stored ?? null;
+  const current: ModuleDraft[] | null =
+    draft ??
+    (stored
+      ? stored.map((module) => ({
+          pageKey: module.pageKey,
+          isEnabled: module.isEnabled,
+          visibility: module.visibility,
+          labelOverride: module.labelOverride,
+        }))
+      : null);
 
-  function setVisibility(pageKey: string, visibility: PageVisibility) {
-    setDraft({ ...(current ?? {}), [pageKey]: visibility });
-    setMessage(null);
-  }
+  const offCount = current?.filter((module) => !module.isEnabled).length ?? 0;
 
   async function handleSave() {
     if (!current || !selectedEventId) return;
-    setMessage("Saving page visibility...");
+    setMessage("Saving modules...");
     try {
-      await save.mutateAsync(current);
+      await saveModules.mutateAsync(current);
       setDraft(null);
-      setMessage("Page visibility saved.");
+      setMessage("Modules saved.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to save page visibility");
+      setMessage(error instanceof Error ? error.message : "Unable to save modules");
     }
   }
 
   return (
     <Card className="xl:col-span-2">
       <CardHeader>
-        <CardTitle>Page Visibility</CardTitle>
+        <CardTitle>Modules</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Decide who can open each page of this event. Editing is never widened by this - it still comes from the role
-          and the per-member grants in Member Access.
+          Turn a module off and it leaves the nav, Member Access and the address bar for this event. Rename one to what
+          your committee actually calls it. Editing is never widened here - it still comes from the role and the
+          per-member grants in Member Access.
         </p>
 
         {query.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading page visibility...</p>
+          <p className="text-sm text-muted-foreground">Loading modules...</p>
         ) : !current ? (
           <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            Page visibility could not be loaded. Check that migration 015_event_page_visibility.sql has been run.
+            Modules could not be loaded. Check that migration 015_event_page_visibility.sql has been run.
           </p>
         ) : (
           <>
-            <div className="overflow-hidden rounded-md border">
-              <div className="divide-y">
-                {configurablePageKeys.map((pageKey) => {
-                  const value = current[pageKey] ?? "restricted";
-                  return (
-                    <div
-                      key={pageKey}
-                      className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{pageLabels[pageKey]}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {signInOnlyPageKeys.has(pageKey)
-                            ? `Always needs a sign-in. ${visibilityHints[value]}`
-                            : visibilityHints[value]}
-                          {committeeOpenPageKeys.has(pageKey) && value === "restricted"
-                            ? " Committee members can still open it to add their own expenses and see only those."
-                            : null}
-                        </p>
-                      </div>
-                      <select
-                        aria-label={`${pageLabels[pageKey]} visibility`}
-                        className="h-10 w-full rounded-md border bg-background px-3 text-sm sm:w-64 sm:shrink-0"
-                        value={value}
-                        onChange={(item) => setVisibility(pageKey, item.target.value as PageVisibility)}
-                      >
-                        {visibilityOptionsFor(pageKey).map((level) => (
-                          <option key={level} value={level}>
-                            {visibilityLabels[level]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <ModuleEditor modules={current} onChange={setDraft} disabled={saveModules.isPending} />
 
             <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
               <p>
@@ -756,12 +696,18 @@ function PageVisibilityCard() {
                 A page set to <span className="font-medium text-foreground">Anyone with the link</span> is genuinely
                 public. Keep contact details and payment references off those pages.
               </p>
+              {offCount ? (
+                <p>
+                  {offCount} module{offCount === 1 ? " is" : "s are"} off. Nothing they hold is deleted - turning one
+                  back on brings its records with it.
+                </p>
+              ) : null}
             </div>
 
             {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
             <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={() => void handleSave()} disabled={!draft || save.isPending}>
-                {save.isPending ? "Saving..." : "Save Visibility"}
+              <Button type="button" onClick={() => void handleSave()} disabled={!draft || saveModules.isPending}>
+                {saveModules.isPending ? "Saving..." : "Save Modules"}
               </Button>
               <Button type="button" variant="outline" onClick={() => setDraft(null)} disabled={!draft}>
                 Reset

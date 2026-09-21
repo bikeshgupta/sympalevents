@@ -32,13 +32,19 @@ export function AppLayout() {
   const [editingName, setEditingName] = useState(false);
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
+  // What this event calls each module. A sports meet's Contributions page is
+  // "Entry fees" and its Events page is "Match days"; the nav says so, because
+  // the server resolved it. Falls back to the app's own name.
+  const labelByPageKey = new Map(
+    accessiblePages.filter((page) => page.label).map((page) => [page.pageKey, page.label as string]),
+  );
   // With no event there is nobody to have set visibility - the app is on the
   // demo dataset - so the nav shows the tour rather than going blank. With an
   // event, the server's list is the only thing that decides.
   const isDemoNav = !selectedEventId && !isEventLoading;
-  const visibleNavItems = isDemoNav
-    ? navItems
-    : navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
+  const visibleNavItems = (
+    isDemoNav ? navItems : navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)))
+  ).map((item) => ({ ...item, label: labelByPageKey.get(pageKeyFromHref(item.href)) ?? item.label }));
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const canRequestCommitteeAccess = Boolean(
     session && selectedEventId && eventAccess.role !== "admin" && eventAccess.role !== "committee",

@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { RouteGuard } from "@/components/layout/route-guard";
 import { AccessDeniedPage } from "@/features/auth/access-denied-page";
 import { LoginPage } from "@/features/auth/login-page";
+import { CreateEventWizard } from "@/features/onboarding/create-event-wizard";
 import { AuctionsPage } from "@/features/auctions/auctions-page";
 import { BudgetPage } from "@/features/budget/budget-page";
 import { ClosingPage } from "@/features/closing/closing-page";
@@ -21,6 +22,9 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
+      {/* Outside AppLayout: no event is selected yet, so the sidebar and the
+          route guard have nothing to be about. */}
+      <Route path="/new-event" element={<CreateEventWizard />} />
       <Route element={<AppLayout />}>
         <Route element={<RouteGuard />}>
           <Route index element={<Navigate to="/dashboard" replace />} />

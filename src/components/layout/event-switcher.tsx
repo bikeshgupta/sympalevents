@@ -193,7 +193,7 @@ export function EventSwitcher({ eventName, eventSubtitle }: { eventName: string;
               <>
                 <DropdownMenu.Separator className="my-1.5 h-px bg-border" />
                 <DropdownMenu.Item
-                  onSelect={() => navigate("/settings")}
+                  onSelect={() => navigate("/new-event")}
                   className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2.5 text-sm text-primary outline-none data-[highlighted]:bg-muted"
                 >
                   <Plus className="h-4 w-4" aria-hidden />

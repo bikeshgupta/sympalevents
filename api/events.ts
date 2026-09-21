@@ -2,6 +2,12 @@ import { handleEventClosing } from "./_lib/closing.js";
 import { handleEventData } from "./_lib/event-data.js";
 import { handleSocieties } from "./_lib/societies.js";
 import {
+  cleanModuleLabel,
+  eventPageKeys,
+  isAlwaysOnPage,
+  normalizeVisibility,
+} from "./_lib/page-visibility.js";
+import {
   assertServiceSupabase,
   getRequestBody,
   handleApiError,
@@ -57,20 +63,7 @@ export default async function handler(req: any, res: any) {
     // "<Event> Organization", that nothing ever read again. See 023.
     const societyId = await resolveSociety(supabase, appUser.id, body);
 
-    const { data: event, error: eventError } = await supabase
-      .from("events")
-      .insert({
-        organization_id: societyId,
-        name: body.eventName,
-        start_date: body.startDate,
-        end_date: body.endDate,
-        location: body.location ?? "",
-        description: body.description ?? "",
-      })
-      .select("id")
-      .single();
-
-    if (eventError) throw eventError;
+    const event = await insertEvent(supabase, societyId, body);
 
     const { error: memberError } = await supabase.from("event_members").insert({
       event_id: event.id,
@@ -79,6 +72,8 @@ export default async function handler(req: any, res: any) {
     });
 
     if (memberError) throw memberError;
+
+    await seedModules(supabase, event.id, body);
 
     sendJson(res, 201, { eventId: event.id });
   } catch (error) {
@@ -140,4 +135,96 @@ async function resolveSociety(
   }
 
   return society.id as string;
+}
+
+/**
+ * The event row. `event_type`, `template_key` and `unit_label` arrived with
+ * 024, so a project that has not run it still gets an event - it just gets the
+ * one shape this app always made.
+ */
+async function insertEvent(
+  supabase: ReturnType<typeof assertServiceSupabase>,
+  societyId: string,
+  body: Record<string, unknown>,
+) {
+  const base = {
+    organization_id: societyId,
+    name: body.eventName,
+    start_date: body.startDate,
+    end_date: body.endDate,
+    location: body.location ?? "",
+    description: body.description ?? "",
+  };
+
+  const withType = {
+    ...base,
+    event_type: typeof body.eventType === "string" ? body.eventType : "festival",
+    template_key: typeof body.templateKey === "string" ? body.templateKey : null,
+    unit_label: typeof body.unitLabel === "string" && body.unitLabel.trim() ? body.unitLabel.trim().slice(0, 24) : null,
+  };
+
+  const first = await supabase.from("events").insert(withType).select("id").single();
+  if (!first.error) return first.data;
+
+  if (!isMissingEventTypeColumns(first.error)) throw first.error;
+
+  console.warn("events has no template columns. Run supabase/migrations/024_event_modules.sql.");
+  const retry = await supabase.from("events").insert(base).select("id").single();
+  if (retry.error) throw retry.error;
+  return retry.data;
+}
+
+function isMissingEventTypeColumns(error: { code?: string; message?: string } | null) {
+  return Boolean(
+    error &&
+      (["42703", "PGRST204"].includes(error.code ?? "") ||
+        error.message?.includes("event_type") ||
+        error.message?.includes("template_key") ||
+        error.message?.includes("unit_label")),
+  );
+}
+
+/**
+ * Write the chosen template's modules as this event's own rows.
+ *
+ * Seeding at creation is the point: until now nothing wrote
+ * `event_page_visibility` when an event was made, so every new event fell
+ * through to the code defaults and an admin had no idea what it had until they
+ * opened Settings. The template is not consulted again after this - these rows
+ * are the event's, to edit freely.
+ *
+ * A failure here never fails the create. An event with no module rows behaves
+ * exactly as every event did before this existed, and Settings can fix it.
+ */
+async function seedModules(
+  supabase: ReturnType<typeof assertServiceSupabase>,
+  eventId: string,
+  body: Record<string, unknown>,
+) {
+  const submitted = Array.isArray(body.modules) ? (body.modules as Record<string, unknown>[]) : null;
+  if (!submitted?.length) return;
+
+  const rows = submitted
+    .filter((item) => (eventPageKeys as readonly string[]).includes(String(item.pageKey ?? "")))
+    .map((item) => {
+      const pageKey = String(item.pageKey);
+      return {
+        event_id: eventId,
+        page_key: pageKey,
+        visibility: normalizeVisibility(item.visibility, pageKey),
+        is_enabled: isAlwaysOnPage(pageKey) ? true : item.isEnabled !== false,
+        label_override: cleanModuleLabel(item.labelOverride),
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+  if (!rows.length) return;
+
+  const { error } = await supabase.from("event_page_visibility").upsert(rows, { onConflict: "event_id,page_key" });
+  if (error) {
+    console.warn(
+      "Could not seed this event's modules - run supabase/migrations/015 and 024. The event was still created.",
+      error,
+    );
+  }
 }

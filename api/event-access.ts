@@ -1,4 +1,4 @@
-import { eventPageKeys, fetchPageVisibility, isCommitteeOpenPage } from "./_lib/page-visibility.js";
+import { fetchEventModules, isCommitteeOpenPage } from "./_lib/page-visibility.js";
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
 /**
@@ -23,16 +23,20 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const visibility = await fetchPageVisibility(eventId);
+    // Modules this event does not have are left out of every branch below,
+    // so the sidebar, the drawer, the route guard and Member Access all stop
+    // mentioning them at once - they already filter on this one list.
+    const modules = Object.values(await fetchEventModules(eventId)).filter((item) => item.isEnabled);
     const authHeader = String(req.headers.authorization ?? "");
 
     if (!authHeader.startsWith("Bearer ")) {
       sendJson(res, 200, {
         role: null,
-        pages: eventPageKeys
-          .filter((pageKey) => visibility[pageKey] === "public")
-          .map((pageKey) => ({
-            pageKey,
+        pages: modules
+          .filter((item) => item.visibility === "public")
+          .map((item) => ({
+            pageKey: item.pageKey,
+            label: item.label,
             canView: true,
             canEdit: false,
             accessLevel: "view",
@@ -66,8 +70,11 @@ export default async function handler(req: any, res: any) {
     if (role === "admin") {
       sendJson(res, 200, {
         role,
-        pages: [...eventPageKeys, "settings"].map((pageKey) => ({
-          pageKey,
+        pages: [
+          ...modules.map((item) => ({ pageKey: item.pageKey, label: item.label })),
+          { pageKey: "settings", label: "Settings" },
+        ].map((item) => ({
+          ...item,
           canView: true,
           canEdit: true,
           accessLevel: "edit",
@@ -87,14 +94,15 @@ export default async function handler(req: any, res: any) {
     // admin left "restricted" needs that personal grant - except a
     // committee-open page (Expenses), which every committee member can reach
     // to file their own claims.
-    const pages = eventPageKeys
-      .map((pageKey) => {
-        const accessLevel = granted.get(pageKey);
-        const openToSignedIn = visibility[pageKey] === "public" || visibility[pageKey] === "authenticated";
-        const openToCommittee = role === "committee" && isCommitteeOpenPage(pageKey);
+    const pages = modules
+      .map((item) => {
+        const accessLevel = granted.get(item.pageKey);
+        const openToSignedIn = item.visibility === "public" || item.visibility === "authenticated";
+        const openToCommittee = role === "committee" && isCommitteeOpenPage(item.pageKey);
         if (!accessLevel && !openToSignedIn && !openToCommittee) return null;
         return {
-          pageKey,
+          pageKey: item.pageKey,
+          label: item.label,
           canView: true,
           canEdit: accessLevel === "edit",
           accessLevel: accessLevel ?? ("view" as const),
