@@ -296,6 +296,65 @@ reach rather than on a list nobody could read.
 Both surfaces filter on the **same** list — `useEventAccess().pages` — so the sidebar
 and the drawer can never disagree about what a viewer may open. See "Auth and access".
 
+## Appearance, and the link that opens an event
+
+**Colour is five named presets, never a picker** ([src/lib/themes.ts](src/lib/themes.ts)).
+The UI rules set a 4.5:1 floor and a free hex field hands a committee the
+ability to fail it; presets are chosen once and checked once. Measured
+white-on-primary: teal 7.71, marigold 6.01, indigo 11.14, rose 8.83, forest
+9.17 to one. **A new preset must clear 4.5:1** - keep `primary` at 38%
+lightness or darker.
+
+A theme is applied by overriding `--primary`, `--ring` and `--accent` on the
+layout root, so every `bg-primary`, focus ring and funding bar already reads
+it. A default-themed event sets nothing and inherits globals.css untouched.
+Do not introduce a second styling mechanism for this.
+
+`events.hero_image_url` (027) replaces the hardcoded `null` that made every
+event show the bundled photograph. It uploads through the existing
+`/api/uploads` with an `events` folder, which falls into the committee branch
+already there. **The server only accepts a URL from this app's own storage** -
+any URL would let an admin point a public dashboard at a third party, which
+quietly tells that third party who opens the page and when.
+
+### Two route shapes, on purpose
+
+`/e/<eventId>/budget` is the real address: it survives a refresh, it can be
+bookmarked, and it works for somebody who has never opened the app. The flat
+`/budget` is kept for existing bookmarks and for a person with one event who
+should not have to look at an id. **Both render the same tree** - `app.tsx`
+defines the page routes once and mounts them twice.
+
+Three things make that work, and the first is the one that fails silently:
+
+- **`pageKeyFromPath()` skips the `/e/<id>/` prefix.** Taking segment 0
+  blindly hands the route guard the literal `"e"`, which is not a page, so
+  every path-form URL resolves to "restricted" and bounces to the login
+  screen. Covered by checks over both shapes.
+- **`useEventPath()`** ([src/lib/event-path.ts](src/lib/event-path.ts)) builds
+  every in-app link in one place, so a page opened from a shared link stays
+  shareable as somebody moves around it. It lives in its own `.ts` file rather
+  than in `event-context.tsx` only to avoid a second react-refresh warning.
+- **`AppLayout` syncs `useParams().eventId` into the context and persists it.**
+  The path wins over whatever the switcher last remembered.
+
+**`/s/<token>`** is the permanent link an admin hands out
+([027](supabase/migrations/027_event_appearance.sql) adds `share_token`). It
+resolves publicly - a share link that needs an account is not a share link -
+and returns an id and a name and nothing else, then redirects to the path
+form. What the visitor can then *see* is unchanged: page by page, from
+Modules. Replacing the token retires the old link immediately, which is the
+only way to take back one that travelled too far.
+
+**A link-borne id is persisted now.** It used to live in React state only, so
+a refresh lost it - the effect that calls `rememberEventId` returns early when
+an id is already set. Both the path form and the older `?eventId=` form write
+it through.
+
+**Per-event link previews are out of scope and need server rendering.** The
+`og:*` tags in index.html are static, so a crawler reading any of these URLs
+shows the app's generic title. See "Link previews" above.
+
 ## App icon and installability
 
 **Six people around a shared centre**, in warm gold on the brand teal

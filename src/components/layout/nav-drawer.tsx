@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { signOut, type AuthSession } from "@/lib/auth";
+import { useEventPath } from "@/lib/event-path";
 import { cn } from "@/lib/utils";
 import type { navItems } from "./nav-items";
 
@@ -54,6 +55,9 @@ export function NavDrawer({
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+  // The drawer's links carry the event in the address too, so a shared link
+  // stays shareable as somebody moves around from it.
+  const eventPath = useEventPath();
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -141,7 +145,7 @@ export function NavDrawer({
               items.map((item) => (
                 <NavLink
                   key={item.href}
-                  to={item.href}
+                  to={eventPath(item.href)}
                   onClick={close}
                   className={({ isActive }) =>
                     cn(

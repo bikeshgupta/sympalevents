@@ -1,7 +1,7 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { LogOut, UserPen } from "lucide-react";
-import { useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useParams } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
 import { EventSwitcher } from "@/components/layout/event-switcher";
 import { NavDrawer } from "@/components/layout/nav-drawer";
@@ -11,6 +11,7 @@ import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
+import { useEventPath } from "@/lib/event-path";
 import { useScrollToTopOnNavigate } from "@/lib/scroll";
 import { themeVariables } from "@/lib/themes";
 import { useEventData } from "@/lib/event-data";
@@ -25,7 +26,19 @@ export function AppLayout() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
-  const { selectedEvent, selectedEventId, societies, isLoading: isEventLoading } = useEventContext();
+  const { selectedEvent, selectedEventId, societies, setSelectedEventId, isLoading: isEventLoading } =
+    useEventContext();
+  const eventPath = useEventPath();
+  const { eventId: eventIdFromRoute } = useParams();
+
+  // `/e/<eventId>/...` is the address that survives a refresh and can be
+  // shared, so the path wins over whatever the switcher last remembered.
+  // Selecting also persists it, which is what a link-borne id never did.
+  useEffect(() => {
+    if (eventIdFromRoute && eventIdFromRoute !== selectedEventId) {
+      setSelectedEventId(eventIdFromRoute);
+    }
+  }, [eventIdFromRoute, selectedEventId, setSelectedEventId]);
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
 
@@ -106,7 +119,7 @@ export function AppLayout() {
           {visibleNavItems.map((item) => (
             <NavLink
               key={item.href}
-              to={item.href}
+              to={eventPath(item.href)}
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground",

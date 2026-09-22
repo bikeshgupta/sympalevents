@@ -84,7 +84,12 @@ const pageKeyAliases: Record<string, string> = {
 };
 
 export function pageKeyFromPath(pathname: string) {
-  const pageKey = pathname.split("/").filter(Boolean)[0] || "dashboard";
+  const segments = pathname.split("/").filter(Boolean);
+  // `/e/<eventId>/budget` is the same page as `/budget`. Taking segment 0
+  // blindly would hand the route guard the literal "e", which is not a page,
+  // so every path-form URL would resolve to "restricted" and bounce.
+  const relevant = segments[0] === "e" ? segments.slice(2) : segments;
+  const pageKey = relevant[0] || "dashboard";
   return pageKeyAliases[pageKey] ?? pageKey;
 }
 

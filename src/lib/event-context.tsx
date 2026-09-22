@@ -42,10 +42,10 @@ const STORAGE_KEY = "selected_event_id";
  * An event id pinned in the address bar, which is how somebody without an
  * account reaches a public page at all.
  *
- * The provider sits outside the Router (see main.tsx), so this reads
- * `window.location` rather than `useSearchParams`. It is read once on mount:
- * following a link into the app is a fresh load, and after that the switcher
- * owns the selection.
+ * Read from `window.location` once on mount rather than through the router,
+ * because it is a starting value rather than something to track: following a
+ * link into the app is a fresh load, and after that the path and the switcher
+ * own the selection.
  */
 function eventIdFromUrl() {
   if (typeof window === "undefined") return undefined;
@@ -73,9 +73,17 @@ function rememberEventId(eventId: string) {
 
 export function EventProvider({ children }: { children: ReactNode }) {
   const { data: session, isLoading: isSessionLoading } = useSession();
-  const [selectedEventId, setSelectedEventIdState] = useState<string | undefined>(
-    () => eventIdFromUrl() ?? storedEventId(),
-  );
+  const [selectedEventId, setSelectedEventIdState] = useState<string | undefined>(() => {
+    // An id in the query string is how the older share links reached a public
+    // page. Persist it here rather than only holding it in state: without
+    // this, a refresh on any page loses the event and drops the visitor back
+    // to whatever they last had, which on a first visit is nothing at all.
+    // `/e/<eventId>/...` is the address to hand out now, and AppLayout
+    // persists that one the same way.
+    const fromUrl = eventIdFromUrl();
+    if (fromUrl) rememberEventId(fromUrl);
+    return fromUrl ?? storedEventId();
+  });
 
   /**
    * The events this person has a role on - not every event in the database.
