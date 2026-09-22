@@ -1162,9 +1162,10 @@ underneath. Do not put it back on the chart.
 ## Notices (print / PDF)
 
 A committee prints things: the programme for the notice board, the prasad roster,
-an auction announcement, the duty list. [src/features/notices/](src/features/notices/)
-gives four screens a **Notice** button (Tasks calls it **Roster**) that opens an A4
-sheet, previews it, and prints it.
+an auction announcement, the duty list, the treasurer's financial report.
+[src/features/notices/](src/features/notices/) gives five screens a **Notice** button
+(Tasks calls it **Roster**, Expenses **Financial report**) that opens an A4 sheet,
+previews it, and prints it.
 
 **There is no PDF library, and no serverless renderer.** The sheet is ordinary HTML
 with print rules, and the browser's print dialog already has "Save as PDF" (and
@@ -1196,6 +1197,7 @@ markup. `document.title` is set while printing, so the file saves as
   | Prasad | slot, prasad, sponsor names | flats, who is distributing, notes |
   | Auction | published live/upcoming ones, the bid rules, how to take part | unpublished and cancelled ones, with status |
   | Duty roster (Tasks) | the job, who is on it, the date | priority, status, category, notes; plus finished work |
+  | Financial report (Expenses) | *nothing - admin only, see below* | the whole report |
 
   Never widen the external column without asking - a board copy is the one surface
   where a flat number or a private note cannot be taken back.
@@ -1204,6 +1206,41 @@ markup. `document.title` is set while printing, so the file saves as
   on `NoticeSheet` scales the title and the running order up for a board, and the
   sheet's heading carries the day, time and place so the entry does not repeat them.
 - Comment threads are never printed, on any notice.
+
+### The financial report is the one notice with no external copy
+
+`FinancialReportDialog` ([financial-report-notice.tsx](src/features/notices/financial-report-notice.tsx))
+is offered on `/expenses` and is **admin only** - `access.isAdmin` from
+`/api/expenses`, not `canPrintNotices`, because it puts the whole ledger beside every
+contribution and sponsorship. There is no notice-board version of it, so the audience
+switch is not rendered and the sheet is always the committee copy.
+
+- **Summary, then collection, then expenses** - what it adds up to, where the money
+  came from, where it went. Fixed order, both formats.
+- `buildFinancialReport()` in [src/lib/financial-report.ts](src/lib/financial-report.ts)
+  produces the numbers **once**, from rows the page already holds (`useEventData()`
+  for contributions and sponsorships, the `/api/expenses` ledger for spending). The
+  printed sheet and the workbook both render that one object, so they cannot drift.
+  No new query, no new serverless function, no migration - the count is still 12.
+- The button also needs `data.source === "supabase"`. With Supabase unreadable the
+  ledger would be this event's while the collection half was the demo set, and a
+  report that silently mixes the two is worse than no button.
+- **The workbook carries payment modes and references; the printed sheet does not.**
+  A printed copy gets photographed and does not have the column width; matching a UTR
+  to a bank statement is what a treasurer opens a spreadsheet for.
+- **Download as Excel is a real `.xlsx`, written by hand** -
+  [src/lib/xlsx.ts](src/lib/xlsx.ts), ~150 lines, no dependency. An .xlsx is a zip of
+  XML parts, and the zip is written **stored rather than deflated** so no compression
+  code is needed. SheetJS/ExcelJS are hundreds of KB and a dependency is something the
+  UI rules say to ask about; CSV would lose the three sheets and the rupee formatting,
+  and an XML file named `.xls` makes Excel complain about the extension every time.
+  Amounts go in as numbers with a `"₹"#,##0` cell format so they can be summed;
+  dates go in as ISO text so they sort everywhere.
+  [financial-report-xlsx.ts](src/lib/financial-report-xlsx.ts) is the report-to-sheets
+  mapping, kept apart from the writer so the writer stays generic for the next export.
+- `NoticeDialog` grew two **optional** props for this - `actions` (the extra button
+  beside Close and Print) and `description` (the line under the title). Both default
+  to exactly what the four existing notices render today.
 
 ## Motion
 
