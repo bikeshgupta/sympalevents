@@ -12,6 +12,7 @@ import { signOut, useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useScrollToTopOnNavigate } from "@/lib/scroll";
+import { themeVariables } from "@/lib/themes";
 import { useEventData } from "@/lib/event-data";
 import { cn } from "@/lib/utils";
 import { navItems } from "./nav-items";
@@ -24,7 +25,7 @@ export function AppLayout() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
-  const { selectedEvent, selectedEventId, isLoading: isEventLoading } = useEventContext();
+  const { selectedEvent, selectedEventId, societies, isLoading: isEventLoading } = useEventContext();
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
 
@@ -73,15 +74,32 @@ export function AppLayout() {
     }
   }
 
-  // No `pb-20` on the root any more: the fixed bottom bar it reserved space
-  // for is gone, replaced by the header drawer (see nav-drawer.tsx).
+  const society = societies.find((item) => item.id === selectedEvent?.societyId) ?? null;
+
   return (
-    <div className="min-h-screen bg-background">
+    // The event's colour preset, set as CSS variables on the root rather than
+    // by any second styling mechanism - every `bg-primary`, focus ring and
+    // accent in the app is already reading these. A default-themed event sets
+    // nothing at all, so it inherits globals.css untouched. See lib/themes.ts.
+    <div className="min-h-screen bg-background" style={themeVariables(event?.theme)}>
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card lg:block">
-        <div className="flex h-16 items-center border-b px-5">
-          <div>
-            <p className="text-sm font-semibold">SymPal Events</p>
-            <p className="text-xs text-muted-foreground">Committee workspace</p>
+        {/* The society's own name and logo, when it has them. A deployment
+            with no society yet falls back to the app's name, which is what
+            this always said. */}
+        <div className="flex h-16 items-center gap-2.5 border-b px-5">
+          {society?.logoUrl ? (
+            <img
+              src={society.logoUrl}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-md border object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{society?.name ?? "SymPal Events"}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {society ? (event?.name ?? "Committee workspace") : "Committee workspace"}
+            </p>
           </div>
         </div>
         <nav className="space-y-1 p-3">

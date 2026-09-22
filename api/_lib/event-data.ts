@@ -133,7 +133,7 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
 async function loadEvent(supabase: SupabaseClient, eventId: string) {
   const withTemplate = await supabase
     .from("events")
-    .select("id,name,start_date,end_date,location,status,event_type,unit_label,dashboard_layout")
+    .select("id,name,start_date,end_date,location,status,event_type,unit_label,dashboard_layout,hero_image_url,theme,share_token")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -145,7 +145,10 @@ async function loadEvent(supabase: SupabaseClient, eventId: string) {
     ["42703", "PGRST204"].includes(withTemplate.error.code ?? "") ||
     withTemplate.error.message?.includes("event_type") ||
     withTemplate.error.message?.includes("unit_label") ||
-    withTemplate.error.message?.includes("dashboard_layout");
+    withTemplate.error.message?.includes("dashboard_layout") ||
+    withTemplate.error.message?.includes("hero_image_url") ||
+    withTemplate.error.message?.includes("theme") ||
+    withTemplate.error.message?.includes("share_token");
 
   if (!missingColumns) throw withTemplate.error;
 
@@ -394,6 +397,15 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
       // kind of event" - which is computed, not stored, so an event is never
       // frozen to whatever the defaults were the day it was made.
       dashboardLayout: "dashboard_layout" in event ? event.dashboard_layout ?? null : null,
+      heroImageUrl: "hero_image_url" in event ? (event.hero_image_url as string | null) ?? null : null,
+      theme: "theme" in event ? (event.theme as string | null) ?? null : null,
+      // The share token is a link, not a secret, but it is only useful to
+      // somebody who can hand it out - so it travels only for a committee
+      // member. A resident reading a public dashboard has no need of it.
+      shareToken:
+        "share_token" in event && (dashboard.role === "admin" || dashboard.canEdit)
+          ? (event.share_token as string | null) ?? null
+          : null,
     },
     financials: {
       totalBudget,

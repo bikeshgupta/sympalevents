@@ -32,6 +32,10 @@ export type AppEvent = {
   /** The committee's dashboard arrangement, or null for this event type's
    *  default. See src/lib/widgets.ts. */
   dashboardLayout?: unknown;
+  /** The colour preset this event wears. See src/lib/themes.ts. */
+  theme?: string | null;
+  /** The permanent link to this event, for a committee member to hand out. */
+  shareToken?: string | null;
 };
 
 export type ContributionRow = {
@@ -199,6 +203,9 @@ type EventDataResponse = {
     eventType?: string;
     unitLabel?: string | null;
     dashboardLayout?: unknown;
+    heroImageUrl?: string | null;
+    theme?: string | null;
+    shareToken?: string | null;
   };
   financials: EventData["financials"];
   contributions: ContributionRow[];
@@ -261,11 +268,15 @@ export function useEventData(options: UseEventDataOptions = {}) {
             startDate: payload.event.startDate,
             endDate: payload.event.endDate,
             timezone: "Asia/Kolkata",
-            heroImageUrl: null,
+            // The event's own photograph when it has one; the bundled image
+            // in the dashboard hero is the fallback, not the only option.
+            heroImageUrl: payload.event.heroImageUrl ?? null,
             status: payload.event.status,
             eventType: payload.event.eventType ?? "festival",
             unitLabel: payload.event.unitLabel ?? null,
             dashboardLayout: payload.event.dashboardLayout ?? null,
+            theme: payload.event.theme ?? null,
+            shareToken: payload.event.shareToken ?? null,
           },
           financials: payload.financials,
           contributions: payload.contributions,

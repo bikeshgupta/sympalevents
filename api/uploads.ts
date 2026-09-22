@@ -41,7 +41,7 @@ const EXT_BY_MIME: Record<string, string> = {
 // below, if it should differ from "committee") for any new upload surface.
 // "closing" holds the celebration photographs on the closing page; like
 // "auctions" it is committee-only, decided explicitly rather than inherited.
-const ALLOWED_FOLDERS = new Set(["auctions", "closing"]);
+const ALLOWED_FOLDERS = new Set(["auctions", "closing", "events"]);
 
 /** Must match MAX_PHOTOS_PER_PERSON in api/_lib/closing.ts, which enforces
  *  the same cap on the row insert. */
@@ -94,6 +94,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return;
       }
     } else {
+      //   auctions  as above.
+      //   events    the hero photograph, which is the first thing anyone sees
+      //             on a page an admin may have opened to the world. Same
+      //             committee bar as an auction's image, and it falls out of
+      //             this branch rather than needing a rule of its own.
       await requireEventCommittee(eventId, appUser.id);
     }
 
