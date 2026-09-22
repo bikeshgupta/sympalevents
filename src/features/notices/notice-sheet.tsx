@@ -119,6 +119,12 @@ export function NoticeEmpty({ children }: { children: ReactNode }) {
   return <p className="text-sm italic text-muted-foreground">{children}</p>;
 }
 
+const defaultNoticeDescription = (
+  <>
+    Print it for the board, or choose <strong>Save as PDF</strong> in the print dialog to share it.
+  </>
+);
+
 /**
  * The preview-and-print wrapper. Pass the sheet as `children`, and anything
  * the notice needs to choose (which event, which day) as `controls`.
@@ -131,6 +137,8 @@ export function NoticeDialog({
   audience,
   onAudienceChange,
   controls,
+  actions,
+  description = defaultNoticeDescription,
   children,
 }: {
   open: boolean;
@@ -142,6 +150,16 @@ export function NoticeDialog({
   /** Omit to lock the notice to one audience (Tasks has no public version). */
   onAudienceChange?: (audience: NoticeAudience) => void;
   controls?: ReactNode;
+  /**
+   * An extra button beside Close and Print, for a notice that has a second
+   * way out of the dialog - the financial report's spreadsheet download.
+   * Optional, so every existing notice keeps the two buttons it has today.
+   */
+  actions?: ReactNode;
+  /** The line under the dialog title. Defaults to the notice-board wording
+   *  every notice used before one of them stopped being a notice: the
+   *  financial report is a treasurer's document, not something to pin up. */
+  description?: ReactNode;
   children: ReactNode;
 }) {
   // Marks the document as "printing a notice" so the print rules know to hide
@@ -173,9 +191,7 @@ export function NoticeDialog({
       <DialogContent data-notice-shell className="max-w-3xl">
         <DialogHeader className="notice-no-print">
           <DialogTitle>{title}</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Print it for the board, or choose <strong>Save as PDF</strong> in the print dialog to share it.
-          </p>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </DialogHeader>
 
         <div className="notice-no-print space-y-3">
@@ -223,10 +239,11 @@ export function NoticeDialog({
           {children}
         </div>
 
-        <div className="notice-no-print flex justify-end gap-2">
+        <div className="notice-no-print flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
+          {actions}
           <Button type="button" onClick={print}>
             <Printer className="h-4 w-4" aria-hidden="true" />
             Print / Save as PDF

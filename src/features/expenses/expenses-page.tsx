@@ -1,4 +1,4 @@
-import { AlertTriangle, Banknote, CheckCircle2, FileText, FolderKanban, Image as ImageIcon, Pencil, Plus, ReceiptText, Trash2 } from "lucide-react";
+import { AlertTriangle, Banknote, CheckCircle2, FileBarChart, FileText, FolderKanban, Image as ImageIcon, Pencil, Plus, ReceiptText, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatCurrencyCompact, formatEventDate, formatEventTimestamp } from "@/features/dashboard/dashboard-utils";
 import { ExpenseFormDialog } from "@/features/expenses/expense-form-dialog";
+import { FinancialReportDialog } from "@/features/notices/financial-report-notice";
 import { PageTools } from "@/features/shared/page-tools";
 import { ColumnFilter, SortableHeader, TableColumn, TableToolbar, useFilteredSortedRows } from "@/features/shared/table-tools";
 import { useSession } from "@/lib/auth";
@@ -121,6 +122,7 @@ export function ExpensesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogExpense, setDialogExpense] = useState<Expense | undefined>();
+  const [reportOpen, setReportOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const ledger = query.data;
@@ -129,6 +131,19 @@ export function ExpensesPage() {
   const access: ExpenseAccess = ledger?.access ?? noExpenseAccess;
   const claimsReady = ledger?.claimsReady ?? true;
   const onlyMine = ledger?.scope === "mine";
+
+  /**
+   * The financial report is the admin's, and nobody else's: it puts the whole
+   * ledger next to every contribution and sponsorship, with flats, and the
+   * workbook adds payment references. `isAdmin` is the server's answer
+   * (api/expenses.ts), not a client guess.
+   *
+   * It also needs real data on both halves. The collection figures come from
+   * `useEventData()`, so with Supabase unreadable the ledger would be this
+   * event's while the collection was the demo set - a report that silently
+   * mixes the two is worse than no button.
+   */
+  const canDownloadReport = access.isAdmin && data.source === "supabase";
 
   const expenses = useMemo(
     () => (fromApi ? ledger?.expenses ?? [] : data.expenses.map(demoExpense)),
@@ -281,14 +296,22 @@ export function ExpensesPage() {
         searchPlaceholder="Search item, category, person"
         searchLabel="Search expenses"
         action={
-          access.canSubmit ? (
-            <Button type="button" onClick={() => openDialog()} disabled={!claimsReady} className="w-full sm:w-auto">
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add Expense
-            </Button>
-          ) : (
-            <span className="text-sm text-muted-foreground">View-only access</span>
-          )
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            {canDownloadReport ? (
+              <Button type="button" variant="outline" onClick={() => setReportOpen(true)} className="w-full sm:w-auto">
+                <FileBarChart className="h-4 w-4" aria-hidden="true" />
+                Financial report
+              </Button>
+            ) : null}
+            {access.canSubmit ? (
+              <Button type="button" onClick={() => openDialog()} disabled={!claimsReady} className="w-full sm:w-auto">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add Expense
+              </Button>
+            ) : (
+              <span className="text-sm text-muted-foreground">View-only access</span>
+            )}
+          </div>
         }
       />
 
@@ -419,6 +442,18 @@ export function ExpensesPage() {
           </>
         )}
       </Card>
+
+      {canDownloadReport ? (
+        <FinancialReportDialog
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          event={data.event}
+          contributions={data.contributions}
+          sponsors={data.sponsors}
+          expenses={expenses}
+          totalBudget={data.financials.totalBudget}
+        />
+      ) : null}
 
       {access.canSubmit ? (
         <ExpenseFormDialog
