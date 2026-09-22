@@ -192,9 +192,20 @@ against Google's public keys and map the user into Supabase `app_users`.
 
 - **Desktop (`lg` and up):** the fixed left sidebar in
   [app-layout.tsx](src/components/layout/app-layout.tsx).
-- **Mobile:** a right-hand drawer behind the three-line button next to the profile
-  picture ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). It shows the
+- **Mobile:** a right-hand drawer behind a round button fixed to the **bottom right**
+  of the screen ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). It shows the
   signed-in account first (or a Sign in button), then every page, then Sign out.
+  The button used to sit in the header next to the profile picture, which is the
+  hardest corner of a phone for a thumb to reach. Two things about its new home are
+  load-bearing:
+  - **It is rendered outside `<header>`, as a sibling before `<main>`.** The header
+    carries `backdrop-blur`, and a backdrop filter makes an element the containing
+    block for every `position: fixed` descendant - inside it, the button anchors to
+    the header box and sits just below it instead of at the foot of the screen, with
+    nothing in the console to say why.
+  - **That DOM position is also the accessible one.** Rendered last it would make a
+    keyboard user tab through the whole page before reaching navigation; rendered
+    there, navigation comes straight after the header's own controls.
 
 **Every navigation starts at the top.** React Router does not do that by itself - it
 swaps the route's element and leaves the window where it was, so a link followed from
@@ -213,10 +224,15 @@ is `sticky h-16`). Today: `/closing#reviews` from the dashboard's review card,
 `/closing#photographs` from its gallery preview, and `/dashboard#in-their-words`, which
 `/login` returns a signed-out commenter to.
 
-**The fixed bottom bar is gone**, and so is the `pb-20` the layout reserved for it.
-With thirteen pages that bar showed about four at a time behind a sideways scroll,
-gave no hint the rest existed, and cost the last ~80px of every screen. Do not
-reintroduce it; add a page to `navItems` and it appears in both surfaces.
+**The fixed bottom bar is gone.** With thirteen pages that bar showed about four at a
+time behind a sideways scroll, gave no hint the rest existed, and cost the last ~80px
+of every screen. Do not reintroduce it; add a page to `navItems` and it appears in
+both surfaces.
+
+`pb-20` came back on `<main>` below `lg`, and only there - the floating menu button
+covers whatever scrolls under it, and a page's last row should not live permanently
+beneath it. That is the same ~80px the bar charged, spent on a control anyone can
+reach rather than on a list nobody could read.
 
 Both surfaces filter on the **same** list — `useEventAccess().pages` — so the sidebar
 and the drawer can never disagree about what a viewer may open. See "Auth and access".

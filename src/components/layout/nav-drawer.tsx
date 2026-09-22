@@ -8,14 +8,28 @@ import { cn } from "@/lib/utils";
 import type { navItems } from "./nav-items";
 
 /**
- * The mobile navigation, as a right-hand drawer behind a three-line button in
- * the header, next to the profile picture.
+ * The mobile navigation, as a right-hand drawer behind a round button at the
+ * bottom right of the screen.
  *
  * It replaced a fixed bottom bar that scrolled sideways: with thirteen pages
- * that bar showed about four of them at a time, gave no indication the rest
- * existed, and cost the last ~80px of every screen. The drawer shows the whole
- * list at once and costs nothing when closed - which is why the layout no
- * longer carries `pb-20`.
+ * that bar showed about four of them at a time and gave no indication the rest
+ * existed. The drawer shows the whole list at once. Do not bring the bar back.
+ *
+ * The button sat in the header next to the profile picture until it became
+ * clear that the top right corner is the hardest place on a phone for a thumb
+ * to reach. It is now fixed to the bottom right, which is why `<main>` carries
+ * `pb-20` again below `lg` - a floating button covers whatever scrolls under
+ * it, and the last row of a page should not live beneath it. That is a much
+ * smaller price than the full-width bar charged, and it buys a control anyone
+ * can actually reach.
+ *
+ * **It must not be rendered inside the header.** The header carries
+ * `backdrop-blur`, and a backdrop filter makes an element the containing block
+ * for every `position: fixed` descendant - the button would anchor to the
+ * header box and sit just below it rather than at the foot of the screen, with
+ * no error to explain why. `AppLayout` renders this as a sibling after the
+ * header instead, which also keeps it early enough in the DOM that a keyboard
+ * reaches navigation before the page content.
  *
  * Who is signed in comes first, because "which account am I looking at this
  * with" is the question a shared committee phone raises most often, and
@@ -44,12 +58,16 @@ export function NavDrawer({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Trigger asChild>
+        {/* Chrome, not a page action: card-coloured rather than primary, so it
+            never reads as the "Add" button several screens already have in
+            their own top right. 56px, comfortably over the 40px tap floor, and
+            the bottom offset clears the iOS home indicator. */}
         <button
           type="button"
           aria-label="Open menu"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+          className="fixed right-4 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-40 inline-flex h-14 w-14 items-center justify-center rounded-full border bg-card text-foreground shadow-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:hidden"
         >
-          <Menu className="h-5 w-5" aria-hidden="true" />
+          <Menu className="h-6 w-6" aria-hidden="true" />
         </button>
       </DialogPrimitive.Trigger>
 

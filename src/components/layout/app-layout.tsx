@@ -180,21 +180,37 @@ export function AppLayout() {
               <Link to="/login">Sign in</Link>
             </Button>
           )}
-          <NavDrawer
-            items={visibleNavItems}
-            session={session}
-            userName={userName}
-            onEditName={() => setEditingName(true)}
-          />
-          {session && editingName ? (
-            <ProfileNameDialog
-              currentName={session.user.name ?? ""}
-              email={session.user.email}
-              onOpenChange={setEditingName}
-            />
-          ) : null}
         </header>
-        <main className="mx-auto w-full max-w-7xl px-4 py-5 lg:px-6">
+
+        {/* Deliberately outside the header. The header carries `backdrop-blur`,
+            and a backdrop filter makes an element the containing block for
+            every fixed-position descendant - the menu button would anchor to
+            the header box and sit just beneath it instead of at the foot of
+            the screen, with nothing to say why. Out here it anchors to the
+            viewport.
+
+            Its position in the DOM is still right after the header's own
+            controls, so a keyboard or screen reader reaches navigation before
+            the page content rather than after all of it. The dialog below is
+            portalled, so where it sits makes no visual difference; it lives
+            next to the drawer because the drawer is what opens it. */}
+        <NavDrawer
+          items={visibleNavItems}
+          session={session}
+          userName={userName}
+          onEditName={() => setEditingName(true)}
+        />
+        {session && editingName ? (
+          <ProfileNameDialog
+            currentName={session.user.name ?? ""}
+            email={session.user.email}
+            onOpenChange={setEditingName}
+          />
+        ) : null}
+
+        {/* `pb-20` below `lg` is the room the floating menu button needs; a
+            page's last row would otherwise sit under it permanently. */}
+        <main className="mx-auto w-full max-w-7xl px-4 pb-20 pt-5 lg:px-6 lg:pb-5">
           {requestMessage ? (
             <div className="mb-4 rounded-md border bg-card px-4 py-3 text-sm text-muted-foreground">{requestMessage}</div>
           ) : null}
