@@ -106,6 +106,8 @@ export type EventModule = {
   label: string;
   /** Only set when the committee renamed it; the UI needs to tell them apart. */
   labelOverride: string | null;
+  /** Where it sits in the nav. Null sorts after everything numbered. */
+  sortOrder: number | null;
 };
 
 const MAX_LABEL = 28;
@@ -128,7 +130,8 @@ function isMissingModuleColumns(error: { code?: string; message?: string } | nul
     error &&
       (["42703", "PGRST204"].includes(error.code ?? "") ||
         error.message?.includes("is_enabled") ||
-        error.message?.includes("label_override")),
+        error.message?.includes("label_override") ||
+        error.message?.includes("sort_order")),
   );
 }
 
@@ -146,11 +149,14 @@ function isMissingVisibilityTable(error: { code?: string; message?: string } | n
 export async function fetchEventModules(eventId: string): Promise<Record<string, EventModule>> {
   const supabase = assertServiceSupabase();
 
-  let stored = new Map<string, { visibility?: unknown; is_enabled?: unknown; label_override?: unknown }>();
+  let stored = new Map<
+    string,
+    { visibility?: unknown; is_enabled?: unknown; label_override?: unknown; sort_order?: unknown }
+  >();
 
   const full = await supabase
     .from("event_page_visibility")
-    .select("page_key,visibility,is_enabled,label_override")
+    .select("page_key,visibility,is_enabled,label_override,sort_order")
     .eq("event_id", eventId);
 
   if (full.error && isMissingModuleColumns(full.error)) {
@@ -188,10 +194,29 @@ export async function fetchEventModules(eventId: string): Promise<Record<string,
               : !defaultDisabledPages.has(pageKey),
           label: labelOverride ?? defaultPageLabels[pageKey] ?? pageKey,
           labelOverride,
+          sortOrder: typeof row?.sort_order === "number" ? row.sort_order : null,
         } satisfies EventModule,
       ];
     }),
   );
+}
+
+/**
+ * Modules in the order the committee put them in.
+ *
+ * A module with no stored position sorts after every one that has a number,
+ * keeping the registry's own order among themselves - so a module added by a
+ * later deploy turns up at the end of the nav rather than vanishing or
+ * jumping to the top of somebody's carefully arranged list.
+ */
+export function sortModules(modules: EventModule[]): EventModule[] {
+  const registryIndex = new Map(eventPageKeys.map((key, index) => [key as string, index]));
+  return [...modules].sort((left, right) => {
+    const l = left.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    const r = right.sortOrder ?? Number.MAX_SAFE_INTEGER;
+    if (l !== r) return l - r;
+    return (registryIndex.get(left.pageKey) ?? 0) - (registryIndex.get(right.pageKey) ?? 0);
+  });
 }
 
 /**

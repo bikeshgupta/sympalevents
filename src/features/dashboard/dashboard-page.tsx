@@ -1,24 +1,19 @@
 import type { ClosingFacts } from "@/features/closing/closing-copy";
-import { AnnouncementsCard } from "@/features/dashboard/announcements-card";
-import { ClosingDashboardCard } from "@/features/closing/closing-summary";
-import { ClosingReviewsCard } from "@/features/closing/closing-reviews-card";
-import { DashboardAuctions } from "@/features/dashboard/dashboard-auctions";
-import { EventHero } from "@/features/dashboard/widgets/event-hero";
-import { EventSchedule } from "@/features/dashboard/widgets/event-schedule";
-import { FinancialSummary } from "@/features/dashboard/widgets/financial-summary";
-import { FundingProgress } from "@/features/dashboard/widgets/funding-progress";
-import { GalleryPreview } from "@/features/dashboard/widgets/gallery-preview";
-import { MyResponsibilities } from "@/features/dashboard/widgets/my-responsibilities";
 import { getDefaultEventDay, getEventDays, getEventPhase, getNextEvent, sortTimelineItems } from "@/features/dashboard/dashboard-utils";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useEventClosing } from "@/lib/closing";
 import { useEventData } from "@/lib/event-data";
 import { useHashTarget } from "@/lib/scroll";
+import { renderWidget, type DashboardContext } from "@/features/dashboard/widget-host";
 import { useSession } from "@/lib/auth";
+import { useEventAccess } from "@/lib/event-access";
+import { cn } from "@/lib/utils";
+import { layoutRows, normaliseLayout, visibleLayout } from "@/lib/widgets";
 
 export function DashboardPage() {
   const { data, isFetching } = useEventData({ includeTasks: false });
   const { data: session } = useSession();
+  const { data: eventAccess } = useEventAccess();
   const [now, setNow] = useState(() => new Date());
   const event = data.event;
   const eventDays = useMemo(() => getEventDays(event), [event]);
@@ -70,80 +65,86 @@ export function DashboardPage() {
     setSelectedDay(defaultDay);
   }, [defaultDay, event.id]);
 
-  const moneySection = (
-    <section className="grid gap-4 lg:grid-cols-[1fr_0.85fr]">
-      <FinancialSummary
-        totalBudget={financials.totalBudget}
-        actualExpenses={financials.actualExpenses}
-        fundsReceived={fundsReceived}
-        fundingGap={fundingGap}
-        sponsors={data.sponsors.length}
-        contributors={data.contributions.length}
-      />
-      <FundingProgress
-        totalBudget={financials.totalBudget}
-        fundsReceived={fundsReceived}
-        contributionReceived={financials.contributionReceived}
-        sponsorshipReceived={financials.sponsorshipReceived}
-        contributions={data.contributions}
-        sponsors={data.sponsors}
-      />
-    </section>
+  // What this dashboard is made of, in the committee's order. A stored layout
+  // is normalised against the catalogue first, so a widget added or removed by
+  // a later release never leaves a saved arrangement broken. No layout at all
+  // means the default for this kind of event, which is exactly the order the
+  // dashboard has always rendered in.
+  const layout = useMemo(
+    () => normaliseLayout(event.dashboardLayout, isClosed),
+    [event.dashboardLayout, isClosed],
   );
 
-  const scheduleSection = (
-    <EventSchedule
-      days={eventDays}
-      selectedDay={selectedDay}
-      onSelectDay={setSelectedDay}
-      items={selectedItems}
-      allItems={timeline}
-      nextEvent={nextEvent}
-      now={now}
-      phase={phase}
-    />
-  );
+  // A widget tied to a module the admin has switched off, or that this viewer
+  // cannot open, is not drawn. That list is the server's, and it is the same
+  // one the sidebar filters on - there is no second permission rule here.
+  //
+  // Demo mode is the exception, for the reason the nav makes the same one
+  // (`isDemoNav` in app-layout.tsx): with no event there is no admin to have
+  // configured anything and nothing real to protect, so the dashboard shows
+  // the whole tour rather than filtering itself down to nothing.
+  const openPageKeys = useMemo(() => {
+    if (data.source === "demo") return null;
+    return new Set((eventAccess?.pages ?? []).filter((page) => page.canView).map((page) => page.pageKey));
+  }, [eventAccess, data.source]);
+
+  const context: DashboardContext = {
+    event,
+    timeline,
+    now,
+    phase,
+    isFetching,
+    isClosed,
+    signedIn: Boolean(session?.user),
+    source: data.source,
+    fallbackReason: data.fallbackReason,
+    totalBudget: financials.totalBudget,
+    actualExpenses: financials.actualExpenses,
+    fundsReceived,
+    fundingGap,
+    contributionReceived: financials.contributionReceived,
+    sponsorshipReceived: financials.sponsorshipReceived,
+    contributions: data.contributions,
+    sponsors: data.sponsors,
+    eventDays,
+    selectedDay,
+    onSelectDay: setSelectedDay,
+    selectedItems,
+    nextEvent,
+    closing: closing.data,
+    closingIsLoading: closing.isLoading,
+    closingFacts,
+    onSubmitReview: (input) => closing.saveReview.mutateAsync(input),
+  };
+
+  const rows = layoutRows(visibleLayout(layout, openPageKeys));
 
   return (
     <div className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
-      <EventHero
-        event={event}
-        timeline={timeline}
-        now={now}
-        phase={phase}
-        isLoading={isFetching}
-        isClosed={isClosed}
-        feedback={closing.data?.feedback}
-        source={data.source}
-        fallbackReason={data.fallbackReason}
-      />
-      {/* Once the celebration is closed the summary and what people wrote sit
-          side by side - "how did it go" is two questions, the committee's
-          answer and everybody else's. */}
-      {isClosed ? (
-        <section className="grid items-start gap-4 lg:grid-cols-[1.1fr_1fr]">
-          <ClosingDashboardCard
-            closing={closing.data?.closing}
-            facts={closingFacts}
-            feedback={closing.data?.feedback}
-          />
-          <ClosingReviewsCard
-            feedback={closing.data?.feedback}
-            isLoading={closing.isLoading}
-            signedIn={Boolean(session?.user)}
-            onSubmit={(input) => closing.saveReview.mutateAsync(input)}
-          />
-        </section>
-      ) : null}
-      <DashboardAuctions eventId={event.id} />
-      <AnnouncementsCard event={event} now={now} />
-      {/* Before the event is closed, money is the live question and leads the
-          page. Once it is closed, the celebration summary leads and the
-          contribution and funding cards move underneath it. */}
-      {isClosed ? scheduleSection : moneySection}
-      {isClosed ? moneySection : scheduleSection}
-      <MyResponsibilities eventId={event.id} signedIn={Boolean(session?.user)} />
-      <GalleryPreview photos={closing.data?.gallery ?? []} />
+      {rows.map((row) => {
+        const rendered = row.entries.map((entry) => ({ entry, node: renderWidget(entry, context) }));
+        // A widget that decides it has nothing to draw (the closing note
+        // before the event is closed) must not leave an empty grid cell or an
+        // empty row behind it.
+        const live = rendered.filter((item) => item.node !== null);
+        if (!live.length) return null;
+
+        // Fragments, not wrapper divs. Several widgets render nothing of
+        // their own when they have nothing to show - the auctions strip with
+        // no published auction, for one - and an empty wrapper still counts
+        // for `space-y-4`, leaving a gap where nothing is.
+        if (live.length === 1) {
+          return <Fragment key={live[0].entry.key}>{live[0].node}</Fragment>;
+        }
+
+        return (
+          <section key={live[0].entry.key} className={cn("grid gap-4", row.rowClass)}>
+            {live.map((item) => (
+              <Fragment key={item.entry.key}>{item.node}</Fragment>
+            ))}
+          </section>
+        );
+      })}
     </div>
   );
 }

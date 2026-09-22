@@ -1,3 +1,4 @@
+import type { WidgetVariant } from "@/lib/widgets";
 import { AnimatedNumber } from "@/components/shared/animated-number";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, CircleAlert, HandCoins, HeartHandshake, Landmark, ReceiptIndianRupee, Users } from "lucide-react";
@@ -11,6 +12,7 @@ export function FinancialSummary({
   fundingGap,
   sponsors,
   contributors,
+  variant = "detailed",
 }: {
   totalBudget: number;
   actualExpenses: number;
@@ -18,6 +20,7 @@ export function FinancialSummary({
   fundingGap: number;
   sponsors: number;
   contributors: number;
+  variant?: WidgetVariant;
 }) {
   const isSettledGap = fundingGap === 0;
   const cards = [
@@ -90,36 +93,40 @@ export function FinancialSummary({
             );
           })}
         </div>
-        <div className="grid grid-cols-2 divide-x rounded-lg border bg-muted/50 text-sm">
-          <div className="flex items-center gap-2.5 p-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-primary">
-              <HeartHandshake className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs text-muted-foreground">Sponsors</p>
-              <AnimatedNumber
-                value={sponsors}
-                format={(count) => String(count)}
-                duration={800}
-                className="block text-lg font-semibold leading-tight tabular-nums"
-              />
+        {/* The two counts are the "detailed" half of this widget. A
+            dashboard that only wants the four money tiles drops them. */}
+        {variant === "detailed" ? (
+          <div className="grid grid-cols-2 divide-x rounded-lg border bg-muted/50 text-sm">
+            <div className="flex items-center gap-2.5 p-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-primary">
+                <HeartHandshake className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-xs text-muted-foreground">Sponsors</p>
+                <AnimatedNumber
+                  value={sponsors}
+                  format={(count) => String(count)}
+                  duration={800}
+                  className="block text-lg font-semibold leading-tight tabular-nums"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 p-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-primary">
+                <Users className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-xs text-muted-foreground">Contributors</p>
+                <AnimatedNumber
+                  value={contributors}
+                  format={(count) => String(count)}
+                  duration={800}
+                  className="block text-lg font-semibold leading-tight tabular-nums"
+                />
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2.5 p-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-primary">
-              <Users className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs text-muted-foreground">Contributors</p>
-              <AnimatedNumber
-                value={contributors}
-                format={(count) => String(count)}
-                duration={800}
-                className="block text-lg font-semibold leading-tight tabular-nums"
-              />
-            </div>
-          </div>
-        </div>
+        ) : null}
       </CardContent>
     </Card>
   );

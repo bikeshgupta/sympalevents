@@ -1,3 +1,4 @@
+import type { WidgetVariant } from "@/lib/widgets";
 import type { EventPhase, TimelineStatus } from "@/features/dashboard/dashboard-utils";
 import type { EventPlanRow } from "@/lib/event-data";
 import type { KeyboardEvent } from "react";
@@ -28,6 +29,7 @@ export function EventSchedule({
   nextEvent,
   now,
   phase,
+  variant = "detailed",
 }: {
   days: Array<{ key: string; label: string; date: string }>;
   selectedDay: string;
@@ -37,6 +39,7 @@ export function EventSchedule({
   nextEvent?: EventPlanRow;
   now: Date;
   phase: EventPhase;
+  variant?: WidgetVariant;
 }) {
   const currentItem = items.find((item) => getTimelineItemStatus(item, now) === "current");
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -90,13 +93,17 @@ export function EventSchedule({
         </div>
       </CardHeader>
       <CardContent className="space-y-4 px-4 sm:px-5">
-        {/* Horizontal scroll rather than wrapping: a five-day event should not
-            push the timeline below the fold on a phone. */}
-        <div
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
-          role="tablist"
-          aria-label="Event days"
-        >
+        {/* The day selector belongs to the full schedule. A dashboard showing
+            the "basic" variant wants what is on now and what is next, not a
+            way to browse the whole week. */}
+        {variant === "detailed" ? (
+          /* Horizontal scroll rather than wrapping: a five-day event should not
+             push the timeline below the fold on a phone. */
+          <div
+            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+            role="tablist"
+            aria-label="Event days"
+          >
           {dayTabs.map((day, index) => {
             const active = selectedDay === day.key;
             return (
@@ -133,8 +140,9 @@ export function EventSchedule({
                 </span>
               </button>
             );
-          })}
-        </div>
+            })}
+          </div>
+        ) : null}
 
         <div id="event-day-panel" role="tabpanel" aria-label={`${selectedDay} schedule`} className="space-y-4">
           {items.length ? (
@@ -160,7 +168,8 @@ export function EventSchedule({
             <UpcomingEvent item={nextEvent} label="Up next" now={now} />
           ) : null}
 
-          {items.length ? (
+          {/* The day's full list is the other half of "detailed". */}
+          {variant === "detailed" && items.length ? (
             <div className="space-y-0">
               {items.map((item, index) => (
                 <TimelineItem
@@ -173,12 +182,12 @@ export function EventSchedule({
                 />
               ))}
             </div>
-          ) : (
+          ) : variant === "detailed" ? (
             <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
-              No activities planned for this day yet. Add them on the Events page, along with the agenda inside each
-              one - puja and arti timings, or the running order of a cultural evening.
+              No activities planned for this day yet. Add them on the Events page, along with the agenda inside
+              each one - the timings, or the running order of a cultural evening.
             </div>
-          )}
+          ) : null}
         </div>
       </CardContent>
     </Card>

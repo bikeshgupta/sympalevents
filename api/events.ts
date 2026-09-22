@@ -1,5 +1,6 @@
 import { handleEventClosing } from "./_lib/closing.js";
 import { handleEventData } from "./_lib/event-data.js";
+import { handleDashboardLayout } from "./_lib/layout.js";
 import { handleSocieties } from "./_lib/societies.js";
 import {
   cleanModuleLabel,
@@ -31,6 +32,14 @@ export default async function handler(req: any, res: any) {
   if (resource === "data" || resource === "mine") {
     try {
       return await handleEventData(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  if (resource === "layout") {
+    try {
+      return await handleDashboardLayout(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }

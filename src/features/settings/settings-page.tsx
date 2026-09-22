@@ -711,6 +711,9 @@ function ModulesCard() {
               <Button type="button" onClick={() => void handleSave()} disabled={!draft || saveModules.isPending}>
                 {saveModules.isPending ? "Saving..." : "Save Modules"}
               </Button>
+              <Button type="button" variant="outline" asChild>
+                <Link to="/customise-dashboard">Arrange the dashboard</Link>
+              </Button>
               <Button type="button" variant="outline" onClick={() => setDraft(null)} disabled={!draft}>
                 Reset
               </Button>

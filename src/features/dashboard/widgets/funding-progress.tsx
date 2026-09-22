@@ -1,3 +1,4 @@
+import type { WidgetVariant } from "@/lib/widgets";
 import type { ContributionRow, SponsorRow } from "@/lib/event-data";
 import { AnimatedNumber } from "@/components/shared/animated-number";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -138,6 +139,7 @@ export function FundingProgress({
   sponsorshipReceived,
   contributions,
   sponsors,
+  variant = "detailed",
 }: {
   totalBudget: number;
   fundsReceived: number;
@@ -145,6 +147,7 @@ export function FundingProgress({
   sponsorshipReceived: number;
   contributions: ContributionRow[];
   sponsors: SponsorRow[];
+  variant?: WidgetVariant;
 }) {
   const progress = calculateFundingProgress(fundsReceived, totalBudget);
   const rounded = Math.round(progress);
@@ -258,49 +261,53 @@ export function FundingProgress({
           ) : null}
         </div>
 
-        <div className="mt-4 border-t pt-4">
-          {/* Same bordered-tab treatment as the day selector in Event Schedule -
-              solid primary fill for the active tab, not a separate "segmented
-              control" look. */}
-          <div className="flex gap-2" role="tablist" aria-label="Top contributors and sponsors">
-            {tileTabs.map((tab, index) => {
-              const active = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  aria-controls="funding-tile-panel"
-                  tabIndex={active ? 0 : -1}
-                  onKeyDown={(event) => {
-                    const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-                    if (!offset) return;
-                    event.preventDefault();
-                    setActiveTab(tileTabs[(index + offset + tileTabs.length) % tileTabs.length].key);
-                  }}
-                  className={`flex-1 rounded-md border px-3 py-1.5 text-center text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
-                    active
-                      ? tab.activeClassName
-                      : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                  onClick={() => setActiveTab(tab.key)}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+        {/* Who gave is the "detailed" half. The bar and the totals above
+            are the whole of the "basic" one. */}
+        {variant === "detailed" ? (
+          <div className="mt-4 border-t pt-4">
+            {/* Same bordered-tab treatment as the day selector in Event Schedule -
+                solid primary fill for the active tab, not a separate "segmented
+                control" look. */}
+            <div className="flex gap-2" role="tablist" aria-label="Top contributors and sponsors">
+              {tileTabs.map((tab, index) => {
+                const active = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    aria-controls="funding-tile-panel"
+                    tabIndex={active ? 0 : -1}
+                    onKeyDown={(event) => {
+                      const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+                      if (!offset) return;
+                      event.preventDefault();
+                      setActiveTab(tileTabs[(index + offset + tileTabs.length) % tileTabs.length].key);
+                    }}
+                    className={`flex-1 rounded-md border px-3 py-1.5 text-center text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                      active
+                        ? tab.activeClassName
+                        : "bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    onClick={() => setActiveTab(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div id="funding-tile-panel" role="tabpanel">
+              <TileGrid
+                key={activeTab}
+                visible={activeTiles.visible}
+                overflowCount={activeTiles.overflowCount}
+                moreHref={activeTiles.href}
+                moreLabel={activeTab === "contributions" ? "contributions" : "sponsors"}
+              />
+            </div>
           </div>
-          <div id="funding-tile-panel" role="tabpanel">
-            <TileGrid
-              key={activeTab}
-              visible={activeTiles.visible}
-              overflowCount={activeTiles.overflowCount}
-              moreHref={activeTiles.href}
-              moreLabel={activeTab === "contributions" ? "contributions" : "sponsors"}
-            />
-          </div>
-        </div>
+        ) : null}
       </CardContent>
     </Card>
   );

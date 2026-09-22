@@ -1,5 +1,6 @@
-import { Check } from "lucide-react";
+import { ArrowDown, ArrowUp, Check } from "lucide-react";
 import { moduleGroups } from "@/data/event-templates";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   committeeOpenPageKeys,
@@ -42,16 +43,49 @@ export function ModuleEditor({
   onChange: (modules: ModuleDraft[]) => void;
   disabled?: boolean;
 }) {
-  const byKey = new Map(modules.map((module) => [module.pageKey, module]));
 
   function update(pageKey: string, patch: Partial<ModuleDraft>) {
     onChange(modules.map((module) => (module.pageKey === pageKey ? { ...module, ...patch } : module)));
   }
 
+  /**
+   * Move a module up or down the nav.
+   *
+   * The swap is with its neighbour *inside the same group*, because that is
+   * what somebody looking at a grouped list expects a Move Up to do - a jump
+   * from the top of People to the bottom of Money would be baffling. The
+   * saved order is this array's own order, so there is no `sort_order` to
+   * renumber and a reorder can never arrive half-applied.
+   *
+   * Buttons rather than drag-and-drop, the same call `CreditsDialog` made:
+   * dragging a row is close to unusable on a phone.
+   */
+  function move(pageKey: string, direction: -1 | 1) {
+    const group = moduleGroups.find((item) => item.pageKeys.includes(pageKey));
+    if (!group) return;
+
+    const at = modules.findIndex((module) => module.pageKey === pageKey);
+    if (at < 0) return;
+
+    const step = direction === -1 ? -1 : 1;
+    let to = at + step;
+    while (to >= 0 && to < modules.length && !group.pageKeys.includes(modules[to].pageKey)) {
+      to += step;
+    }
+    if (to < 0 || to >= modules.length) return;
+
+    const next = [...modules];
+    [next[at], next[to]] = [next[to], next[at]];
+    onChange(next);
+  }
+
   return (
     <div className="space-y-5">
       {moduleGroups.map((group) => {
-        const rows = group.pageKeys.map((pageKey) => byKey.get(pageKey)).filter(Boolean) as ModuleDraft[];
+        // Follow the draft's own order inside the group, so a module that has
+        // been moved shows where it now sits rather than where the group
+        // happens to list it.
+        const rows = modules.filter((module) => group.pageKeys.includes(module.pageKey));
         if (!rows.length) return null;
 
         return (
@@ -64,7 +98,10 @@ export function ModuleEditor({
                     key={module.pageKey}
                     module={module}
                     disabled={disabled}
+                    isFirst={rows[0]?.pageKey === module.pageKey}
+                    isLast={rows[rows.length - 1]?.pageKey === module.pageKey}
                     onChange={(patch) => update(module.pageKey, patch)}
+                    onMove={(direction) => move(module.pageKey, direction)}
                   />
                 ))}
               </div>
@@ -79,11 +116,17 @@ export function ModuleEditor({
 function ModuleRow({
   module,
   disabled,
+  isFirst,
+  isLast,
   onChange,
+  onMove,
 }: {
   module: ModuleDraft;
   disabled: boolean;
+  isFirst: boolean;
+  isLast: boolean;
   onChange: (patch: Partial<ModuleDraft>) => void;
+  onMove: (direction: -1 | 1) => void;
 }) {
   const defaultLabel = pageLabels[module.pageKey] ?? module.pageKey;
   const alwaysOn = alwaysOnPageKeys.has(module.pageKey);
@@ -116,6 +159,29 @@ function ModuleRow({
               <span className="h-5 w-5 rounded-full bg-card shadow-sm" />
             </button>
           )}
+
+          <div className="flex shrink-0 flex-col gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-8 p-0"
+              aria-label={`Move ${defaultLabel} up the nav`}
+              disabled={disabled || isFirst}
+              onClick={() => onMove(-1)}
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-8 p-0"
+              aria-label={`Move ${defaultLabel} down the nav`}
+              disabled={disabled || isLast}
+              onClick={() => onMove(1)}
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+            </Button>
+          </div>
 
           <div className="min-w-0">
             <p className={cn("text-sm font-medium", off && "text-muted-foreground")}>

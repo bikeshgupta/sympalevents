@@ -31,7 +31,6 @@ export function AppLayout() {
   useScrollToTopOnNavigate();
   const [editingName, setEditingName] = useState(false);
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
-  const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
   // What this event calls each module. A sports meet's Contributions page is
   // "Entry fees" and its Events page is "Match days"; the nav says so, because
   // the server resolved it. Falls back to the app's own name.
@@ -42,8 +41,17 @@ export function AppLayout() {
   // demo dataset - so the nav shows the tour rather than going blank. With an
   // event, the server's list is the only thing that decides.
   const isDemoNav = !selectedEventId && !isEventLoading;
+  // `navItems` supplies the icon and the href. The *order* is the committee's,
+  // from the server's module list, so Settings -> Modules can rearrange the
+  // sidebar and the drawer together. Anything the server did not name (the
+  // demo tour, or Settings) keeps its place from the array.
+  const navByPageKey = new Map(navItems.map((item) => [pageKeyFromHref(item.href), item]));
+  const orderedFromServer = accessiblePages
+    .filter((page) => page.canView)
+    .map((page) => navByPageKey.get(page.pageKey))
+    .filter((item): item is (typeof navItems)[number] => Boolean(item));
   const visibleNavItems = (
-    isDemoNav ? navItems : navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)))
+    isDemoNav ? navItems : orderedFromServer
   ).map((item) => ({ ...item, label: labelByPageKey.get(pageKeyFromHref(item.href)) ?? item.label }));
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const canRequestCommitteeAccess = Boolean(

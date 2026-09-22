@@ -76,9 +76,16 @@ export function visibilityOptionsFor(pageKey: string): PageVisibility[] {
   return signInOnlyPageKeys.has(pageKey) ? levels.filter((level) => level !== "public") : levels;
 }
 
+/** Routes that are part of another page rather than pages of their own, and
+ *  are therefore governed by that page's visibility and edit rights. */
+const pageKeyAliases: Record<string, string> = {
+  events: "event-plan",
+  "customise-dashboard": "dashboard",
+};
+
 export function pageKeyFromPath(pathname: string) {
   const pageKey = pathname.split("/").filter(Boolean)[0] || "dashboard";
-  return pageKey === "events" ? "event-plan" : pageKey;
+  return pageKeyAliases[pageKey] ?? pageKey;
 }
 
 export function useCurrentPageAccess() {

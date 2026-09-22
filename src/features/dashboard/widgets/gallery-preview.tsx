@@ -1,3 +1,4 @@
+import type { WidgetVariant } from "@/lib/widgets";
 import type { GalleryPhoto } from "@/lib/closing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Image } from "lucide-react";
@@ -8,8 +9,15 @@ import { Link } from "react-router-dom";
  * Same photos and same captions as `/closing` - this is a window onto that
  * gallery, not a second place to manage one.
  */
-export function GalleryPreview({ photos }: { photos: GalleryPhoto[] }) {
-  const preview = photos.slice(0, 6);
+export function GalleryPreview({
+  photos,
+  variant = "detailed",
+}: {
+  photos: GalleryPhoto[];
+  variant?: WidgetVariant;
+}) {
+  // One row of three on a phone-width dashboard, two rows on a roomy one.
+  const preview = photos.slice(0, variant === "detailed" ? 6 : 3);
 
   return (
     <Card>

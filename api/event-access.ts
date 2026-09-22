@@ -1,4 +1,4 @@
-import { fetchEventModules, isCommitteeOpenPage } from "./_lib/page-visibility.js";
+import { fetchEventModules, isCommitteeOpenPage, sortModules } from "./_lib/page-visibility.js";
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
 /**
@@ -26,7 +26,7 @@ export default async function handler(req: any, res: any) {
     // Modules this event does not have are left out of every branch below,
     // so the sidebar, the drawer, the route guard and Member Access all stop
     // mentioning them at once - they already filter on this one list.
-    const modules = Object.values(await fetchEventModules(eventId)).filter((item) => item.isEnabled);
+    const modules = sortModules(Object.values(await fetchEventModules(eventId))).filter((item) => item.isEnabled);
     // The event's own words travel with its module list rather than with the
     // screen data: every page already asks this route once, and the nav, the
     // headings and the unit column all need the same answer before any row

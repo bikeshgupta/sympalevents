@@ -1,5 +1,6 @@
 import {
   cleanModuleLabel,
+  sortModules,
   eventPageKeys,
   fetchEventModules,
   fetchPageVisibility,
@@ -78,7 +79,7 @@ async function readVisibility(eventId: string, req: any, res: any) {
   // `visibility` stays for callers that only ever wanted the map. `modules`
   // is the fuller answer Settings needs: on/off and the event's own name for
   // each one, alongside who may see it.
-  sendJson(res, 200, { visibility, modules: Object.values(modules), pageKeys: eventPageKeys, canEdit });
+  sendJson(res, 200, { visibility, modules: sortModules(Object.values(modules)), pageKeys: eventPageKeys, canEdit });
 }
 
 async function saveVisibility(req: any, res: any) {
@@ -101,12 +102,15 @@ async function saveVisibility(req: any, res: any) {
   const rows = submittedModules
     ? submittedModules
         .filter((item) => (eventPageKeys as readonly string[]).includes(String(item.pageKey ?? "")))
-        .map((item) => {
+        .map((item, index) => {
           const pageKey = String(item.pageKey);
           return {
             event_id: eventId,
             page_key: pageKey,
             visibility: normalizeVisibility(item.visibility, pageKey),
+            // Position is the array's own order rather than a number the
+            // client sends, so a reorder cannot arrive half-renumbered.
+            sort_order: index,
             // The dashboard is every route's landing place; an event without
             // one has no front door, so it cannot be switched off here.
             is_enabled: isAlwaysOnPage(pageKey) ? true : item.isEnabled !== false,
@@ -140,10 +144,11 @@ async function saveVisibility(req: any, res: any) {
       error &&
       (["42703", "PGRST204"].includes(error.code ?? "") ||
         error.message?.includes("is_enabled") ||
-        error.message?.includes("label_override"))
+        error.message?.includes("label_override") ||
+        error.message?.includes("sort_order"))
     ) {
       const missing = new Error(
-        "Turning modules on and off needs supabase/migrations/024_event_modules.sql. Run it, then try again. Changing who can see a page still works.",
+        "Turning modules on and off needs supabase/migrations/024_event_modules.sql, and reordering them needs 026_dashboard_layout.sql. Run them, then try again. Changing who can see a page still works.",
       );
       Object.assign(missing, { statusCode: 501 });
       throw missing;
@@ -154,7 +159,7 @@ async function saveVisibility(req: any, res: any) {
   const saved = await fetchEventModules(eventId);
   sendJson(res, 200, {
     visibility: Object.fromEntries(Object.values(saved).map((item) => [item.pageKey, item.visibility])),
-    modules: Object.values(saved),
+    modules: sortModules(Object.values(saved)),
   });
 }
 

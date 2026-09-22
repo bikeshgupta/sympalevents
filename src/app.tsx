@@ -8,6 +8,7 @@ import { AuctionsPage } from "@/features/auctions/auctions-page";
 import { BudgetPage } from "@/features/budget/budget-page";
 import { ClosingPage } from "@/features/closing/closing-page";
 import { ContributionsPage } from "@/features/contributions/contributions-page";
+import { CustomiseDashboardPage } from "@/features/dashboard/customise-dashboard";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
 import { ExpensesPage } from "@/features/expenses/expenses-page";
 import { FixturesPage } from "@/features/fixtures/fixtures-page";
@@ -31,6 +32,7 @@ export function App() {
         <Route element={<RouteGuard />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/customise-dashboard" element={<CustomiseDashboardPage />} />
           <Route path="/contributions" element={<ContributionsPage />} />
           <Route path="/sponsors" element={<SponsorsPage />} />
           <Route path="/budget" element={<BudgetPage />} />

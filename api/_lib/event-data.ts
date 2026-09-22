@@ -133,7 +133,7 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
 async function loadEvent(supabase: SupabaseClient, eventId: string) {
   const withTemplate = await supabase
     .from("events")
-    .select("id,name,start_date,end_date,location,status,event_type,unit_label")
+    .select("id,name,start_date,end_date,location,status,event_type,unit_label,dashboard_layout")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -144,7 +144,8 @@ async function loadEvent(supabase: SupabaseClient, eventId: string) {
   const missingColumns =
     ["42703", "PGRST204"].includes(withTemplate.error.code ?? "") ||
     withTemplate.error.message?.includes("event_type") ||
-    withTemplate.error.message?.includes("unit_label");
+    withTemplate.error.message?.includes("unit_label") ||
+    withTemplate.error.message?.includes("dashboard_layout");
 
   if (!missingColumns) throw withTemplate.error;
 
@@ -389,6 +390,10 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
       // The word this event uses for the unit a person belongs to - "Flat" in
       // a housing society, "Team" in a league. Null means the app's default.
       unitLabel: ("unit_label" in event ? (event.unit_label as string | null) : null) ?? null,
+      // The arrangement of the dashboard, or null for "the default for this
+      // kind of event" - which is computed, not stored, so an event is never
+      // frozen to whatever the defaults were the day it was made.
+      dashboardLayout: "dashboard_layout" in event ? event.dashboard_layout ?? null : null,
     },
     financials: {
       totalBudget,

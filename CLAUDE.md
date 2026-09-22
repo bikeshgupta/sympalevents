@@ -188,6 +188,65 @@ against Google's public keys and map the user into Supabase `app_users`.
   migration, while a write with an empty agenda still saves. Reads still degrade
   gracefully.
 
+## Dashboard widgets
+
+The dashboard is assembled from widgets an admin arranges, not a fixed
+sequence of JSX. Three pieces, and the split between them is deliberate:
+
+- **[src/lib/widgets.ts](src/lib/widgets.ts)** is the catalogue, and is
+  **data, not components**. The builder lists it and the dashboard renders it,
+  but only one of those needs JSX - so this stays a plain `.ts` module that
+  anything can import without pulling the dashboard's component tree along.
+  It also holds `defaultLayout`, `normaliseLayout`, `visibleLayout` and
+  `layoutRows`, all pure, all covered by the checks described below.
+- **[src/features/dashboard/widget-host.tsx](src/features/dashboard/widget-host.tsx)**
+  is the other half: the single place that knows which component a key means
+  and what to hand it. Every widget gets the same `DashboardContext`,
+  gathered once by the page, so **adding a widget to a dashboard never adds a
+  request**. Keep it that way - a widget that fetches its own data makes a
+  busier dashboard a slower one.
+- **[src/features/dashboard/widgets/](src/features/dashboard/widgets/)** holds
+  the six components the page used to define inline.
+
+A widget's `module` is its access rule, and it is one that already exists:
+`useEventAccess().pages` is the server-filtered list of pages this viewer may
+open. A widget tied to a module that is off, or that this person cannot see,
+is neither drawn nor offered in the builder. **Do not add a second permission
+concept here.** Demo mode passes `null` instead of a key set, skipping the
+filter for the same reason `isDemoNav` does in the nav: with no event there
+is no admin to have configured anything.
+
+`variant` is `"basic"` or `"detailed"`, and each widget declares which it
+supports. **Every default variant reproduces what that widget rendered before
+the system existed** - `gallery` defaults to `detailed` for exactly that
+reason, because its six photographs are what the dashboard has always shown.
+
+`events.dashboard_layout` (026) stores the arrangement as a jsonb array, for
+the reason 020 gives for the closing credits: reordering is then the array's
+own order rather than a `sort_order` column to renumber. **`null` is
+meaningful** and is the default - it means "the default for this kind of
+event", computed at render, so Reset stores nothing and an event picks up a
+better default from a later release instead of being frozen to the one it was
+made with. Reading it costs nothing extra: it travels with the event in
+`?resource=data`. Only the write is its own resource, `?resource=layout`.
+
+Widgets are rendered into **fragments, not wrapper divs**. Several of them
+draw nothing when they have nothing to show, and an empty wrapper still
+counts for the container's `space-y-4`, leaving a gap where nothing is.
+
+**Module order is the committee's too.** `event_page_visibility.sort_order`
+(026) drives it, `sortModules()` applies it with unpositioned modules sorting
+last in registry order, and `navItems` supplies only the icon and href - the
+*order* comes from the server list, so the sidebar and the drawer rearrange
+together. Reordering in both the module editor and the dashboard builder is
+up/down buttons, never drag-and-drop, the same call `CreditsDialog` made.
+
+**The regression bar, and how it was met:** the dashboard renders
+pixel-for-pixel what it rendered before any of this, when an event has no
+stored layout. Verified by full-page screenshot diff at 1280x1413, 0 differing
+pixels out of 1,808,640, twice - once for the file split and once for the
+layout-driven render.
+
 ## Navigation
 
 - **Desktop (`lg` and up):** the fixed left sidebar in

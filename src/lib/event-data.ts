@@ -29,6 +29,9 @@ export type AppEvent = {
   eventType?: string;
   /** The word this event uses for a person's unit: Flat, House, Team. */
   unitLabel?: string | null;
+  /** The committee's dashboard arrangement, or null for this event type's
+   *  default. See src/lib/widgets.ts. */
+  dashboardLayout?: unknown;
 };
 
 export type ContributionRow = {
@@ -195,6 +198,7 @@ type EventDataResponse = {
     status: string;
     eventType?: string;
     unitLabel?: string | null;
+    dashboardLayout?: unknown;
   };
   financials: EventData["financials"];
   contributions: ContributionRow[];
@@ -261,6 +265,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
             status: payload.event.status,
             eventType: payload.event.eventType ?? "festival",
             unitLabel: payload.event.unitLabel ?? null,
+            dashboardLayout: payload.event.dashboardLayout ?? null,
           },
           financials: payload.financials,
           contributions: payload.contributions,
