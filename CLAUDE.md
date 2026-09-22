@@ -1217,6 +1217,13 @@ switch is not rendered and the sheet is always the committee copy.
 
 - **Summary, then collection, then expenses** - what it adds up to, where the money
   came from, where it went. Fixed order, both formats.
+- **No by-category breakdown above the ledger, on either surface.** It was there and
+  came off: the ledger under it already carries every row with its category, and a
+  spreadsheet can group them any way the reader likes.
+- **No footer stamp.** `NoticeSheet` takes `showFooter` (default `true`, so the other
+  four notices are untouched) and this one passes `false`. The report goes to everyone
+  helping organise the event, and a sheet reading "Committee copy - not for the notice
+  board" only makes the person holding it wonder whether they were meant to have it.
 - `buildFinancialReport()` in [src/lib/financial-report.ts](src/lib/financial-report.ts)
   produces the numbers **once**, from rows the page already holds (`useEventData()`
   for contributions and sponsorships, the `/api/expenses` ledger for spending). The
