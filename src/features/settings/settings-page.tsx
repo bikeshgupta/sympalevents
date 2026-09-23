@@ -10,6 +10,7 @@ import { useEventContext } from "@/lib/event-context";
 import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
 import { AppearanceCard } from "@/features/settings/appearance-card";
 import { ShareCard } from "@/features/settings/share-card";
+import { TrafficCard } from "@/features/settings/traffic-card";
 import { SocietyCard } from "@/features/settings/society-card";
 import { useEventData } from "@/lib/event-data";
 import { configurablePageKeys, pageLabels, usePageAccess, usePageVisibility } from "@/lib/page-access";
@@ -364,6 +365,7 @@ export function SettingsPage() {
         <SocietyCard />
         <AppearanceCard />
         <ShareCard />
+        <TrafficCard />
         <Card>
           <CardHeader>
             <CardTitle>Create Event</CardTitle>

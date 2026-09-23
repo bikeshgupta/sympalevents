@@ -1,4 +1,5 @@
 import { fetchEventModules, isCommitteeOpenPage, sortModules } from "./_lib/page-visibility.js";
+import { handleEventTraffic } from "./_lib/traffic.js";
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
 /**
@@ -10,6 +11,18 @@ import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from 
  * api/_lib/page-visibility.ts.
  */
 export default async function handler(req: any, res: any) {
+  // Who is on this event's pages, and who has been. It rides on this route
+  // rather than api/events.ts because the heartbeat is the hottest path in
+  // the app and this file's imports are the cheapest cold start of the two -
+  // see the note at the top of api/_lib/traffic.ts.
+  if (String(req.query?.resource ?? "") === "traffic") {
+    try {
+      return await handleEventTraffic(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
   try {
     if (req.method !== "GET") {
       sendJson(res, 405, { error: "Method not allowed" });

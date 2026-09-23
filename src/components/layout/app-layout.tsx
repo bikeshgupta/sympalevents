@@ -13,6 +13,7 @@ import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventPath } from "@/lib/event-path";
 import { useScrollToTopOnNavigate } from "@/lib/scroll";
+import { useTrafficHeartbeat } from "@/lib/traffic";
 import { themeVariables } from "@/lib/themes";
 import { useEventData } from "@/lib/event-data";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,11 @@ export function AppLayout() {
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
 
   useScrollToTopOnNavigate();
+  // One beat a minute while this tab is being looked at, so Settings can
+  // say whether anybody reads what the committee maintains. Mounted here
+  // rather than per page: /login, /new-event and /s/<token> are outside
+  // this layout and belong to no event.
+  useTrafficHeartbeat();
   const [editingName, setEditingName] = useState(false);
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   // What this event calls each module. A sports meet's Contributions page is

@@ -1383,6 +1383,102 @@ switch is not rendered and the sheet is always the committee copy.
   beside Close and Print) and `description` (the line under the title). Both default
   to exactly what the four existing notices render today.
 
+## Traffic (Settings)
+
+Who opens this event's pages, and who has been. A collapsible **Traffic**
+panel in Settings ([traffic-card.tsx](src/features/settings/traffic-card.tsx)),
+admin only, answering the question a committee had no way to ask: is any of
+this read?
+
+It records people's browsing, so most of what follows is a privacy decision
+rather than a storage one.
+
+### One table, one row per visit
+
+[028_event_traffic.sql](supabase/migrations/028_event_traffic.sql) adds
+`event_visits`. **Not run yet** - until it is, the panel shows an amber banner
+naming it, the read returns `ready: false`, and the heartbeat silently does
+nothing. That last part differs from every other degraded write in this repo,
+which answers 501: the person who triggered a heartbeat is a resident reading
+a page, who asked for nothing and must see nothing.
+
+- **One row per visit, not per page view.** Time spent is
+  `last_seen_at - started_at` - no second table, no join. The *path* somebody
+  took through the site is deliberately not recorded: a per-view log is five
+  to ten times the rows and a far more intimate record of one person than a
+  committee needs in order to learn whether its pages are read. Making that
+  change is a new decision, not a column to add quietly.
+- **No IP address is stored, in any form - not raw, not hashed.** A hash is
+  still re-identifiable to anyone who can guess the salt, and one society's
+  residents are a small input space. The address is used to derive `device`,
+  `browser`, `country` and `city` and is never written down. Those four are
+  coarse on purpose - "iPhone", not a user agent string, which is a
+  fingerprint.
+- `visitor_key` is a random value the **visitor's own browser** generates and
+  keeps in `localStorage`; it groups repeat visits ("3rd visit") and
+  identifies nobody. The visit id lives in `sessionStorage`, so a new tab is a
+  new visit and the heartbeat is an upsert on a primary key rather than a
+  read-then-write with a race in it. Neither ever reaches the client again.
+- RLS on, **zero policies**, the same reasoning as every table since 009.
+  This one is more sensitive than most, not less: it is the only place that
+  says who was reading what.
+- **90-day retention**, applied in `api/_lib/traffic.ts` on the admin's own
+  read rather than by a cron this project does not have.
+
+### API - no new serverless function
+
+`?resource=traffic` on **`api/event-access.ts`**, handler in
+[api/_lib/traffic.ts](api/_lib/traffic.ts). The count is still **12**.
+
+**It rides on `event-access.ts` and not `events.ts`** - where the last five
+resources went - because the heartbeat is the hottest path in the app: every
+visitor, every minute, on every page. `api/events.ts` statically imports
+closing, event-data, appearance, share, layout and societies, which is a large
+cold start to pay for a single-row upsert; `api/event-access.ts` imports
+`page-visibility` and `server` and nothing else. Do not tidy it across.
+
+- **`POST` is open to everyone** - a signed-out visitor is exactly who this has
+  to count - and always answers `{ ok: true }`, whatever happened. It must
+  never leak a count to a non-admin and never put an error in front of a
+  resident.
+- **Every beat is authorised against `resolvePageAccess`**, the same answer the
+  route guard gets. Without it anyone could write rows into any event's table,
+  and a visitor could claim to be reading a page they cannot open.
+- **`GET` needs `requireEventAdmin`.** It returns **names only** for signed-in
+  visitors - no email, no photograph, no role, the same rule the closing
+  credits follow - and never a name for a guest.
+- A beat on the **same** page is throttled to one per 20 seconds, so a runaway
+  tab cannot spin its row. A move to a **different** page always counts, or
+  somebody skimming four screens in a minute would register as having read
+  one: `page_views` counts pages reached, not beats sent.
+
+### The heartbeat
+
+`useTrafficHeartbeat()` ([src/lib/traffic.ts](src/lib/traffic.ts)) is mounted
+once in `AppLayout`, so it runs on event pages only - `/login`, `/new-event`
+and `/s/<token>` sit outside that layout and belong to no event.
+
+- It beats **only while `document.visibilityState === "visible"`**. A
+  backgrounded tab is not a person on the site, and counting one would make
+  both the live number and every recorded duration wrong.
+- Storage access is wrapped in try/catch: a private window throws, and
+  somebody who cannot store anything must still be able to read the page. The
+  visit simply goes uncounted.
+- **There is no close-out beat on unload.** `navigator.sendBeacon` cannot carry
+  the Authorization header this API needs. The cost is that a visit
+  under-counts by up to one interval - which is honest, and much better than a
+  tab left open all night reading as a night's attention.
+
+### "Here now" means a two-minute heartbeat window, and says so
+
+There is no socket in this app, so the live count is an approximation and the
+panel is labelled "seen in the last 2 minutes" rather than claiming to know
+who is on the page this instant - UI rules §3. Do not relabel it "now".
+
+The panel is **collapsed by default and the query is gated on that**: an
+unopened card makes no request and runs no timer; opened, it refetches every
+30 seconds.
+
 ## Motion
 
 - `useCountUp(target)` and `usePrefersReducedMotion()` live in
