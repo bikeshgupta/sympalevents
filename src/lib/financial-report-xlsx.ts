@@ -11,6 +11,10 @@ import type { XlsxCell, XlsxSheet } from "@/lib/xlsx";
  * everywhere and cannot be read as a US date by a spreadsheet in another
  * locale.
  *
+ * There is no by-category breakdown, on either surface: the ledger below it
+ * already carries every row with its category, and a spreadsheet can group
+ * them any way the reader wants.
+ *
  * The workbook carries two things the printed sheet deliberately leaves out -
  * payment mode and payment reference. A printed report gets pinned up or
  * photographed; a workbook is the reconciliation tool, and matching a UTR to
@@ -18,10 +22,6 @@ import type { XlsxCell, XlsxSheet } from "@/lib/xlsx";
  */
 function blank(): XlsxCell[] {
   return [];
-}
-
-function heading(text: string): XlsxCell[] {
-  return [{ value: text, style: "heading" }];
 }
 
 function headerRow(labels: string[]): XlsxCell[] {
@@ -53,7 +53,7 @@ export function financialReportSheets({
   ];
 
   for (const group of report.summary) {
-    summaryRows.push(heading(group.title));
+    summaryRows.push([{ value: group.title, style: "heading" }]);
     summaryRows.push(headerRow(["Line", "Amount", "Note"]));
     for (const line of group.lines) {
       summaryRows.push([
@@ -95,15 +95,6 @@ export function financialReportSheets({
     ...masthead,
     [{ value: "Expenses · what the money went on", style: "muted" }],
     blank(),
-    heading("By category"),
-    headerRow(["Category", "Records", "Amount"]),
-    ...report.expenses.byCategory.map((row): XlsxCell[] => [
-      row.category,
-      row.count,
-      { value: row.amount, style: "money" },
-    ]),
-    blank(),
-    heading("Every expense"),
     headerRow(["Date", "Item", "Category", "Amount", "Paid by", "Reimbursement", "Settled on", "Notes"]),
     ...report.expenses.entries.map((entry): XlsxCell[] => [
       entry.date,

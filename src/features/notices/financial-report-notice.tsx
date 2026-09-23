@@ -158,6 +158,7 @@ export function FinancialReportDialog({
         title="Financial report"
         intro={`Where the money came from and where it went. Prepared ${preparedOn}.`}
         audience="internal"
+        showFooter={false}
       >
         <NoticeBlock heading="Summary">
           <div className="space-y-3">
@@ -209,56 +210,36 @@ export function FinancialReportDialog({
           meta={`${report.expenses.entries.length} ${report.expenses.entries.length === 1 ? "record" : "records"}`}
         >
           {report.expenses.entries.length ? (
-            <>
-              <div className="notice-block">
-                <p className="text-sm font-semibold">By category</p>
-                <ul className="mt-1 space-y-0.5">
-                  {report.expenses.byCategory.map((row) => (
-                    <li key={row.category} className="flex items-baseline justify-between gap-4 text-sm">
-                      <span>
-                        {row.category}
-                        <span className="ml-1.5 text-xs text-muted-foreground">
-                          {row.count} {row.count === 1 ? "record" : "records"}
-                        </span>
-                      </span>
-                      <Money value={row.amount} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <p className="text-sm font-semibold">Every expense</p>
-              <ReportTable headers={["Date", "Item", "Category", "Paid by", "Reimbursement", "Amount"]}>
-                {report.expenses.entries.map((entry) => (
-                  <tr key={entry.id} className="border-b border-border/60 align-top">
-                    <td className="whitespace-nowrap py-1 pr-2 tabular-nums">{reportDate(entry.date)}</td>
-                    <td className="py-1 pr-2">
-                      {entry.item}
-                      {entry.notes ? (
-                        <span className="block text-[10px] text-muted-foreground">{entry.notes}</span>
-                      ) : null}
-                    </td>
-                    <td className="py-1 pr-2">{entry.category || "—"}</td>
-                    <td className="py-1 pr-2">{entry.paidBy || "—"}</td>
-                    <td className="py-1 pr-2">
-                      {entry.status}
-                      {entry.settledOn ? (
-                        <span className="block text-[10px] text-muted-foreground">{reportDate(entry.settledOn)}</span>
-                      ) : null}
-                    </td>
-                    <td className="py-1 text-right font-medium tabular-nums">{formatCurrency(entry.amount)}</td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="py-1 pr-2 font-semibold" colSpan={5}>
-                    Total
+            <ReportTable headers={["Date", "Item", "Category", "Paid by", "Reimbursement", "Amount"]}>
+              {report.expenses.entries.map((entry) => (
+                <tr key={entry.id} className="border-b border-border/60 align-top">
+                  <td className="whitespace-nowrap py-1 pr-2 tabular-nums">{reportDate(entry.date)}</td>
+                  <td className="py-1 pr-2">
+                    {entry.item}
+                    {entry.notes ? (
+                      <span className="block text-[10px] text-muted-foreground">{entry.notes}</span>
+                    ) : null}
                   </td>
-                  <td className="py-1 text-right font-semibold tabular-nums">
-                    {formatCurrency(report.expenses.total)}
+                  <td className="py-1 pr-2">{entry.category || "—"}</td>
+                  <td className="py-1 pr-2">{entry.paidBy || "—"}</td>
+                  <td className="py-1 pr-2">
+                    {entry.status}
+                    {entry.settledOn ? (
+                      <span className="block text-[10px] text-muted-foreground">{reportDate(entry.settledOn)}</span>
+                    ) : null}
                   </td>
+                  <td className="py-1 text-right font-medium tabular-nums">{formatCurrency(entry.amount)}</td>
                 </tr>
-              </ReportTable>
-            </>
+              ))}
+              <tr>
+                <td className="py-1 pr-2 font-semibold" colSpan={5}>
+                  Total
+                </td>
+                <td className="py-1 text-right font-semibold tabular-nums">
+                  {formatCurrency(report.expenses.total)}
+                </td>
+              </tr>
+            </ReportTable>
           ) : (
             <NoticeEmpty>Nothing has been recorded in the ledger yet.</NoticeEmpty>
           )}

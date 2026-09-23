@@ -48,6 +48,7 @@ export function NoticeSheet({
   intro,
   audience,
   size = "notice",
+  showFooter = true,
   children,
 }: {
   eventName: string;
@@ -62,6 +63,14 @@ export function NoticeSheet({
    * the type goes up to be read from a few feet away on a board.
    */
   size?: "notice" | "poster";
+  /**
+   * The line at the bottom that says which copy this is. On by default, so
+   * every notice keeps the footer it has today. The financial report turns
+   * it off: it goes to everyone helping organise the event, and a sheet
+   * stamped "Committee copy - not for the notice board" only makes the
+   * person holding it wonder whether they were meant to have it.
+   */
+  showFooter?: boolean;
   children: ReactNode;
 }) {
   const poster = size === "poster";
@@ -85,9 +94,11 @@ export function NoticeSheet({
 
       {/* No "printed on" date here, deliberately: a notice stays pinned on the
           board for days and a stale print date only makes it look out of date. */}
-      <footer className="mt-6 border-t border-border pt-2 text-xs text-muted-foreground">
-        {audience === "internal" ? "Committee copy - not for the notice board" : `Issued by the ${eventName} committee`}
-      </footer>
+      {showFooter ? (
+        <footer className="mt-6 border-t border-border pt-2 text-xs text-muted-foreground">
+          {audience === "internal" ? "Committee copy - not for the notice board" : `Issued by the ${eventName} committee`}
+        </footer>
+      ) : null}
     </article>
   );
 }

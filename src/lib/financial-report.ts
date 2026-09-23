@@ -63,8 +63,6 @@ export type ExpenseEntry = {
   notes: string;
 };
 
-export type CategoryTotal = { category: string; amount: number; count: number };
-
 export type FinancialReport = {
   summary: ReportGroup[];
   collection: {
@@ -80,7 +78,6 @@ export type FinancialReport = {
   expenses: {
     entries: ExpenseEntry[];
     total: number;
-    byCategory: CategoryTotal[];
     pendingAmount: number;
     pendingCount: number;
     settledAmount: number;
@@ -207,16 +204,6 @@ export function buildFinancialReport({
   const fundsAmount = sum(expenses.filter((e) => e.status === "not_needed"), (expense) => expense.amount);
   const untrackedAmount = sum(expenses.filter((e) => e.status === null), (expense) => expense.amount);
 
-  const categories = new Map<string, CategoryTotal>();
-  for (const expense of expenses) {
-    const category = expense.category.trim() || "Uncategorised";
-    const existing = categories.get(category) ?? { category, amount: 0, count: 0 };
-    existing.amount += expense.amount;
-    existing.count += 1;
-    categories.set(category, existing);
-  }
-  const byCategory = [...categories.values()].sort((left, right) => right.amount - left.amount);
-
   const balance = totalReceived - spent;
 
   const summary: ReportGroup[] = [
@@ -281,7 +268,6 @@ export function buildFinancialReport({
     expenses: {
       entries: expenseEntries,
       total: spent,
-      byCategory,
       pendingAmount,
       pendingCount: pending.length,
       settledAmount,
