@@ -8,8 +8,10 @@ import { auctionRuntimeStatus, useAuctions, type Auction } from "@/lib/auctions"
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
+import { useVocabulary } from "@/lib/vocabulary";
 
 export function AuctionsPage() {
+  const vocab = useVocabulary();
   const { selectedEventId } = useEventContext();
   // Only for the event's name and dates on a printed notice; the query is
   // already in flight for the layout, so this costs nothing.
@@ -56,7 +58,7 @@ export function AuctionsPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Auctions</h2>
+          <h2 className="text-2xl font-semibold">{vocab.labelFor("auctions")}</h2>
           <p className="text-sm text-muted-foreground">
             Committee-run online auctions. Register, watch bidding live, and see who wins.
           </p>

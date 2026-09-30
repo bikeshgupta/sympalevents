@@ -1,4 +1,6 @@
+import { handleSports } from "./_lib/fixtures.js";
 import { handlePrasad } from "./_lib/prasad.js";
+import { fetchSchedule, isMissingSubEventsColumn } from "./_lib/schedule.js";
 import {
   assertServiceSupabase,
   getRequestBody,
@@ -80,15 +82,6 @@ function payloadWithoutSubEvents(payload: ReturnType<typeof schedulePayload>) {
   return rest;
 }
 
-function isMissingSubEventsColumn(error: { code?: string; message?: string } | null) {
-  return Boolean(
-    error &&
-      (["42703", "PGRST204"].includes(error.code ?? "") ||
-        error.message?.includes("'sub_events' column") ||
-        error.message?.includes("sub_events")),
-  );
-}
-
 /**
  * Reads tolerate a missing `sub_events` column - the rest of the schedule is
  * still worth showing. Writes must not: silently retrying without the column
@@ -104,44 +97,19 @@ function assertAgendaStorable(payload: ReturnType<typeof schedulePayload>) {
   throw error;
 }
 
-async function fetchSchedule(supabase: ReturnType<typeof assertServiceSupabase>, eventId: string) {
-  const columns = "id,day,activity_date,activity,sub_events,start_time,end_time,location,expected_attendance,owner_name,status,notes";
-  const columnsWithoutSubEvents =
-    "id,day,activity_date,activity,start_time,end_time,location,expected_attendance,owner_name,status,notes";
-
-  // The two selects return different row shapes (the retry has no
-  // `sub_events`), so `data` is widened to cover both - otherwise assigning
-  // the fallback result below is a type error. The rows are passed straight
-  // back out as JSON, so nothing downstream needs the narrower type.
-  const primary = await supabase
-    .from("event_schedule")
-    .select(columns)
-    .eq("event_id", eventId)
-    .order("activity_date", { ascending: true })
-    .order("start_time", { ascending: true });
-
-  let data: Record<string, unknown>[] | null = primary.data;
-  let error = primary.error;
-
-  if (isMissingSubEventsColumn(error)) {
-    const retryResult = await supabase
-      .from("event_schedule")
-      .select(columnsWithoutSubEvents)
-      .eq("event_id", eventId)
-      .order("activity_date", { ascending: true })
-      .order("start_time", { ascending: true });
-    data = retryResult.data;
-    error = retryResult.error;
-  }
-
-  if (error) throw error;
-  return data ?? [];
-}
-
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {
-    if (String(req.query?.resource ?? "") === "prasad") {
+    const resource = String(req.query?.resource ?? "");
+
+    if (resource === "prasad") {
       await handlePrasad(req, res);
+      return;
+    }
+
+    // A fixture is a scheduled thing, and there is no room for a thirteenth
+    // function under api/ - see api/_lib/fixtures.ts.
+    if (resource === "teams" || resource === "fixtures") {
+      await handleSports(req, res);
       return;
     }
 

@@ -5,6 +5,8 @@ import { useEventContext } from "@/lib/event-context";
 
 export type PageAccess = {
   pageKey: string;
+  /** What this event calls the module - the nav renders this, not a constant. */
+  label?: string;
   canView: boolean;
   canEdit: boolean;
   accessLevel: "none" | "view" | "edit";
@@ -13,6 +15,10 @@ export type PageAccess = {
 type EventAccess = {
   role: "admin" | "committee" | "read_only" | null;
   pages: PageAccess[];
+  /** festival | sports | cultural | mixed | custom. */
+  eventType?: string;
+  /** The word this event uses for a person's unit: Flat, House, Team. */
+  unitLabel?: string | null;
 };
 
 /**
@@ -21,7 +27,7 @@ type EventAccess = {
  * guessed default here would either flash links a viewer cannot open or hide
  * ones they can - the nav simply waits for the real list.
  */
-const noAccess: EventAccess = { role: null, pages: [] };
+const noAccess: EventAccess = { role: null, pages: [], eventType: "festival", unitLabel: null };
 
 export function useEventAccess() {
   const { data: session, isLoading: isSessionLoading } = useSession();

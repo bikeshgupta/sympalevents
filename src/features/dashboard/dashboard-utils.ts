@@ -145,6 +145,33 @@ export function formatEventTimestamp(value: string) {
   }).format(parsed);
 }
 
+/** A stored timestamp (timestamptz) as a time of day, read in the event's zone.
+ *  `formatEventTime` above takes an "HH:MM" column; a fixture stores a full
+ *  timestamptz, so it needs its own reader rather than a slice of the ISO
+ *  string - which would show UTC to anyone reading it. */
+export function formatEventTimestampTime(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
+}
+
+/** A stored timestamp as "Sun, 22 Mar" - the heading a day of matches sits under. */
+export function formatEventTimestampWeekday(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
+}
+
 /** How far through a start-to-end window we are, 0-100. */
 export function getWindowProgress(date: string, startTime: string, endTime: string, now = new Date()) {
   if (!startTime || !endTime) return 0;

@@ -30,7 +30,7 @@ const PHOTOS_PER_PERSON = 10;
  * a screen reader gets it once (the image itself carries the same words as
  * its alt text only when there is no caption).
  *
- * Albums are free text ("Puja mandap", "Cultural evening", "Our team") -
+ * Albums are free text ("Opening day", "Cultural evening", "Our team") -
  * whatever this event's photos happen to be about.
  */
 export function GallerySection({
@@ -164,7 +164,7 @@ export function GallerySection({
           <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
             No photographs yet.{" "}
             {signedIn
-              ? "Add yours with a short caption - the mandap, the cultural evening, the team behind it."
+              ? "Add yours with a short caption - the decorations, the cultural evening, the team behind it."
               : "Sign in to add yours."}
           </div>
         )}
@@ -245,7 +245,7 @@ function AlbumField({ defaultValue, knownAlbums }: { defaultValue?: string; know
         name="album"
         list="closing-albums"
         defaultValue={defaultValue}
-        placeholder="Puja mandap, Cultural evening, Our team..."
+        placeholder="Opening day, Cultural evening, Our team..."
       />
       <datalist id="closing-albums">
         {knownAlbums.map((album) => (
@@ -387,7 +387,7 @@ function PhotoUploadDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="caption">Caption</Label>
-            <Input id="caption" name="caption" placeholder="Sthapana morning at the mandap" maxLength={160} />
+            <Input id="caption" name="caption" placeholder="The morning everything came together" maxLength={160} />
           </div>
           <AlbumField knownAlbums={knownAlbums} />
           {error ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}

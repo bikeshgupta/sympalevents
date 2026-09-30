@@ -46,7 +46,7 @@ export function defaultClosingMessage(facts: ClosingFacts) {
       ? `Across ${days}${facts.eventCount ? ` and ${facts.eventCount} events` : ""}, ${who}. Together that is ${formatCurrency(total)} raised and spent on all of us.`
       : `Across ${days}, this was put together entirely by the people who live here.`,
     facts.coreCount
-      ? `The ${facts.coreCount}-member committee planned it, but the mandap did not decorate itself, the prasad did not count itself, and the sound system did not carry itself up the stairs.`
+      ? `The ${facts.coreCount}-member committee planned it, but the decorations did not hang themselves, the food did not count itself, and the sound system did not carry itself up the stairs.`
       : "",
     "To everyone who donated, cooked, carried, decorated, sang, danced, kept accounts, swept up afterwards, or simply turned up and sang along - thank you. Every single name on this page is the reason it happened, and none of it would have been possible without any one of you.",
     "See you next year.",

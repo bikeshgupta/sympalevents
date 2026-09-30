@@ -1,8 +1,9 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronsUpDown, LogOut, UserPen } from "lucide-react";
-import { useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { LogOut, UserPen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useParams } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
+import { EventSwitcher } from "@/components/layout/event-switcher";
 import { NavDrawer } from "@/components/layout/nav-drawer";
 import { ProfileNameDialog } from "@/components/layout/profile-name-dialog";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,10 @@ import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
+import { useEventPath } from "@/lib/event-path";
 import { useScrollToTopOnNavigate } from "@/lib/scroll";
+import { useTrafficHeartbeat } from "@/lib/traffic";
+import { themeVariables } from "@/lib/themes";
 import { useEventData } from "@/lib/event-data";
 import { cn } from "@/lib/utils";
 import { navItems } from "./nav-items";
@@ -23,21 +27,52 @@ export function AppLayout() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
-  const { events, selectedEventId, setSelectedEventId, isLoading: isEventLoading } = useEventContext();
+  const { selectedEvent, selectedEventId, societies, setSelectedEventId, isLoading: isEventLoading } =
+    useEventContext();
+  const eventPath = useEventPath();
+  const { eventId: eventIdFromRoute } = useParams();
+
+  // `/e/<eventId>/...` is the address that survives a refresh and can be
+  // shared, so the path wins over whatever the switcher last remembered.
+  // Selecting also persists it, which is what a link-borne id never did.
+  useEffect(() => {
+    if (eventIdFromRoute && eventIdFromRoute !== selectedEventId) {
+      setSelectedEventId(eventIdFromRoute);
+    }
+  }, [eventIdFromRoute, selectedEventId, setSelectedEventId]);
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
 
   useScrollToTopOnNavigate();
+  // One beat a minute while this tab is being looked at, so Settings can
+  // say whether anybody reads what the committee maintains. Mounted here
+  // rather than per page: /login, /new-event and /s/<token> are outside
+  // this layout and belong to no event.
+  useTrafficHeartbeat();
   const [editingName, setEditingName] = useState(false);
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
-  const accessiblePageKeys = new Set(accessiblePages.filter((page) => page.canView).map((page) => page.pageKey));
+  // What this event calls each module. A sports meet's Contributions page is
+  // "Entry fees" and its Events page is "Match days"; the nav says so, because
+  // the server resolved it. Falls back to the app's own name.
+  const labelByPageKey = new Map(
+    accessiblePages.filter((page) => page.label).map((page) => [page.pageKey, page.label as string]),
+  );
   // With no event there is nobody to have set visibility - the app is on the
   // demo dataset - so the nav shows the tour rather than going blank. With an
   // event, the server's list is the only thing that decides.
   const isDemoNav = !selectedEventId && !isEventLoading;
-  const visibleNavItems = isDemoNav
-    ? navItems
-    : navItems.filter((item) => accessiblePageKeys.has(pageKeyFromHref(item.href)));
+  // `navItems` supplies the icon and the href. The *order* is the committee's,
+  // from the server's module list, so Settings -> Modules can rearrange the
+  // sidebar and the drawer together. Anything the server did not name (the
+  // demo tour, or Settings) keeps its place from the array.
+  const navByPageKey = new Map(navItems.map((item) => [pageKeyFromHref(item.href), item]));
+  const orderedFromServer = accessiblePages
+    .filter((page) => page.canView)
+    .map((page) => navByPageKey.get(page.pageKey))
+    .filter((item): item is (typeof navItems)[number] => Boolean(item));
+  const visibleNavItems = (
+    isDemoNav ? navItems : orderedFromServer
+  ).map((item) => ({ ...item, label: labelByPageKey.get(pageKeyFromHref(item.href)) ?? item.label }));
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const canRequestCommitteeAccess = Boolean(
     session && selectedEventId && eventAccess.role !== "admin" && eventAccess.role !== "committee",
@@ -58,22 +93,39 @@ export function AppLayout() {
     }
   }
 
-  // No `pb-20` on the root any more: the fixed bottom bar it reserved space
-  // for is gone, replaced by the header drawer (see nav-drawer.tsx).
+  const society = societies.find((item) => item.id === selectedEvent?.societyId) ?? null;
+
   return (
-    <div className="min-h-screen bg-background">
+    // The event's colour preset, set as CSS variables on the root rather than
+    // by any second styling mechanism - every `bg-primary`, focus ring and
+    // accent in the app is already reading these. A default-themed event sets
+    // nothing at all, so it inherits globals.css untouched. See lib/themes.ts.
+    <div className="min-h-screen bg-background" style={themeVariables(event?.theme)}>
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card lg:block">
-        <div className="flex h-16 items-center border-b px-5">
-          <div>
-            <p className="text-sm font-semibold">SymPal Events</p>
-            <p className="text-xs text-muted-foreground">Committee workspace</p>
+        {/* The society's own name and logo, when it has them. A deployment
+            with no society yet falls back to the app's name, which is what
+            this always said. */}
+        <div className="flex h-16 items-center gap-2.5 border-b px-5">
+          {society?.logoUrl ? (
+            <img
+              src={society.logoUrl}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-md border object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{society?.name ?? "SymPal Events"}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {society ? (event?.name ?? "Committee workspace") : "Committee workspace"}
+            </p>
           </div>
         </div>
         <nav className="space-y-1 p-3">
           {visibleNavItems.map((item) => (
             <NavLink
               key={item.href}
-              to={item.href}
+              to={eventPath(item.href)}
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -91,27 +143,16 @@ export function AppLayout() {
       <div className="lg:pl-64">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur lg:px-6">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {events.length > 1 ? (
-                <select
-                  className="max-w-48 rounded-md border bg-background px-2 py-1 text-sm font-semibold outline-none"
-                  value={selectedEventId}
-                  onChange={(item) => setSelectedEventId(item.target.value)}
-                >
-                  {events.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <h1 className="truncate text-sm font-semibold lg:text-base">{event?.name ?? "SymPal Events"}</h1>
-              )}
-              <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <p className="truncate text-xs text-muted-foreground">
-              {event ? `${event.dates} · ${event.location}` : "Loading event"}
-            </p>
+            <EventSwitcher
+              eventName={event?.name ?? "SymPal Events"}
+              eventSubtitle={
+                selectedEvent?.societyName
+                  ? `${selectedEvent.societyName} · ${event?.dates ?? ""}`
+                  : event
+                    ? `${event.dates} · ${event.location}`
+                    : "Loading event"
+              }
+            />
           </div>
           <AnnouncementsBell event={event} />
           {canRequestCommitteeAccess ? (
@@ -184,21 +225,37 @@ export function AppLayout() {
               <Link to="/login">Sign in</Link>
             </Button>
           )}
-          <NavDrawer
-            items={visibleNavItems}
-            session={session}
-            userName={userName}
-            onEditName={() => setEditingName(true)}
-          />
-          {session && editingName ? (
-            <ProfileNameDialog
-              currentName={session.user.name ?? ""}
-              email={session.user.email}
-              onOpenChange={setEditingName}
-            />
-          ) : null}
         </header>
-        <main className="mx-auto w-full max-w-7xl px-4 py-5 lg:px-6">
+
+        {/* Deliberately outside the header. The header carries `backdrop-blur`,
+            and a backdrop filter makes an element the containing block for
+            every fixed-position descendant - the menu button would anchor to
+            the header box and sit just beneath it instead of at the foot of
+            the screen, with nothing to say why. Out here it anchors to the
+            viewport.
+
+            Its position in the DOM is still right after the header's own
+            controls, so a keyboard or screen reader reaches navigation before
+            the page content rather than after all of it. The dialog below is
+            portalled, so where it sits makes no visual difference; it lives
+            next to the drawer because the drawer is what opens it. */}
+        <NavDrawer
+          items={visibleNavItems}
+          session={session}
+          userName={userName}
+          onEditName={() => setEditingName(true)}
+        />
+        {session && editingName ? (
+          <ProfileNameDialog
+            currentName={session.user.name ?? ""}
+            email={session.user.email}
+            onOpenChange={setEditingName}
+          />
+        ) : null}
+
+        {/* `pb-20` below `lg` is the room the floating menu button needs; a
+            page's last row would otherwise sit under it permanently. */}
+        <main className="mx-auto w-full max-w-7xl px-4 pb-20 pt-5 lg:px-6 lg:pb-5">
           {requestMessage ? (
             <div className="mb-4 rounded-md border bg-card px-4 py-3 text-sm text-muted-foreground">{requestMessage}</div>
           ) : null}

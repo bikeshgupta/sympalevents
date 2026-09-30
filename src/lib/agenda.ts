@@ -1,6 +1,6 @@
 /**
  * Agenda points inside one scheduled event - "idol arrival", "sankalp and
- * sthapana", "prasad counter opens", or the running order of a cultural
+ * ceremony", "refreshment counter opens", or the running order of a cultural
  * evening.
  *
  * These live in `event_schedule.sub_events`, one point per line. There is
@@ -9,8 +9,8 @@
  * two clock fields per bullet was the reason this field went unused. A
  * plain textarea in, bullets out.
  *
- *   Idol arrival and welcome at the gate
- *   Sankalp and sthapana - Pandit ji leads
+ *   Welcome at the gate
+ *   Opening ceremony
  *   Prasad counter opens
  *
  * Older rows were stored as `HH:MM | Title | Note`. Nothing in production

@@ -188,13 +188,83 @@ against Google's public keys and map the user into Supabase `app_users`.
   migration, while a write with an empty agenda still saves. Reads still degrade
   gracefully.
 
+## Dashboard widgets
+
+The dashboard is assembled from widgets an admin arranges, not a fixed
+sequence of JSX. Three pieces, and the split between them is deliberate:
+
+- **[src/lib/widgets.ts](src/lib/widgets.ts)** is the catalogue, and is
+  **data, not components**. The builder lists it and the dashboard renders it,
+  but only one of those needs JSX - so this stays a plain `.ts` module that
+  anything can import without pulling the dashboard's component tree along.
+  It also holds `defaultLayout`, `normaliseLayout`, `visibleLayout` and
+  `layoutRows`, all pure, all covered by the checks described below.
+- **[src/features/dashboard/widget-host.tsx](src/features/dashboard/widget-host.tsx)**
+  is the other half: the single place that knows which component a key means
+  and what to hand it. Every widget gets the same `DashboardContext`,
+  gathered once by the page, so **adding a widget to a dashboard never adds a
+  request**. Keep it that way - a widget that fetches its own data makes a
+  busier dashboard a slower one.
+- **[src/features/dashboard/widgets/](src/features/dashboard/widgets/)** holds
+  the six components the page used to define inline.
+
+A widget's `module` is its access rule, and it is one that already exists:
+`useEventAccess().pages` is the server-filtered list of pages this viewer may
+open. A widget tied to a module that is off, or that this person cannot see,
+is neither drawn nor offered in the builder. **Do not add a second permission
+concept here.** Demo mode passes `null` instead of a key set, skipping the
+filter for the same reason `isDemoNav` does in the nav: with no event there
+is no admin to have configured anything.
+
+`variant` is `"basic"` or `"detailed"`, and each widget declares which it
+supports. **Every default variant reproduces what that widget rendered before
+the system existed** - `gallery` defaults to `detailed` for exactly that
+reason, because its six photographs are what the dashboard has always shown.
+
+`events.dashboard_layout` (026) stores the arrangement as a jsonb array, for
+the reason 020 gives for the closing credits: reordering is then the array's
+own order rather than a `sort_order` column to renumber. **`null` is
+meaningful** and is the default - it means "the default for this kind of
+event", computed at render, so Reset stores nothing and an event picks up a
+better default from a later release instead of being frozen to the one it was
+made with. Reading it costs nothing extra: it travels with the event in
+`?resource=data`. Only the write is its own resource, `?resource=layout`.
+
+Widgets are rendered into **fragments, not wrapper divs**. Several of them
+draw nothing when they have nothing to show, and an empty wrapper still
+counts for the container's `space-y-4`, leaving a gap where nothing is.
+
+**Module order is the committee's too.** `event_page_visibility.sort_order`
+(026) drives it, `sortModules()` applies it with unpositioned modules sorting
+last in registry order, and `navItems` supplies only the icon and href - the
+*order* comes from the server list, so the sidebar and the drawer rearrange
+together. Reordering in both the module editor and the dashboard builder is
+up/down buttons, never drag-and-drop, the same call `CreditsDialog` made.
+
+**The regression bar, and how it was met:** the dashboard renders
+pixel-for-pixel what it rendered before any of this, when an event has no
+stored layout. Verified by full-page screenshot diff at 1280x1413, 0 differing
+pixels out of 1,808,640, twice - once for the file split and once for the
+layout-driven render.
+
 ## Navigation
 
 - **Desktop (`lg` and up):** the fixed left sidebar in
   [app-layout.tsx](src/components/layout/app-layout.tsx).
-- **Mobile:** a right-hand drawer behind the three-line button next to the profile
-  picture ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). It shows the
+- **Mobile:** a right-hand drawer behind a round button fixed to the **bottom right**
+  of the screen ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). It shows the
   signed-in account first (or a Sign in button), then every page, then Sign out.
+  The button used to sit in the header next to the profile picture, which is the
+  hardest corner of a phone for a thumb to reach. Two things about its new home are
+  load-bearing:
+  - **It is rendered outside `<header>`, as a sibling before `<main>`.** The header
+    carries `backdrop-blur`, and a backdrop filter makes an element the containing
+    block for every `position: fixed` descendant - inside it, the button anchors to
+    the header box and sits just below it instead of at the foot of the screen, with
+    nothing in the console to say why.
+  - **That DOM position is also the accessible one.** Rendered last it would make a
+    keyboard user tab through the whole page before reaching navigation; rendered
+    there, navigation comes straight after the header's own controls.
 
 **Every navigation starts at the top.** React Router does not do that by itself - it
 swaps the route's element and leaves the window where it was, so a link followed from
@@ -213,13 +283,77 @@ is `sticky h-16`). Today: `/closing#reviews` from the dashboard's review card,
 `/closing#photographs` from its gallery preview, and `/dashboard#in-their-words`, which
 `/login` returns a signed-out commenter to.
 
-**The fixed bottom bar is gone**, and so is the `pb-20` the layout reserved for it.
-With thirteen pages that bar showed about four at a time behind a sideways scroll,
-gave no hint the rest existed, and cost the last ~80px of every screen. Do not
-reintroduce it; add a page to `navItems` and it appears in both surfaces.
+**The fixed bottom bar is gone.** With thirteen pages that bar showed about four at a
+time behind a sideways scroll, gave no hint the rest existed, and cost the last ~80px
+of every screen. Do not reintroduce it; add a page to `navItems` and it appears in
+both surfaces.
+
+`pb-20` came back on `<main>` below `lg`, and only there - the floating menu button
+covers whatever scrolls under it, and a page's last row should not live permanently
+beneath it. That is the same ~80px the bar charged, spent on a control anyone can
+reach rather than on a list nobody could read.
 
 Both surfaces filter on the **same** list — `useEventAccess().pages` — so the sidebar
 and the drawer can never disagree about what a viewer may open. See "Auth and access".
+
+## Appearance, and the link that opens an event
+
+**Colour is five named presets, never a picker** ([src/lib/themes.ts](src/lib/themes.ts)).
+The UI rules set a 4.5:1 floor and a free hex field hands a committee the
+ability to fail it; presets are chosen once and checked once. Measured
+white-on-primary: teal 7.71, marigold 6.01, indigo 11.14, rose 8.83, forest
+9.17 to one. **A new preset must clear 4.5:1** - keep `primary` at 38%
+lightness or darker.
+
+A theme is applied by overriding `--primary`, `--ring` and `--accent` on the
+layout root, so every `bg-primary`, focus ring and funding bar already reads
+it. A default-themed event sets nothing and inherits globals.css untouched.
+Do not introduce a second styling mechanism for this.
+
+`events.hero_image_url` (027) replaces the hardcoded `null` that made every
+event show the bundled photograph. It uploads through the existing
+`/api/uploads` with an `events` folder, which falls into the committee branch
+already there. **The server only accepts a URL from this app's own storage** -
+any URL would let an admin point a public dashboard at a third party, which
+quietly tells that third party who opens the page and when.
+
+### Two route shapes, on purpose
+
+`/e/<eventId>/budget` is the real address: it survives a refresh, it can be
+bookmarked, and it works for somebody who has never opened the app. The flat
+`/budget` is kept for existing bookmarks and for a person with one event who
+should not have to look at an id. **Both render the same tree** - `app.tsx`
+defines the page routes once and mounts them twice.
+
+Three things make that work, and the first is the one that fails silently:
+
+- **`pageKeyFromPath()` skips the `/e/<id>/` prefix.** Taking segment 0
+  blindly hands the route guard the literal `"e"`, which is not a page, so
+  every path-form URL resolves to "restricted" and bounces to the login
+  screen. Covered by checks over both shapes.
+- **`useEventPath()`** ([src/lib/event-path.ts](src/lib/event-path.ts)) builds
+  every in-app link in one place, so a page opened from a shared link stays
+  shareable as somebody moves around it. It lives in its own `.ts` file rather
+  than in `event-context.tsx` only to avoid a second react-refresh warning.
+- **`AppLayout` syncs `useParams().eventId` into the context and persists it.**
+  The path wins over whatever the switcher last remembered.
+
+**`/s/<token>`** is the permanent link an admin hands out
+([027](supabase/migrations/027_event_appearance.sql) adds `share_token`). It
+resolves publicly - a share link that needs an account is not a share link -
+and returns an id and a name and nothing else, then redirects to the path
+form. What the visitor can then *see* is unchanged: page by page, from
+Modules. Replacing the token retires the old link immediately, which is the
+only way to take back one that travelled too far.
+
+**A link-borne id is persisted now.** It used to live in React state only, so
+a refresh lost it - the effect that calls `rememberEventId` returns early when
+an id is already set. Both the path form and the older `?eventId=` form write
+it through.
+
+**Per-event link previews are out of scope and need server rendering.** The
+`og:*` tags in index.html are static, so a crawler reading any of these URLs
+shows the app's generic title. See "Link previews" above.
 
 ## App icon and installability
 
@@ -1248,6 +1382,102 @@ switch is not rendered and the sheet is always the committee copy.
 - `NoticeDialog` grew two **optional** props for this - `actions` (the extra button
   beside Close and Print) and `description` (the line under the title). Both default
   to exactly what the four existing notices render today.
+
+## Traffic (Settings)
+
+Who opens this event's pages, and who has been. A collapsible **Traffic**
+panel in Settings ([traffic-card.tsx](src/features/settings/traffic-card.tsx)),
+admin only, answering the question a committee had no way to ask: is any of
+this read?
+
+It records people's browsing, so most of what follows is a privacy decision
+rather than a storage one.
+
+### One table, one row per visit
+
+[028_event_traffic.sql](supabase/migrations/028_event_traffic.sql) adds
+`event_visits`. **Not run yet** - until it is, the panel shows an amber banner
+naming it, the read returns `ready: false`, and the heartbeat silently does
+nothing. That last part differs from every other degraded write in this repo,
+which answers 501: the person who triggered a heartbeat is a resident reading
+a page, who asked for nothing and must see nothing.
+
+- **One row per visit, not per page view.** Time spent is
+  `last_seen_at - started_at` - no second table, no join. The *path* somebody
+  took through the site is deliberately not recorded: a per-view log is five
+  to ten times the rows and a far more intimate record of one person than a
+  committee needs in order to learn whether its pages are read. Making that
+  change is a new decision, not a column to add quietly.
+- **No IP address is stored, in any form - not raw, not hashed.** A hash is
+  still re-identifiable to anyone who can guess the salt, and one society's
+  residents are a small input space. The address is used to derive `device`,
+  `browser`, `country` and `city` and is never written down. Those four are
+  coarse on purpose - "iPhone", not a user agent string, which is a
+  fingerprint.
+- `visitor_key` is a random value the **visitor's own browser** generates and
+  keeps in `localStorage`; it groups repeat visits ("3rd visit") and
+  identifies nobody. The visit id lives in `sessionStorage`, so a new tab is a
+  new visit and the heartbeat is an upsert on a primary key rather than a
+  read-then-write with a race in it. Neither ever reaches the client again.
+- RLS on, **zero policies**, the same reasoning as every table since 009.
+  This one is more sensitive than most, not less: it is the only place that
+  says who was reading what.
+- **90-day retention**, applied in `api/_lib/traffic.ts` on the admin's own
+  read rather than by a cron this project does not have.
+
+### API - no new serverless function
+
+`?resource=traffic` on **`api/event-access.ts`**, handler in
+[api/_lib/traffic.ts](api/_lib/traffic.ts). The count is still **12**.
+
+**It rides on `event-access.ts` and not `events.ts`** - where the last five
+resources went - because the heartbeat is the hottest path in the app: every
+visitor, every minute, on every page. `api/events.ts` statically imports
+closing, event-data, appearance, share, layout and societies, which is a large
+cold start to pay for a single-row upsert; `api/event-access.ts` imports
+`page-visibility` and `server` and nothing else. Do not tidy it across.
+
+- **`POST` is open to everyone** - a signed-out visitor is exactly who this has
+  to count - and always answers `{ ok: true }`, whatever happened. It must
+  never leak a count to a non-admin and never put an error in front of a
+  resident.
+- **Every beat is authorised against `resolvePageAccess`**, the same answer the
+  route guard gets. Without it anyone could write rows into any event's table,
+  and a visitor could claim to be reading a page they cannot open.
+- **`GET` needs `requireEventAdmin`.** It returns **names only** for signed-in
+  visitors - no email, no photograph, no role, the same rule the closing
+  credits follow - and never a name for a guest.
+- A beat on the **same** page is throttled to one per 20 seconds, so a runaway
+  tab cannot spin its row. A move to a **different** page always counts, or
+  somebody skimming four screens in a minute would register as having read
+  one: `page_views` counts pages reached, not beats sent.
+
+### The heartbeat
+
+`useTrafficHeartbeat()` ([src/lib/traffic.ts](src/lib/traffic.ts)) is mounted
+once in `AppLayout`, so it runs on event pages only - `/login`, `/new-event`
+and `/s/<token>` sit outside that layout and belong to no event.
+
+- It beats **only while `document.visibilityState === "visible"`**. A
+  backgrounded tab is not a person on the site, and counting one would make
+  both the live number and every recorded duration wrong.
+- Storage access is wrapped in try/catch: a private window throws, and
+  somebody who cannot store anything must still be able to read the page. The
+  visit simply goes uncounted.
+- **There is no close-out beat on unload.** `navigator.sendBeacon` cannot carry
+  the Authorization header this API needs. The cost is that a visit
+  under-counts by up to one interval - which is honest, and much better than a
+  tab left open all night reading as a night's attention.
+
+### "Here now" means a two-minute heartbeat window, and says so
+
+There is no socket in this app, so the live count is an approximation and the
+panel is labelled "seen in the last 2 minutes" rather than claiming to know
+who is on the page this instant - UI rules §3. Do not relabel it "now".
+
+The panel is **collapsed by default and the query is gated on that**: an
+unopened card makes no request and runs no timer; opened, it refetches every
+30 seconds.
 
 ## Motion
 

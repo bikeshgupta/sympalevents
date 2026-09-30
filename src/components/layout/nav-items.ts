@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  ClipboardList,
   CircleDollarSign,
   Contact,
   Gauge,
@@ -25,6 +26,8 @@ export const navItems = [
   { label: "Tasks", href: "/tasks", icon: ListChecks },
   { label: "Volunteers", href: "/volunteers", icon: Users },
   { label: "Events", href: "/event-plan", icon: CalendarDays },
+  { label: "Teams", href: "/teams", icon: Users },
+  { label: "Fixtures", href: "/fixtures", icon: ClipboardList },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "Closing", href: "/closing", icon: PartyPopper },
   { label: "Settings", href: "/settings", icon: Settings },

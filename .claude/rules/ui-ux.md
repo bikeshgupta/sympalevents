@@ -64,12 +64,14 @@ Every data surface implements four states, not one:
 
 ## 5. Mobile
 
-- **Mobile navigation is a right-hand drawer**, opened by the three-line button next to
-  the profile picture in the header
-  ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). The fixed bottom bar is
-  gone, and with it the `pb-20` the layout used to reserve for it — the bottom of the
-  screen is ordinary page space now. A new fixed-position element still needs a reason;
-  it just no longer has a bar to collide with.
+- **Mobile navigation is a right-hand drawer**, opened by a round button fixed to the
+  **bottom right** ([nav-drawer.tsx](src/components/layout/nav-drawer.tsx)). It lived in
+  the header until it became clear that the top right corner is the hardest place on a
+  phone for a thumb to reach. The fixed bottom bar is still gone and stays gone. The
+  button is rendered outside `<header>` because the header's `backdrop-blur` would
+  otherwise become its containing block and strand it under the header — see CLAUDE.md
+  under Navigation. `<main>` carries `pb-20` below `lg` to keep a page's last row out
+  from under it. A *new* fixed-position element still needs a reason of its own.
 - Tap targets ≥ 40px.
 - **A page's stat tiles are one row, at every width.** Wrap them in `StatGrid`
   ([stat-card.tsx](src/components/shared/stat-card.tsx)), which sets one column per

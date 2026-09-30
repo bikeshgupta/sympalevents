@@ -42,6 +42,8 @@ export const pageLabels: Record<string, string> = {
   tasks: "Tasks",
   volunteers: "Volunteers",
   "event-plan": "Events",
+  teams: "Teams",
+  fixtures: "Fixtures",
   closing: "Closing",
   contacts: "Contacts",
   settings: "Settings",
@@ -74,9 +76,21 @@ export function visibilityOptionsFor(pageKey: string): PageVisibility[] {
   return signInOnlyPageKeys.has(pageKey) ? levels.filter((level) => level !== "public") : levels;
 }
 
+/** Routes that are part of another page rather than pages of their own, and
+ *  are therefore governed by that page's visibility and edit rights. */
+const pageKeyAliases: Record<string, string> = {
+  events: "event-plan",
+  "customise-dashboard": "dashboard",
+};
+
 export function pageKeyFromPath(pathname: string) {
-  const pageKey = pathname.split("/").filter(Boolean)[0] || "dashboard";
-  return pageKey === "events" ? "event-plan" : pageKey;
+  const segments = pathname.split("/").filter(Boolean);
+  // `/e/<eventId>/budget` is the same page as `/budget`. Taking segment 0
+  // blindly would hand the route guard the literal "e", which is not a page,
+  // so every path-form URL would resolve to "restricted" and bounce.
+  const relevant = segments[0] === "e" ? segments.slice(2) : segments;
+  const pageKey = relevant[0] || "dashboard";
+  return pageKeyAliases[pageKey] ?? pageKey;
 }
 
 export function useCurrentPageAccess() {
@@ -139,8 +153,24 @@ export function usePageAccess(pageKey: string) {
   };
 }
 
+/**
+ * One module of one event, as the server resolves it. `isEnabled` is a
+ * different question from `visibility` and both matter: a sports meet has no
+ * Prasad, which is not "Prasad, restricted" but a module the committee never
+ * turned on. See supabase/migrations/024_event_modules.sql.
+ */
+export type EventModule = {
+  pageKey: string;
+  visibility: PageVisibility;
+  isEnabled: boolean;
+  /** What this event calls it - the override if there is one, else the app's name. */
+  label: string;
+  labelOverride: string | null;
+};
+
 type VisibilityResponse = {
   visibility: Record<string, PageVisibility>;
+  modules?: EventModule[];
   pageKeys: string[];
   canEdit: boolean;
 };
@@ -178,5 +208,26 @@ export function usePageVisibility() {
     },
   });
 
-  return { query, save };
+  /**
+   * The fuller save: on/off, the event's own name for a module, and who may
+   * see it, all in one write. `save` above stays for the visibility-only
+   * callers. A project that has not run 024 gets a 501 naming it, and the
+   * visibility half still works.
+   */
+  const saveModules = useMutation({
+    mutationFn: (modules: Pick<EventModule, "pageKey" | "visibility" | "isEnabled" | "labelOverride">[]) =>
+      apiFetch<{ modules: EventModule[] }>("/api/page-access", {
+        method: "POST",
+        body: { eventId: selectedEventId, modules },
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["page-visibility"] }),
+        queryClient.invalidateQueries({ queryKey: ["page-access"] }),
+        queryClient.invalidateQueries({ queryKey: ["event-access"] }),
+      ]);
+    },
+  });
+
+  return { query, save, saveModules };
 }

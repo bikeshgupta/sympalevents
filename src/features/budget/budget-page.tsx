@@ -16,6 +16,7 @@ import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
+import { useVocabulary } from "@/lib/vocabulary";
 import {
   ColumnFilter,
   SortableHeader,
@@ -53,6 +54,7 @@ function BudgetFields({ budget }: { budget?: BudgetRow }) {
 }
 
 export function BudgetPage() {
+  const vocab = useVocabulary();
   const { data } = useEventData();
   const access = usePageAccess("budget");
   const budgetRows = data.budgets;
@@ -65,7 +67,7 @@ export function BudgetPage() {
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Budget</h2>
+            <h2 className="text-2xl font-semibold">{vocab.labelFor("budget")}</h2>
             <p className="text-sm text-muted-foreground">Plan category-wise costs and compare estimates against actuals.</p>
           </div>
           <DataSourceBadge source={data.source} reason={data.fallbackReason} />

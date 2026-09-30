@@ -10,7 +10,7 @@
  *
  * Phone photos are routinely 3-8MB. Shrinking on the device rather than
  * refusing the upload is the whole point: nobody should have to know what a
- * megabyte is to add a picture of the mandap.
+ * megabyte is to add a picture of the decorations.
  */
 
 /** Types a browser can decode and we can send untouched. */
