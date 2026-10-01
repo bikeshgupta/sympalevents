@@ -1,7 +1,14 @@
 import type { AppEvent, EventPlanRow } from "@/lib/event-data";
+import { datePhase, getDateInEventZone, toEventZoneTimestamp } from "@/lib/event-status";
 import { formatCurrency } from "@/lib/utils";
 
-export type EventPhase = "before" | "during" | "after";
+// The event's timezone primitives and the one date-vs-clock comparison now
+// live in @/lib/event-status, so Society Home and the dashboard cannot drift
+// into two answers about the same event. They are re-exported here because
+// every screen already imports them from this file.
+export { getDateInEventZone, toEventZoneTimestamp };
+export type { EventPhase } from "@/lib/event-status";
+
 export type TimelineStatus = "completed" | "current" | "upcoming";
 
 const KOLKATA_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -22,30 +29,10 @@ export function calculateFundingProgress(fundsReceived: number, totalBudget: num
   return Math.min(100, Math.max(0, (fundsReceived / totalBudget) * 100));
 }
 
-export function toEventZoneTimestamp(date: string, time = "00:00") {
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours = 0, minutes = 0, seconds = 0] = time.split(":").map(Number);
-  return Date.UTC(year, month - 1, day, hours, minutes, seconds) - KOLKATA_OFFSET_MS;
-}
-
-export function getDateInEventZone(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${value("year")}-${value("month")}-${value("day")}`;
-}
-
-export function getEventPhase(event: AppEvent, now = new Date()): EventPhase {
-  const currentMs = now.getTime();
-  const startMs = toEventZoneTimestamp(event.startDate);
-  const endMs = toEventZoneTimestamp(event.endDate, "23:59:59");
-  if (currentMs < startMs) return "before";
-  if (currentMs > endMs) return "after";
-  return "during";
+/** The dashboard's view of the event's state. A thin adapter over
+ *  `datePhase` - see @/lib/event-status for why there is only one of these. */
+export function getEventPhase(event: AppEvent, now = new Date()) {
+  return datePhase(event.startDate, event.endDate, now);
 }
 
 export function getEventDays(event: AppEvent) {

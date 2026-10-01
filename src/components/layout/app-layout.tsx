@@ -104,23 +104,14 @@ export function AppLayout() {
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card lg:block">
         {/* The society's own name and logo, when it has them. A deployment
             with no society yet falls back to the app's name, which is what
-            this always said. */}
-        <div className="flex h-16 items-center gap-2.5 border-b px-5">
-          {society?.logoUrl ? (
-            <img
-              src={society.logoUrl}
-              alt=""
-              className="h-8 w-8 shrink-0 rounded-md border object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : null}
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{society?.name ?? "SymPal Events"}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {society ? (event?.name ?? "Committee workspace") : "Committee workspace"}
-            </p>
-          </div>
-        </div>
+            this always said.
+
+            It is also the way back out: this block is where somebody already
+            looks to answer "where am I", so it is the least surprising place
+            to put "and how do I get back to the rest of it". Without a
+            society there is nowhere to go back to, so it stays a plain block
+            rather than a link that leads nowhere. */}
+        <SocietyBrand society={society} eventName={event?.name} />
         <nav className="space-y-1 p-3">
           {visibleNavItems.map((item) => (
             <NavLink
@@ -263,5 +254,55 @@ export function AppLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+/**
+ * The sidebar's head: whose events these are, and which one you are in.
+ *
+ * A link back to the society when there is one to go back to, and the plain
+ * block this always was when there is not (demo mode, or before the society
+ * migrations have run). `/society` without a slug is the fallback: the server
+ * resolves it to the viewer's own society, so this still works before 029
+ * gives societies their addresses.
+ */
+function SocietyBrand({
+  society,
+  eventName,
+}: {
+  society?: { name: string; slug: string | null; logoUrl: string | null } | null;
+  eventName?: string;
+}) {
+  const inner = (
+    <>
+      {society?.logoUrl ? (
+        <img
+          src={society.logoUrl}
+          alt=""
+          className="h-8 w-8 shrink-0 rounded-md border object-cover"
+          referrerPolicy="no-referrer"
+        />
+      ) : null}
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold">{society?.name ?? "SymPal Events"}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {society ? (eventName ?? "Committee workspace") : "Committee workspace"}
+        </p>
+      </div>
+    </>
+  );
+
+  if (!society) {
+    return <div className="flex h-16 items-center gap-2.5 border-b px-5">{inner}</div>;
+  }
+
+  return (
+    <Link
+      to={society.slug ? `/society/${society.slug}` : "/society"}
+      title={`All events at ${society.name}`}
+      className="flex h-16 items-center gap-2.5 border-b px-5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+    >
+      {inner}
+    </Link>
   );
 }
