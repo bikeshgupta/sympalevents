@@ -1,7 +1,7 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { LogOut, UserPen } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useParams } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
 import { EventSwitcher } from "@/components/layout/event-switcher";
 import { NavDrawer } from "@/components/layout/nav-drawer";
@@ -12,6 +12,7 @@ import { signOut, useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventPath } from "@/lib/event-path";
+import { useResolvedEventSlug } from "@/lib/event-slug";
 import { useScrollToTopOnNavigate } from "@/lib/scroll";
 import { useTrafficHeartbeat } from "@/lib/traffic";
 import { themeVariables } from "@/lib/themes";
@@ -30,16 +31,23 @@ export function AppLayout() {
   const { selectedEvent, selectedEventId, societies, setSelectedEventId, isLoading: isEventLoading } =
     useEventContext();
   const eventPath = useEventPath();
-  const { eventId: eventIdFromRoute } = useParams();
+  const { eventId: eventIdFromRoute, societySlug, eventSlug } = useParams();
+  const location = useLocation();
 
-  // `/e/<eventId>/...` is the address that survives a refresh and can be
-  // shared, so the path wins over whatever the switcher last remembered.
-  // Selecting also persists it, which is what a link-borne id never did.
+  // A readable address has to become an id before any screen can load, and the
+  // person opening it may have no account and no stored selection - so the
+  // server answers it, publicly, the same way it answers a share token.
+  const resolved = useResolvedEventSlug(societySlug, eventSlug);
+  const eventIdFromPath = eventIdFromRoute ?? resolved.data?.eventId;
+
+  // Whichever form the address takes, it wins over whatever the switcher last
+  // remembered. Selecting also persists it, which is what a link-borne id
+  // never did.
   useEffect(() => {
-    if (eventIdFromRoute && eventIdFromRoute !== selectedEventId) {
-      setSelectedEventId(eventIdFromRoute);
+    if (eventIdFromPath && eventIdFromPath !== selectedEventId) {
+      setSelectedEventId(eventIdFromPath);
     }
-  }, [eventIdFromRoute, selectedEventId, setSelectedEventId]);
+  }, [eventIdFromPath, selectedEventId, setSelectedEventId]);
   const event = data?.event;
   const userName = session?.user.name ?? session?.user.email ?? "Signed in";
 
@@ -94,6 +102,21 @@ export function AppLayout() {
   }
 
   const society = societies.find((item) => item.id === selectedEvent?.societyId) ?? null;
+
+  // An old /e/<uuid> address becomes the readable one once this event's slugs
+  // are known, so there is a single canonical address per page and nobody
+  // re-shares the uuid form by accident. Every existing bookmark and share
+  // token still resolves - it just does not stay in the address bar.
+  //
+  // After every hook above, deliberately: an early return placed higher would
+  // change the hook order between renders.
+  if (eventIdFromRoute && event?.slug && event?.societySlug) {
+    const rest = location.pathname.replace(`/e/${eventIdFromRoute}`, "");
+    return (
+      <Navigate to={`/society/${event.societySlug}/events/${event.slug}${rest}${location.search}`} replace />
+    );
+  }
+
 
   return (
     // The event's colour preset, set as CSS variables on the root rather than
