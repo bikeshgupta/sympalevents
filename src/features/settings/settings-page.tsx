@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
+import { AddressCard } from "@/features/settings/address-card";
 import { AppearanceCard } from "@/features/settings/appearance-card";
 import { ShareCard } from "@/features/settings/share-card";
 import { TrafficCard } from "@/features/settings/traffic-card";
@@ -371,6 +372,7 @@ export function SettingsPage() {
         <SocietyCard />
         <AppearanceCard />
         <ShareCard />
+        <AddressCard />
         <TrafficCard />
         <Card>
           <CardHeader>

@@ -81,20 +81,44 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
   // Either filter alone is a valid way to reach an event, so they are two
   // queries rather than one `or(...)` - PostgREST's `or` across a join and a
   // column is exactly the kind of filter that quietly stops matching.
-  const [byMembership, bySociety] = await Promise.all([
+  let [byMembership, bySociety] = await Promise.all([
     roleByEvent.size
       ? supabase
           .from("events")
-          .select("id,name,start_date,end_date,location,organization_id")
+          .select("id,name,slug,start_date,end_date,location,organization_id")
           .in("id", [...roleByEvent.keys()])
       : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
     societyIds.length
       ? supabase
           .from("events")
-          .select("id,name,start_date,end_date,location,organization_id")
+          .select("id,name,slug,start_date,end_date,location,organization_id")
           .in("organization_id", societyIds)
       : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
   ]);
+
+  // `slug` arrives with 029. Until it is run, ask again without it rather than
+  // failing the one call every page makes.
+  const missingSlug = (error: { code?: string; message?: string } | null) =>
+    Boolean(error && (["42703", "PGRST204"].includes(error.code ?? "") || error.message?.includes("slug")));
+
+  if (missingSlug(byMembership.error) || missingSlug(bySociety.error)) {
+    const [legacyMembership, legacySociety] = await Promise.all([
+      roleByEvent.size
+        ? supabase
+            .from("events")
+            .select("id,name,start_date,end_date,location,organization_id")
+            .in("id", [...roleByEvent.keys()])
+        : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+      societyIds.length
+        ? supabase
+            .from("events")
+            .select("id,name,start_date,end_date,location,organization_id")
+            .in("organization_id", societyIds)
+        : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+    ]);
+    byMembership = legacyMembership as typeof byMembership;
+    bySociety = legacySociety as typeof bySociety;
+  }
 
   if (byMembership.error) throw byMembership.error;
   if (bySociety.error) throw bySociety.error;
@@ -114,8 +138,12 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
         end_date: row.end_date as string,
         location: (row.location as string) ?? null,
         role: roleByEvent.get(String(row.id)) ?? null,
+        // Both halves of the readable address. Null before 029, which is what
+        // keeps useEventPath falling back to the id form.
+        slug: (row.slug as string | null) ?? null,
         societyId: (row.organization_id as string) ?? null,
         societyName: society?.name ?? null,
+        societySlug: society?.slug ?? null,
       };
     })
     .sort((left, right) => String(right.start_date).localeCompare(String(left.start_date)));
@@ -133,7 +161,7 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
 async function loadEvent(supabase: SupabaseClient, eventId: string) {
   const withTemplate = await supabase
     .from("events")
-    .select("id,name,start_date,end_date,location,status,event_type,unit_label,dashboard_layout,hero_image_url,theme,share_token")
+    .select("id,name,slug,organization_id,start_date,end_date,location,status,event_type,unit_label,dashboard_layout,hero_image_url,theme,share_token")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -381,10 +409,29 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
   const sponsorshipCommitted = sponsors.reduce((sum, row) => sum + row.committed, 0);
   const sponsorshipReceived = sponsors.reduce((sum, row) => sum + row.received, 0);
 
+  // The society's own slug, for the first half of the readable address. A
+  // separate small read rather than a join: it is one row, it is cached by the
+  // time anybody navigates, and `loadEvent` already has a legacy fallback that
+  // a join would complicate.
+  let societySlug: string | null = null;
+  if ("organization_id" in event && event.organization_id) {
+    const { data: societyRow } = await supabase
+      .from("organizations")
+      .select("slug")
+      .eq("id", event.organization_id as string)
+      .maybeSingle();
+    societySlug = (societyRow?.slug as string | null) ?? null;
+  }
+
   sendJson(res, 200, {
     event: {
       id: event.id,
       name: event.name,
+      // The two halves of the readable address. Both null before 029, which is
+      // what keeps every link falling back to the id form - see
+      // src/lib/event-path.ts.
+      slug: "slug" in event ? (event.slug as string | null) ?? null : null,
+      societySlug,
       location: event.location ?? "",
       startDate: event.start_date,
       endDate: event.end_date,

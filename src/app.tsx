@@ -75,6 +75,17 @@ export function App() {
       <Route path="/society" element={<SocietyHomePage />} />
       <Route path="/society/:societySlug" element={<SocietyHomePage />} />
 
+      {/* The readable address. The `society` and `events` segments are what
+          make it collision-proof: a society slugged "login" or "dashboard" can
+          never shadow an app route, so there is no reserved-word list to keep
+          up to date. AppLayout resolves the pair to an id. */}
+      <Route path="/society/:societySlug/events/:eventSlug" element={<AppLayout />}>
+        {eventRoutes()}
+      </Route>
+
+      {/* The id form. Still the address every existing bookmark and share token
+          resolves to, and still what an event without slugs uses. AppLayout
+          redirects it to the readable form once the slugs are known. */}
       <Route path="/e/:eventId" element={<AppLayout />}>
         {eventRoutes()}
       </Route>

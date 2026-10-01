@@ -18,6 +18,11 @@ export type DataSource = "supabase" | "demo";
 export type AppEvent = {
   id?: string;
   name: string;
+  /** The event half of the readable address: /society/<s>/events/<slug>.
+   *  Null before migration 029, which is what keeps links on the id form. */
+  slug?: string | null;
+  /** The society half of it. */
+  societySlug?: string | null;
   dates: string;
   location: string;
   startDate: string;

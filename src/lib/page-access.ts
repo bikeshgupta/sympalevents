@@ -83,12 +83,29 @@ const pageKeyAliases: Record<string, string> = {
   "customise-dashboard": "dashboard",
 };
 
+/**
+ * Which page an address is about, whatever shape it takes.
+ *
+ * Three shapes reach this, and the prefix has to be skipped on two of them.
+ * Taking segment 0 blindly hands the route guard the literal "e" or "society",
+ * neither of which is a page, so every prefixed URL resolves to "restricted"
+ * and bounces to the login screen - with nothing in the console to say why.
+ * That is the failure this function exists to prevent.
+ *
+ *   /budget                                        -> budget
+ *   /e/<eventId>/budget                            -> budget
+ *   /society/<societySlug>/events/<eventSlug>/budget -> budget
+ */
 export function pageKeyFromPath(pathname: string) {
   const segments = pathname.split("/").filter(Boolean);
-  // `/e/<eventId>/budget` is the same page as `/budget`. Taking segment 0
-  // blindly would hand the route guard the literal "e", which is not a page,
-  // so every path-form URL would resolve to "restricted" and bounce.
-  const relevant = segments[0] === "e" ? segments.slice(2) : segments;
+
+  const relevant =
+    segments[0] === "society" && segments[2] === "events"
+      ? segments.slice(4)
+      : segments[0] === "e"
+        ? segments.slice(2)
+        : segments;
+
   const pageKey = relevant[0] || "dashboard";
   return pageKeyAliases[pageKey] ?? pageKey;
 }

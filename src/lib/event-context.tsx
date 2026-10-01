@@ -6,6 +6,10 @@ import { useSession } from "@/lib/auth";
 export type EventOption = {
   id: string;
   name: string;
+  /** The event half of the readable address. Null before migration 029. */
+  slug?: string | null;
+  /** The society half. Null before 029. */
+  societySlug?: string | null;
   start_date: string;
   end_date: string;
   location: string | null;

@@ -327,3 +327,67 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
     events,
   });
 }
+
+/**
+ * A readable address resolved to the id everything else works by.
+ *
+ *   GET /api/events?resource=resolve&society=<slug>&event=<slug>
+ *
+ * **Public, deliberately** - the same reasoning as `/s/<token>`: an address
+ * that needs an account is not one you can hand out. Like that route it returns
+ * an id and a name and nothing else, and what the visitor may then *see* is
+ * decided page by page by the admin's visibility settings, exactly as before.
+ *
+ * Answers 404 for an unknown pair rather than anything more specific: whether a
+ * given slug exists is not worth confirming to somebody guessing.
+ */
+export async function handleResolveEventSlug(req: ApiRequest, res: ApiResponse) {
+  if (String(req.method) !== "GET") {
+    sendJson(res, 405, { error: "Method not allowed" });
+    return;
+  }
+
+  const societySlug = queryValue(req, "society").trim().toLowerCase();
+  const eventSlug = queryValue(req, "event").trim().toLowerCase();
+  if (!societySlug || !eventSlug) throw fail("A society and an event are required", 400);
+
+  const supabase = assertServiceSupabase();
+
+  const society = await supabase
+    .from("organizations")
+    .select("id,name,slug")
+    .eq("slug", societySlug)
+    .maybeSingle();
+
+  // Before 029 these columns do not exist. Say so rather than 500ing, so the
+  // client can fall back to the id form instead of showing an error.
+  if (society.error && isMissingSchema(society.error)) {
+    sendJson(res, 200, { ready: false, migration: "supabase/migrations/029_society_home.sql" });
+    return;
+  }
+  if (society.error) throw society.error;
+  if (!society.data) throw fail("That address does not match any event", 404);
+
+  const event = await supabase
+    .from("events")
+    .select("id,name,slug")
+    .eq("organization_id", society.data.id)
+    .eq("slug", eventSlug)
+    .maybeSingle();
+
+  if (event.error && isMissingSchema(event.error)) {
+    sendJson(res, 200, { ready: false, migration: "supabase/migrations/029_society_home.sql" });
+    return;
+  }
+  if (event.error) throw event.error;
+  if (!event.data) throw fail("That address does not match any event", 404);
+
+  sendJson(res, 200, {
+    ready: true,
+    eventId: event.data.id,
+    eventName: event.data.name,
+    eventSlug: event.data.slug,
+    societyName: society.data.name,
+    societySlug: society.data.slug,
+  });
+}

@@ -3,7 +3,7 @@ import { handleEventData } from "./_lib/event-data.js";
 import { handleAppearance } from "./_lib/appearance.js";
 import { handleShareLink } from "./_lib/share.js";
 import { handleLedger } from "./_lib/ledger.js";
-import { handleSocietyHome } from "./_lib/society-home.js";
+import { handleResolveEventSlug, handleSocietyHome } from "./_lib/society-home.js";
 import { handleDashboardLayout } from "./_lib/layout.js";
 import { handleSocieties } from "./_lib/societies.js";
 import {
@@ -82,6 +82,15 @@ export default async function handler(req: any, res: any) {
   if (resource === "contributions" || resource === "sponsors" || resource === "budgets") {
     try {
       return await handleLedger(req, res, resource);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // A readable address resolved to an id. Public, like the share token.
+  if (resource === "resolve") {
+    try {
+      return await handleResolveEventSlug(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }
