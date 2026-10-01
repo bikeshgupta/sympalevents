@@ -14,6 +14,8 @@ import { ExpensesPage } from "@/features/expenses/expenses-page";
 import { FixturesPage } from "@/features/fixtures/fixtures-page";
 import { CreateEventWizard } from "@/features/onboarding/create-event-wizard";
 import { ShareLinkPage } from "@/features/onboarding/share-link";
+import { SocietyHomePage } from "@/features/society/society-home-page";
+import { SocietyRoot } from "@/features/society/society-root";
 import { PrasadPage } from "@/features/prasad/prasad-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
@@ -31,10 +33,10 @@ import { TeamsPage } from "@/features/teams/teams-page";
  * at an id. Both render the same tree; which event they are about comes from
  * the path when there is one, and from the switcher otherwise.
  */
-function eventRoutes() {
+function eventRoutes(indexElement = <Navigate to="dashboard" replace />) {
   return (
     <Route element={<RouteGuard />}>
-      <Route index element={<Navigate to="dashboard" replace />} />
+      <Route index element={indexElement} />
       <Route path="dashboard" element={<DashboardPage />} />
       <Route path="customise-dashboard" element={<CustomiseDashboardPage />} />
       <Route path="contributions" element={<ContributionsPage />} />
@@ -67,11 +69,20 @@ export function App() {
       {/* The permanent link. Resolves a token and hands over to the path form. */}
       <Route path="/s/:token" element={<ShareLinkPage />} />
 
+      {/* A society's events - the front door. Outside AppLayout: this page is
+          about choosing an event, so the event sidebar has nothing to be
+          about yet. `/society` with no slug resolves to the viewer's own. */}
+      <Route path="/society" element={<SocietyHomePage />} />
+      <Route path="/society/:societySlug" element={<SocietyHomePage />} />
+
       <Route path="/e/:eventId" element={<AppLayout />}>
         {eventRoutes()}
       </Route>
 
-      <Route element={<AppLayout />}>{eventRoutes()}</Route>
+      {/* The flat mount. Its index is the one difference from the path form:
+          `/e/<id>/` means "this event, show me its dashboard", while a bare
+          `/` has no event in hand yet and resolves to the society instead. */}
+      <Route element={<AppLayout />}>{eventRoutes(<SocietyRoot />)}</Route>
     </Routes>
   );
 }

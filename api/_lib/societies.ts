@@ -64,7 +64,7 @@ function fail(message: string, statusCode: number) {
  */
 function isMissingSocietySchema(error: { code?: string; message?: string } | null) {
   return Boolean(
-    error && (["42P01", "42703", "PGRST205", "PGRST204"].includes(error.code ?? "") || error.message?.includes("invite_code")),
+    error && (["42P01", "42703", "PGRST205", "PGRST204"].includes(error.code ?? "") || error.message?.includes("invite_code") || error.message?.includes("slug")),
   );
 }
 
@@ -102,7 +102,7 @@ export async function fetchMySocieties(supabase: SupabaseClient, userId: string)
 
   const societies = await supabase
     .from("organizations")
-    .select("id,name,city,logo_url,invite_code")
+    .select("id,name,slug,city,logo_url,invite_code")
     .in("id", ids)
     .order("name", { ascending: true });
 
@@ -114,6 +114,9 @@ export async function fetchMySocieties(supabase: SupabaseClient, userId: string)
   return (societies.data ?? []).map((society) => ({
     id: society.id as string,
     name: (society.name as string) ?? "",
+    // Its address. Null until 029 is run, which is why every link that uses
+    // it falls back to the slugless `/society`, resolved server-side.
+    slug: (society.slug as string | null) ?? null,
     city: (society.city as string) ?? "",
     logoUrl: (society.logo_url as string) ?? null,
     role: roleById.get(society.id) ?? "read_only",

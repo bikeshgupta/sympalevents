@@ -18,6 +18,8 @@ export type EventOption = {
 export type SocietyOption = {
   id: string;
   name: string;
+  /** Its address: /society/<slug>. Null before migration 029. */
+  slug: string | null;
   city: string;
   logoUrl: string | null;
   role: "admin" | "committee" | "read_only";

@@ -2,6 +2,7 @@ import { handleEventClosing } from "./_lib/closing.js";
 import { handleEventData } from "./_lib/event-data.js";
 import { handleAppearance } from "./_lib/appearance.js";
 import { handleShareLink } from "./_lib/share.js";
+import { handleSocietyHome } from "./_lib/society-home.js";
 import { handleDashboardLayout } from "./_lib/layout.js";
 import { handleSocieties } from "./_lib/societies.js";
 import {
@@ -58,6 +59,16 @@ export default async function handler(req: any, res: any) {
   if (resource === "layout") {
     try {
       return await handleDashboardLayout(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // Society Home's whole payload in one request - see api/_lib/society-home.ts
+  // for why the card aggregates are batched rather than fetched per card.
+  if (resource === "society-home") {
+    try {
+      return await handleSocietyHome(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }
