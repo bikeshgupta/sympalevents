@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { isSocietyAdminForEvent } from "./authority.js";
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -155,11 +156,17 @@ export async function requireEventAdmin(eventId: string, userId: string) {
 
   if (error) throw error;
 
-  if (data?.role !== "admin") {
-    const denied = new Error("Only event admins can perform this action");
-    Object.assign(denied, { statusCode: 403 });
-    throw denied;
-  }
+  if (data?.role === "admin") return;
+
+  // A society admin is an admin of every event in their society. Without this
+  // branch an event whose only admin goes quiet cannot be recovered by
+  // anybody - there is no way in from outside the event. See
+  // api/_lib/authority.ts for the full hierarchy.
+  if (await isSocietyAdminForEvent(supabase, eventId, userId)) return;
+
+  const denied = new Error("Only event admins can perform this action");
+  Object.assign(denied, { statusCode: 403 });
+  throw denied;
 }
 
 /** Admin OR committee - the bar for auction management and (so far) uploads.
@@ -175,11 +182,15 @@ export async function requireEventCommittee(eventId: string, userId: string) {
 
   if (error) throw error;
 
-  if (data?.role !== "admin" && data?.role !== "committee") {
-    const denied = new Error("Only event admins or committee members can perform this action");
-    Object.assign(denied, { statusCode: 403 });
-    throw denied;
-  }
+  if (data?.role === "admin" || data?.role === "committee") return;
+
+  // Same reasoning as requireEventAdmin: the society's admin outranks the
+  // event's, so they clear this bar too.
+  if (await isSocietyAdminForEvent(supabase, eventId, userId)) return;
+
+  const denied = new Error("Only event admins or committee members can perform this action");
+  Object.assign(denied, { statusCode: 403 });
+  throw denied;
 }
 
 export function handleApiError(res: any, error: unknown) {

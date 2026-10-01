@@ -6,6 +6,7 @@ import {
   requireEventCommittee,
   sendJson,
 } from "./server.js";
+import { audit } from "./audit.js";
 
 type ApiRequest = {
   method?: string;
@@ -652,6 +653,16 @@ async function handleClosingWrite(
     }
     throw error;
   }
+  audit(req, {
+    action: "update",
+    entityType: "event_closing",
+    entityId: eventId,
+    eventId,
+    actor: { id: appUser.id },
+    after: updates as Record<string, unknown>,
+    summary: "Updated the closing note or credits",
+  });
+
   sendJson(res, 200, { closing: data });
 }
 

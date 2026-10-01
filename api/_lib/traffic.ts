@@ -165,6 +165,13 @@ async function recordBeat(req: ApiRequest, res: ApiResponse) {
       city: decodeURIComponent(header(req, "x-vercel-ip-city") || "") || null,
     });
     if (error && !isMissingTable(error)) console.warn("Could not record a visit:", error);
+    await recordPageView(supabase, {
+      visitId,
+      eventId,
+      userId: appUser?.id ?? null,
+      pageKey,
+      movedPage: false,
+    });
     sendJson(res, 200, { ok: true });
     return;
   }
@@ -196,6 +203,15 @@ async function recordBeat(req: ApiRequest, res: ApiResponse) {
     .eq("id", visitId);
 
   if (error && !isMissingTable(error)) console.warn("Could not update a visit:", error);
+
+  await recordPageView(supabase, {
+    visitId,
+    eventId,
+    userId: appUser?.id ?? null,
+    pageKey,
+    movedPage,
+  });
+
   sendJson(res, 200, { ok: true });
 }
 
@@ -312,6 +328,77 @@ async function readTraffic(req: ApiRequest, res: ApiResponse) {
     .delete()
     .lt("last_seen_at", since)
     .then(undefined, () => undefined);
+}
+
+/**
+ * One row per page opened, with how long was spent on it.
+ *
+ * `event_visits` (028) answers "who was here and for how long" as one row per
+ * visit. This is the detail underneath it: which pages, in what order, and the
+ * dwell time on each.
+ *
+ * It rides on the heartbeat that is already arriving - no extra endpoint and
+ * nothing new for the client to send. When a beat shows a different page from
+ * the one still open, that row is closed (`left_at`, `seconds`) and the next
+ * is opened.
+ *
+ * Failures are swallowed: a visitor reading a page must never see this, and
+ * 030 may not have been applied yet.
+ */
+async function recordPageView(
+  supabase: ReturnType<typeof assertServiceSupabase>,
+  input: { visitId: string; eventId: string; userId: string | null; pageKey: string; movedPage: boolean },
+) {
+  try {
+    const nowIso = new Date().toISOString();
+
+    if (input.movedPage) {
+      // Close whichever row is still open for this visit.
+      const { data: open } = await supabase
+        .from("event_page_views")
+        .select("id,opened_at")
+        .eq("visit_id", input.visitId)
+        .is("left_at", null)
+        .order("opened_at", { ascending: false })
+        .limit(1);
+
+      const current = open?.[0];
+      if (current) {
+        const seconds = Math.max(
+          0,
+          Math.round((Date.now() - new Date(current.opened_at as string).getTime()) / 1000),
+        );
+        await supabase
+          .from("event_page_views")
+          .update({ left_at: nowIso, seconds })
+          .eq("id", current.id);
+      }
+    }
+
+    // A fresh visit, or a move: open a row for the page they are on now.
+    const { data: existingOpen } = await supabase
+      .from("event_page_views")
+      .select("id")
+      .eq("visit_id", input.visitId)
+      .eq("page_key", input.pageKey)
+      .is("left_at", null)
+      .limit(1);
+
+    if (existingOpen?.length) return;
+
+    await supabase.from("event_page_views").insert({
+      visit_id: input.visitId,
+      event_id: input.eventId,
+      user_id: input.userId,
+      page_key: input.pageKey,
+      opened_at: nowIso,
+    });
+  } catch (error) {
+    const code = (error as { code?: string })?.code ?? "";
+    if (!["42P01", "PGRST205"].includes(code)) {
+      console.warn("Could not record a page view:", error);
+    }
+  }
 }
 
 export async function handleEventTraffic(req: ApiRequest, res: ApiResponse) {

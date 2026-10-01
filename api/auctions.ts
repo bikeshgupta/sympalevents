@@ -8,6 +8,7 @@ import {
   requireEventCommittee,
   sendJson,
 } from "./_lib/server.js";
+import { audit } from "./_lib/audit.js";
 
 type ApiRequest = {
   method?: string;
@@ -140,6 +141,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         .single();
 
       if (error) throw error;
+      audit(req, { action: "create", entityType: "auction", entityId: String(data.id), eventId,
+        actor: { id: appUser.id }, after: data as Record<string, unknown>,
+        summary: `Created auction "${String((data as Record<string, unknown>).title ?? "")}"` });
       sendJson(res, 200, { auction: toAuction(data) });
       return;
     }
@@ -168,6 +172,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           .eq("id", auctionId);
 
         if (error) throw error;
+        audit(req, { action: "cancel", entityType: "auction", entityId: auctionId, eventId: existing.event_id,
+          actor: { id: appUser.id }, before: { status: "active" }, after: { status: "cancelled" },
+          summary: "Cancelled an auction" });
         sendJson(res, 200, { ok: true });
         return;
       }
@@ -181,6 +188,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           .single();
 
         if (error) throw error;
+        audit(req, { action: String(body.action), entityType: "auction", entityId: auctionId,
+          eventId: existing.event_id, actor: { id: appUser.id },
+          after: { is_published: body.action === "publish" },
+          summary: body.action === "publish" ? "Published an auction" : "Unpublished an auction" });
         sendJson(res, 200, { auction: toAuction(data) });
         return;
       }

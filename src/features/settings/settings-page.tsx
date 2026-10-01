@@ -102,13 +102,19 @@ export function SettingsPage() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const access = usePageAccess("settings");
-  const { selectedEventId } = useEventContext();
+  const { selectedEventId, selectedEvent, societies } = useEventContext();
   const queryClient = useQueryClient();
   const [accessMessage, setAccessMessage] = useState<string | null>(null);
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const [rosterMessage, setRosterMessage] = useState<string | null>(null);
   const [pageAccess, setPageAccess] = useState<Record<string, AccessLevel>>(initialPageAccess);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  // A society admin outranks an event admin and is the only one who may grant
+  // or revoke event admin. The server is the authority; this is read only so
+  // the form does not offer what would be refused.
+  const isSocietyAdmin = societies.some(
+    (society) => society.id === selectedEvent?.societyId && society.role === "admin",
+  );
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState<EventRole>("read_only");
 
@@ -566,8 +572,17 @@ export function SettingsPage() {
                   >
                     <option value="read_only">Read-only</option>
                     <option value="committee">Committee</option>
-                    <option value="admin">Admin</option>
+                    {/* Granting event admin is the society's call - see
+                        api/_lib/authority.ts. The server refuses it either
+                        way; this only avoids offering a control that would
+                        just 403. */}
+                    {isSocietyAdmin ? <option value="admin">Admin</option> : null}
                   </select>
+                  {isSocietyAdmin ? null : (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Only a society admin can make somebody an event admin.
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="overflow-hidden rounded-md border">

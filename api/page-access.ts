@@ -17,6 +17,7 @@ import {
   requireEventAdmin,
   sendJson,
 } from "./_lib/server.js";
+import { audit } from "./_lib/audit.js";
 
 /**
  * Two resources on one function, dispatched on `?resource=` - the same
@@ -93,6 +94,10 @@ async function saveVisibility(req: any, res: any) {
   const { appUser } = await requireAppUser(req);
   await requireEventAdmin(eventId, appUser.id);
 
+  // Read the modules as they stand, so the audit row can say what moved
+  // rather than only what they became.
+  const existingModules = await fetchEventModules(eventId);
+
   // Two shapes, because two callers. Settings sends `modules` (on/off, name
   // and visibility per page); anything that only cares who may look sends the
   // older `visibility` map. A module left out of either is left alone.
@@ -157,6 +162,18 @@ async function saveVisibility(req: any, res: any) {
   }
 
   const saved = await fetchEventModules(eventId);
+
+  audit(req, {
+    action: "update",
+    entityType: "page_visibility",
+    entityId: eventId,
+    eventId,
+    actor: { id: appUser.id },
+    before: { modules: Object.fromEntries(Object.values(existingModules).map((m) => [m.pageKey, { visibility: m.visibility, isEnabled: m.isEnabled, label: m.label }])) },
+    after: { modules: Object.fromEntries(Object.values(saved).map((m) => [m.pageKey, { visibility: m.visibility, isEnabled: m.isEnabled, label: m.label }])) },
+    summary: "Changed which pages this event has and who can see them",
+  });
+
   sendJson(res, 200, {
     visibility: Object.fromEntries(Object.values(saved).map((item) => [item.pageKey, item.visibility])),
     modules: sortModules(Object.values(saved)),

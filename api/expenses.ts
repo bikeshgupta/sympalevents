@@ -7,6 +7,7 @@ import {
   requireAppUser,
   sendJson,
 } from "./_lib/server.js";
+import { audit } from "./_lib/audit.js";
 
 /**
  * The expense ledger and out-of-pocket claims - one function, because this
@@ -451,6 +452,16 @@ async function createExpense(userId: string, body: Record<string, unknown>, res:
     throw error;
   }
 
+  audit(req, {
+    action: "create",
+    entityType: "expense",
+    entityId: data.id,
+    eventId,
+    actor: { id: userId },
+    after: { event_id: eventId, ...fields, reimbursement_status: fromFunds ? "not_needed" : "pending", bill_path: billPath },
+    summary: `Recorded expense "${String(fields.item ?? "")}" for ${String(fields.amount ?? "")}`,
+  });
+
   sendJson(res, 201, { expenseId: data.id });
 }
 
@@ -513,6 +524,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (!data?.length) throw changedUnderneath();
 
       if (existing.bill_path) await discardBill(existing.bill_path);
+      audit(req, {
+        action: "delete",
+        entityType: "expense",
+        entityId: expenseId,
+        eventId,
+        actor: { id: appUser.id },
+        before: existing as Record<string, unknown>,
+        summary: `Deleted expense "${String((existing as Record<string, unknown>).item ?? "")}"`,
+      });
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -551,6 +571,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ).select("id");
       if (error) throw error;
       if (!data?.length) throw changedUnderneath();
+
+      audit(req, {
+        action,
+        entityType: "expense",
+        entityId: expenseId,
+        eventId: existing.event_id,
+        actor: { id: appUser.id },
+        before: { reimbursement_status: existing.reimbursement_status },
+        after: { reimbursement_status: update.reimbursement_status },
+        summary:
+          action === "settle"
+            ? `Marked expense "${String(existing.item ?? "")}" settled`
+            : `Marked expense "${String(existing.item ?? "")}" not settled`,
+      });
 
       sendJson(res, 200, { ok: true });
       return;
@@ -601,6 +635,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     if ((newBillPath || removeBill) && existing.bill_path) await discardBill(existing.bill_path);
+
+    audit(req, {
+      action: "update",
+      entityType: "expense",
+      entityId: expenseId,
+      eventId: existing.event_id,
+      actor: { id: appUser.id },
+      before: existing as Record<string, unknown>,
+      after: { ...(existing as Record<string, unknown>), ...update },
+      summary: `Edited expense "${String(fields.item ?? existing.item ?? "")}"`,
+    });
+
     sendJson(res, 200, { ok: true });
   } catch (error) {
     handleApiError(res, error);

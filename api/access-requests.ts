@@ -6,6 +6,7 @@ import {
   requireEventAdmin,
   sendJson,
 } from "./_lib/server.js";
+import { audit } from "./_lib/audit.js";
 
 const validActions = new Set(["approve", "reject"]);
 
@@ -89,6 +90,18 @@ export default async function handler(req: any, res: any) {
         );
 
         if (memberError) throw memberError;
+
+        // Logged after the upsert, so the row records something that happened
+        // rather than something that was attempted.
+        audit(req, {
+          action: "approve",
+          entityType: "access_request",
+          entityId: requestId,
+          eventId: request.event_id,
+          actor: { id: appUser.id },
+          after: { user_id: request.user_id, role: request.requested_role },
+          summary: `Approved a request for ${String(request.requested_role)} access`,
+        });
       }
 
       const { error: updateError } = await supabase

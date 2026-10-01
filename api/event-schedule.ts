@@ -8,6 +8,7 @@ import {
   requireAppUser,
   sendJson,
 } from "./_lib/server.js";
+import { audit } from "./_lib/audit.js";
 
 /**
  * The event schedule, plus prasad slots on `?resource=prasad` (handled in
@@ -183,7 +184,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     await requireScheduleEditAccess(supabase, existingSchedule.event_id, appUser.id);
 
     if (req.method === "DELETE") {
+      const { data: priorRow } = await supabase.from("event_schedule").select("*").eq("id", scheduleId).maybeSingle();
       const { error } = await supabase.from("event_schedule").delete().eq("id", scheduleId);
+      if (!error) {
+        audit(req, { action: "delete", entityType: "schedule_item", entityId: scheduleId,
+          eventId: (priorRow?.event_id as string | null) ?? null, actor: { id: appUser.id },
+          before: priorRow as Record<string, unknown>,
+          summary: `Removed "${String(priorRow?.title ?? priorRow?.name ?? "an item")}" from the programme` });
+      }
       if (error) throw error;
       sendJson(res, 200, { ok: true });
       return;

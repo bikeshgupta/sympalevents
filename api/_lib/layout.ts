@@ -1,5 +1,6 @@
 import { resolvePageAccess } from "./page-visibility.js";
 import { assertServiceSupabase, requireAppUser, sendJson } from "./server.js";
+import { audit } from "./audit.js";
 
 /**
  * Saving a dashboard arrangement, on `PUT /api/events?resource=layout`.
@@ -114,6 +115,16 @@ export async function handleDashboardLayout(req: ApiRequest, res: ApiResponse) {
     }
     throw error;
   }
+
+  audit(req, {
+    action: "update",
+    entityType: "dashboard_layout",
+    entityId: eventId,
+    eventId,
+    actor: { id: appUser.id },
+    after: { dashboard_layout: layout },
+    summary: layout === null ? "Reset the dashboard to its default layout" : "Rearranged the dashboard",
+  });
 
   sendJson(res, 200, { layout });
 }

@@ -6,6 +6,7 @@ import {
   requireAppUser,
   sendJson,
 } from "./_lib/server.js";
+import { audit } from "./_lib/audit.js";
 
 /**
  * Tasks, their assignees, and their comment threads - one function, dispatched
@@ -413,6 +414,13 @@ export default async function handler(req: any, res: any) {
       const assigneeIds = Array.isArray(body.assigneeIds) ? (body.assigneeIds as string[]) : [];
       if (assigneeIds.length) await syncAssignees(data.id, assigneeIds, appUser.id);
 
+      audit(req, {
+        action: "create", entityType: "task", entityId: data.id, eventId,
+        actor: { id: appUser.id },
+        after: { event_id: eventId, ...payload, assignees: assigneeIds },
+        summary: `Created task "${String(payload.task ?? "")}"`,
+      });
+
       sendJson(res, 201, { taskId: data.id });
       return;
     }
@@ -434,7 +442,13 @@ export default async function handler(req: any, res: any) {
       }
 
       const supabase = assertServiceSupabase();
+      const { data: priorTask } = await supabase.from("tasks").select("*").eq("id", taskId).maybeSingle();
       const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+      if (!error) {
+        audit(req, { action: "delete", entityType: "task", entityId: taskId, eventId: priorTask?.event_id ?? null,
+          actor: { id: appUser.id }, before: priorTask as Record<string, unknown>,
+          summary: `Deleted task "${String(priorTask?.title ?? "")}" and its comment thread` });
+      }
       if (error) throw error;
       sendJson(res, 200, { ok: true });
       return;
@@ -462,11 +476,27 @@ export default async function handler(req: any, res: any) {
         throw denied("Only an event admin, or someone assigned to this task, can change its status");
       }
 
+      const { data: priorStatus } = await supabase
+        .from("tasks")
+        .select("status,task,event_id")
+        .eq("id", taskId)
+        .maybeSingle();
+
       const { error } = await supabase
         .from("tasks")
         .update({ status, updated_at: new Date().toISOString() })
         .eq("id", taskId);
       if (error) throw error;
+
+      audit(req, {
+        action: "update", entityType: "task", entityId: taskId,
+        eventId: (priorStatus?.event_id as string | null) ?? null,
+        actor: { id: appUser.id },
+        before: { status: priorStatus?.status ?? null },
+        after: { status },
+        summary: `Moved task "${String(priorStatus?.task ?? "")}" to ${status}`,
+      });
+
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -488,8 +518,19 @@ export default async function handler(req: any, res: any) {
       payload.status = current.status as string;
     }
 
+    const { data: priorTaskRow } = await supabase.from("tasks").select("*").eq("id", taskId).maybeSingle();
+
     const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
     if (error) throw error;
+
+    audit(req, {
+      action: "update", entityType: "task", entityId: taskId,
+      eventId: (priorTaskRow?.event_id as string | null) ?? null,
+      actor: { id: appUser.id },
+      before: priorTaskRow as Record<string, unknown>,
+      after: { ...(priorTaskRow as Record<string, unknown>), ...payload },
+      summary: `Edited task "${String(payload.task ?? priorTaskRow?.task ?? "")}"`,
+    });
 
     if (Array.isArray(body.assigneeIds)) {
       await syncAssignees(taskId, body.assigneeIds as string[], appUser.id);
