@@ -1,35 +1,34 @@
-import { MapPin } from "lucide-react";
 import type { Society } from "@/lib/society";
 
 /**
- * The society's own name, its place, and its mark.
+ * The society's own name and place.
  *
- * Every word here comes from the `organizations` row. Nothing about any
- * particular society is written into this file - that is the whole point of
- * it, and it is what lets a second society be onboarded without a component
- * change. Do not reintroduce a literal name or city here.
+ * Deliberately two lines. The first version spent four on a logo, a name, a
+ * "Community Events" line and a pinned city, which pushed the thing people
+ * came for below the fold on a phone. Name, then one quiet line that carries
+ * both the purpose and the place.
+ *
+ * Every word comes from the `organizations` row - nothing about any particular
+ * society is written into this file, which is what lets a second one be
+ * onboarded without a component change. Do not reintroduce a literal.
  */
 export function SocietyHeader({ society }: { society: Society }) {
   return (
-    <header className="flex items-start gap-3 sm:gap-4">
+    <header className="flex items-center gap-3">
       {society.logoUrl ? (
         <img
           src={society.logoUrl}
           alt=""
           aria-hidden
-          className="h-12 w-12 shrink-0 rounded-xl border object-cover sm:h-14 sm:w-14"
+          className="h-10 w-10 shrink-0 rounded-xl border object-cover sm:h-12 sm:w-12"
         />
       ) : null}
 
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold leading-tight sm:text-4xl">{society.name}</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground sm:text-base">Community Events</p>
-        {society.city ? (
-          <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
-            <MapPin className="h-4 w-4 shrink-0" aria-hidden />
-            {society.city}
-          </p>
-        ) : null}
+        <h1 className="truncate text-2xl font-semibold leading-tight sm:text-3xl">{society.name}</h1>
+        <p className="truncate text-sm text-muted-foreground">
+          Community Events{society.city ? ` · ${society.city}` : ""}
+        </p>
       </div>
     </header>
   );

@@ -1,9 +1,8 @@
 import { AlertTriangle, CalendarDays } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Card, CardContent } from "@/components/ui/card";
 import { EventCard } from "@/features/society/event-card";
-import { pickFeaturedEvent } from "@/features/society/event-presentation";
+import { groupByMonth, pickFeaturedEvent, residentVisibleEvents } from "@/features/society/event-presentation";
 import { FeaturedEvent } from "@/features/society/featured-event";
 import { SocietyHeader } from "@/features/society/society-header";
 import { getEventStatus, groupForStatus, toEventZoneTimestamp, type EventGroup } from "@/lib/event-status";
@@ -13,17 +12,19 @@ import { cn } from "@/lib/utils";
 /**
  * A society's events - the front door.
  *
- * This is a community events board, not a dashboard: one lead event, then
- * three short lists. There are deliberately no stat tiles, no charts and no
- * admin controls here. Managing an event happens inside it.
+ * The question this page answers is "what is happening in my community", not
+ * "what records exist in my society", and the shape follows from that: one
+ * event shown large, then a short scannable list. There are deliberately no
+ * stat tiles, no charts and no admin controls - managing an event happens
+ * inside it.
  *
- * Everything on the page comes from one request (see src/lib/society.ts), so
- * a society with twenty events costs exactly what one with two does.
+ * Everything comes from one request (src/lib/society.ts), so a society with
+ * twenty events costs exactly what one with two does.
  */
 
 const tabs: { key: EventGroup; label: string }[] = [
   { key: "upcoming", label: "Upcoming" },
-  { key: "ongoing", label: "Ongoing" },
+  { key: "ongoing", label: "Live" },
   { key: "past", label: "Past" },
 ];
 
@@ -33,29 +34,30 @@ export function SocietyHomePage() {
   // One clock for the whole page, so every card and the featured pick agree.
   const now = useMemo(() => new Date(), []);
 
-  const featured = useMemo(() => pickFeaturedEvent(data?.events ?? [], now), [data?.events, now]);
+  // Drafts never reach this page, and a cancelled event only stays while its
+  // date is still ahead - see residentVisibleEvents for why.
+  const events = useMemo(() => residentVisibleEvents(data?.events ?? [], now), [data?.events, now]);
+  const featured = useMemo(() => pickFeaturedEvent(events, now), [events, now]);
 
   const grouped = useMemo(() => {
     const groups: Record<EventGroup, SocietyEvent[]> = { ongoing: [], upcoming: [], past: [] };
-    for (const event of data?.events ?? []) {
-      // The featured event is already the loudest thing on the page. Listing
-      // it again a few hundred pixels below, with the same call to action, is
-      // the duplicate-CTA problem - so it is shown once, at the top.
+    for (const event of events) {
+      // The featured event is already the loudest thing here. Listing it again
+      // a few hundred pixels below, with the same call to action, is the
+      // duplicate-CTA problem - so it appears once, at the top.
       if (event.id === featured?.id) continue;
       groups[groupForStatus(getEventStatus(event, now), event, now)].push(event);
     }
-    // Soonest first for what is coming and what is on; most recent first for
-    // what is done - in each case, the one somebody is most likely to want.
     groups.upcoming.sort((a, b) => toEventZoneTimestamp(a.startDate) - toEventZoneTimestamp(b.startDate));
     groups.ongoing.sort((a, b) => toEventZoneTimestamp(a.endDate) - toEventZoneTimestamp(b.endDate));
     groups.past.sort((a, b) => toEventZoneTimestamp(b.endDate) - toEventZoneTimestamp(a.endDate));
     return groups;
-  }, [data?.events, featured?.id, now]);
+  }, [events, featured?.id, now]);
 
-  // Open on the tab that has something in it, rather than on an empty one.
+  // Open on a tab that has something in it rather than on an empty one.
   const firstPopulated = tabs.find((tab) => grouped[tab.key].length)?.key ?? "upcoming";
-  const [active, setActive] = useState<EventGroup | null>(null);
-  const current = active ?? firstPopulated;
+  const [chosen, setChosen] = useState<EventGroup | null>(null);
+  const current = chosen ?? firstPopulated;
 
   if (isLoading) return <SocietyHomeSkeleton />;
 
@@ -70,9 +72,10 @@ export function SocietyHomePage() {
   }
 
   const society = data?.society;
+  const hasAnything = events.length > 0;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6 sm:pt-8">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-5 sm:pt-7">
       {society ? <SocietyHeader society={society} /> : null}
 
       {data?.ready === false ? (
@@ -85,48 +88,69 @@ export function SocietyHomePage() {
       ) : null}
 
       {featured ? (
-        <section className="mt-5 sm:mt-6">
+        <section className="mt-4 sm:mt-5">
           <FeaturedEvent event={featured} to={eventPath(featured)} now={now} />
         </section>
       ) : null}
 
-      {data?.events.length ? (
+      {hasAnything ? (
         <>
-          <div role="tablist" aria-label="Events by when they happen" className="mt-7 flex gap-1.5">
-            {tabs.map((tab) => {
-              const count = grouped[tab.key].length;
-              const selected = tab.key === current;
-              return (
-                <button
-                  key={tab.key}
-                  role="tab"
-                  type="button"
-                  aria-selected={selected}
-                  aria-controls={`panel-${tab.key}`}
-                  id={`tab-${tab.key}`}
-                  onClick={() => setActive(tab.key)}
-                  className={cn(
-                    "flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80",
-                  )}
-                >
-                  {tab.label}
-                  {count ? <span className="tabular-nums opacity-70">{count}</span> : null}
-                </button>
-              );
-            })}
+          <div className="mt-7 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+            <h2 className="text-lg font-semibold">What&rsquo;s happening</h2>
+
+            {/* Text tabs with an underline rather than filled pills: three
+                solid capsules competed with the featured card for weight, and
+                an empty one was as loud as a full one. A tab with nothing in
+                it is dimmed and carries no count. */}
+            <div role="tablist" aria-label="Events by when they happen" className="-mb-px flex gap-4">
+              {tabs.map((tab) => {
+                const count = grouped[tab.key].length;
+                const selected = tab.key === current;
+                return (
+                  <button
+                    key={tab.key}
+                    role="tab"
+                    type="button"
+                    aria-selected={selected}
+                    aria-controls={`panel-${tab.key}`}
+                    id={`tab-${tab.key}`}
+                    onClick={() => setChosen(tab.key)}
+                    className={cn(
+                      "relative pb-1.5 text-sm font-medium transition-colors",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      selected ? "text-foreground" : count ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/50",
+                    )}
+                  >
+                    {tab.label}
+                    {count ? <span className="ml-1 text-xs tabular-nums text-muted-foreground">{count}</span> : null}
+                    {selected ? (
+                      <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <section
             role="tabpanel"
             id={`panel-${current}`}
             aria-labelledby={`tab-${current}`}
-            className="mt-4 space-y-3"
+            className="mt-4 space-y-2.5"
           >
             {grouped[current].length ? (
-              grouped[current].map((event) => (
-                <EventCard key={event.id} event={event} to={eventPath(event)} now={now} />
+              // Months only once there is enough to scan - see groupByMonth.
+              groupByMonth(grouped[current], now).map((group) => (
+                <div key={group.key || "all"} className="space-y-2.5">
+                  {group.heading ? (
+                    <h3 className="pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group.heading}
+                    </h3>
+                  ) : null}
+                  {group.events.map((event) => (
+                    <EventCard key={event.id} event={event} to={eventPath(event)} now={now} />
+                  ))}
+                </div>
               ))
             ) : (
               <EmptyGroup group={current} />
@@ -157,20 +181,18 @@ function EmptyGroup({ group }: { group: EventGroup }) {
     ongoing: "Nothing happening right now.",
     past: "No events have finished yet.",
   };
-  return <p className="rounded-md border border-dashed p-5 text-sm text-muted-foreground">{copy[group]}</p>;
+  return <p className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">{copy[group]}</p>;
 }
 
 function EmptySociety() {
   return (
-    <Card className="mt-6">
-      <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
-        <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />
-        <p className="text-sm font-medium">No events yet</p>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          This society has not published an event. Once one is created it will appear here for everybody.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="mt-6 flex flex-col items-center gap-2 rounded-2xl border border-dashed p-10 text-center">
+      <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />
+      <p className="text-sm font-medium">No events yet</p>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        This society has not published an event. Once one is created it will appear here for everybody.
+      </p>
+    </div>
   );
 }
 
@@ -178,18 +200,14 @@ function EmptySociety() {
  *  "unknown" is a lie, and this page is made almost entirely of counts. */
 function SocietyHomeSkeleton() {
   return (
-    <main className="mx-auto w-full max-w-3xl animate-pulse px-4 pb-16 pt-6 sm:pt-8" aria-hidden>
-      <div className="h-9 w-56 rounded-md bg-muted" />
-      <div className="mt-2 h-4 w-32 rounded bg-muted" />
-      <div className="mt-6 h-56 rounded-xl bg-muted" />
-      <div className="mt-7 flex gap-1.5">
+    <main className="mx-auto w-full max-w-3xl animate-pulse px-4 pb-16 pt-5 sm:pt-7" aria-hidden>
+      <div className="h-8 w-56 rounded-md bg-muted" />
+      <div className="mt-1.5 h-4 w-40 rounded bg-muted" />
+      <div className="mt-5 aspect-[16/10] w-full rounded-2xl bg-muted sm:aspect-[21/9]" />
+      <div className="mt-7 h-6 w-40 rounded bg-muted" />
+      <div className="mt-4 space-y-2.5">
         {[0, 1, 2].map((key) => (
-          <div key={key} className="h-9 w-24 rounded-full bg-muted" />
-        ))}
-      </div>
-      <div className="mt-4 space-y-3">
-        {[0, 1].map((key) => (
-          <div key={key} className="h-24 rounded-xl bg-muted" />
+          <div key={key} className="h-[104px] rounded-xl bg-muted" />
         ))}
       </div>
     </main>
