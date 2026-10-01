@@ -1,5 +1,6 @@
 import { resolvePageAccess } from "./page-visibility.js";
 import { assertServiceSupabase, requireAppUser, sendJson } from "./server.js";
+import { audit } from "./audit.js";
 
 /**
  * What an event looks like, on `PATCH /api/events?resource=appearance`.
@@ -104,6 +105,16 @@ export async function handleAppearance(req: ApiRequest, res: ApiResponse) {
     }
     throw error;
   }
+
+  audit(req, {
+    action: "update",
+    entityType: "event_appearance",
+    entityId: eventId,
+    eventId,
+    actor: { id: appUser.id },
+    after: updates,
+    summary: "Changed this event's colour or hero photograph",
+  });
 
   sendJson(res, 200, { theme: data.theme ?? null, heroImageUrl: data.hero_image_url ?? null });
 }

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ContributionRow, SponsorRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
-import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
 import {
   buildCollectionSeries,
   collectionStateOn,
@@ -746,69 +746,48 @@ function ContributionActions({ contribution }: { contribution: ContributionRow }
 }
 
 async function addContribution(formData: FormData) {
-  if (!supabase) throw new Error("Supabase is not configured");
   const eventId = await getFirstEventId();
-
-  const { data: resident, error: residentError } = await supabase
-    .from("residents")
-    .insert({
-      event_id: eventId,
+  // Through the API rather than straight to Supabase: it is what makes this
+  // write auditable, and what lets permission be decided by the same page
+  // access rule every other screen uses. See api/_lib/ledger.ts.
+  await apiFetch("/api/events?resource=contributions", {
+    method: "POST",
+    body: {
+      eventId,
       flat_no: formString(formData, "flat"),
       resident_name: formString(formData, "name"),
       resident_type: formString(formData, "type", "Owner"),
-      interested: true,
-    })
-    .select("id")
-    .single();
-
-  if (residentError) throw residentError;
-
-  const { error } = await supabase.from("contributions").insert({
-    event_id: eventId,
-    resident_id: resident.id,
-    expected_amount: formNumber(formData, "expected"),
-    received_amount: formNumber(formData, "received"),
-    received_date: formString(formData, "paymentDate", todayDateInputValue()),
-    payment_mode: formString(formData, "mode", "UPI"),
-    status: formString(formData, "status", "Received"),
-    reference: formString(formData, "reference"),
-  });
-
-  if (error) throw error;
-}
-
-async function updateContribution(contribution: ContributionRow, formData: FormData) {
-  if (!supabase) throw new Error("Supabase is not configured");
-
-  if (contribution.residentId) {
-    const { error: residentError } = await supabase
-      .from("residents")
-      .update({
-        flat_no: formString(formData, "flat"),
-        resident_name: formString(formData, "name"),
-        resident_type: formString(formData, "type", "Owner"),
-      })
-      .eq("id", contribution.residentId);
-
-    if (residentError) throw residentError;
-  }
-
-  const { error } = await supabase
-    .from("contributions")
-    .update({
       expected_amount: formNumber(formData, "expected"),
       received_amount: formNumber(formData, "received"),
       received_date: formString(formData, "paymentDate", todayDateInputValue()),
       payment_mode: formString(formData, "mode", "UPI"),
       status: formString(formData, "status", "Received"),
       reference: formString(formData, "reference"),
-    })
-    .eq("id", contribution.id);
-  if (error) throw error;
+    },
+  });
+}
+
+async function updateContribution(contribution: ContributionRow, formData: FormData) {
+  // Demo rows have no id; nothing on this page offers to edit one, but the
+  // type allows it, so say so plainly rather than sending "undefined".
+  if (!contribution.id) throw new Error("This row cannot be edited");
+
+  await apiFetch(`/api/events?resource=contributions&id=${encodeURIComponent(contribution.id)}`, {
+    method: "PATCH",
+    body: {
+      flat_no: formString(formData, "flat"),
+      resident_name: formString(formData, "name"),
+      resident_type: formString(formData, "type", "Owner"),
+      expected_amount: formNumber(formData, "expected"),
+      received_amount: formNumber(formData, "received"),
+      received_date: formString(formData, "paymentDate", todayDateInputValue()),
+      payment_mode: formString(formData, "mode", "UPI"),
+      status: formString(formData, "status", "Received"),
+      reference: formString(formData, "reference"),
+    },
+  });
 }
 
 async function deleteContribution(id: string) {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase.from("contributions").delete().eq("id", id);
-  if (error) throw error;
+  await apiFetch(`/api/events?resource=contributions&id=${encodeURIComponent(id)}`, { method: "DELETE" });
 }

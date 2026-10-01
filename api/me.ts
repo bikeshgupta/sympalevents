@@ -1,4 +1,5 @@
 import { assertServiceSupabase, getRequestBody, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
+import { audit } from "./_lib/audit.js";
 
 const MAX_NAME = 80;
 
@@ -47,6 +48,15 @@ export default async function handler(req: any, res: any) {
       .single();
 
     if (error) throw error;
+
+    audit(req, {
+      action: "update", entityType: "app_user", entityId: appUser.id,
+      actor: { id: appUser.id, email: appUser.email as string | undefined },
+      before: { full_name: appUser.full_name ?? null },
+      after: { full_name: fullName },
+      summary: "Changed their own display name",
+    });
+
     sendJson(res, 200, { user: data });
   } catch (error) {
     handleApiError(res, error);

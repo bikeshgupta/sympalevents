@@ -2,6 +2,7 @@ import { handleEventClosing } from "./_lib/closing.js";
 import { handleEventData } from "./_lib/event-data.js";
 import { handleAppearance } from "./_lib/appearance.js";
 import { handleShareLink } from "./_lib/share.js";
+import { handleLedger } from "./_lib/ledger.js";
 import { handleSocietyHome } from "./_lib/society-home.js";
 import { handleDashboardLayout } from "./_lib/layout.js";
 import { handleSocieties } from "./_lib/societies.js";
@@ -18,6 +19,7 @@ import {
   requireAppUser,
   sendJson,
 } from "./_lib/server.js";
+import { audit } from "./_lib/audit.js";
 
 /**
  * Event creation, plus the closing page's three resources and the composite
@@ -74,6 +76,17 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  // The money pages' writes. They used to go straight from the browser to
+  // Supabase with the anon key, which meant nothing could be logged and the
+  // last anon write grants had to stay exactly right - see api/_lib/ledger.ts.
+  if (resource === "contributions" || resource === "sponsors" || resource === "budgets") {
+    try {
+      return await handleLedger(req, res, resource);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
   if (resource === "societies" || resource === "join") {
     try {
       return await handleSocieties(req, res);
@@ -112,6 +125,13 @@ export default async function handler(req: any, res: any) {
     });
 
     if (memberError) throw memberError;
+
+    audit(req, {
+      action: "create", entityType: "event", entityId: event.id, eventId: event.id,
+      organizationId: societyId, actor: { id: appUser.id },
+      after: { id: event.id, organization_id: societyId, name: body.eventName ?? body.name },
+      summary: `Created the event "${String(body.eventName ?? body.name ?? "")}" and became its admin`,
+    });
 
     await seedModules(supabase, event.id, body);
 
@@ -168,6 +188,13 @@ async function resolveSociety(
   const { error: membershipError } = await supabase
     .from("organization_members")
     .insert({ organization_id: society.id, user_id: userId, role: "admin" });
+
+  audit(null, {
+    action: "create", entityType: "society", entityId: society.id as string,
+    organizationId: society.id as string, actor: { id: userId },
+    after: { id: society.id, name: body.societyName ?? body.eventName },
+    summary: "Created a society and became its admin",
+  });
 
   if (membershipError) {
     console.warn(

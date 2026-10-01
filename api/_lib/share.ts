@@ -1,5 +1,6 @@
 import { resolvePageAccess } from "./page-visibility.js";
 import { assertServiceSupabase, requireAppUser, sendJson } from "./server.js";
+import { audit } from "./audit.js";
 
 /**
  * The permanent link to an event, on `/api/events?resource=share`.
@@ -118,6 +119,19 @@ async function mintToken(req: ApiRequest, res: ApiResponse) {
     }
     throw error;
   }
+
+  // The token itself is redacted by the audit helper - recording that the
+  // link was replaced is the point; recording the new credential would be a
+  // second copy of it.
+  audit(req, {
+    action: "rotate_share_token",
+    entityType: "event",
+    entityId: eventId,
+    eventId,
+    actor: { id: appUser.id },
+    after: { share_token: token },
+    summary: "Replaced the event's share link, retiring the old one",
+  });
 
   sendJson(res, 200, { shareToken: data.share_token });
 }

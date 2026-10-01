@@ -1479,6 +1479,84 @@ The panel is **collapsed by default and the query is gated on that**: an
 unopened card makes no request and runs no timer; opened, it refetches every
 30 seconds.
 
+## Logging: what everybody does, and what they read
+
+Two tables ([030_audit_and_authority.sql](supabase/migrations/030_audit_and_authority.sql)),
+neither with a UI. **Not run yet** - until it is, every write still succeeds
+and nothing is logged, silently.
+
+### `audit_log` - every write
+
+Before this there was provenance but no history: `created_by` / `submitted_by`
+/ `settled_by` say who a row belongs to *now*, and an edit overwrites them
+while a delete erases them. Nothing said who changed a contribution from 5,000
+to 500.
+
+`recordAudit()` in [api/_lib/audit.ts](api/_lib/audit.ts) is called from every
+mutating branch of every API route. Three things are load-bearing:
+
+- **It diffs field by field.** Only keys that actually moved land in `changes`,
+  as `{amount: {from, to}}`. Both whole rows would bury the one field that
+  changed among forty that did not. An update that moved nothing writes no row.
+- **It redacts credentials** - `share_token`, `invite_code`, anything matching
+  `*_token`. The change is recorded, the value is `"[redacted]"`. An audit log
+  that leaks a share token is a new hole, not a record of one.
+- **It never breaks the write it logs.** Fire-and-forget inside try/catch; a
+  missing table is ignored. Nobody should fail to settle an expense because
+  the audit table is unhappy.
+
+`requestId` groups rows from one request, so a member edit that writes a role
+and four page grants reads back as one action.
+
+### `event_page_views` - every read
+
+028's `event_visits` answers "who was here and for how long", one row per
+visit. This is the detail underneath: which pages, in what order, and the dwell
+time on each. It rides on the heartbeat that already arrives - when a beat
+shows a different page, the open row is closed (`left_at`, `seconds`) and the
+next opened. **No IP address, in either table**, consistent with 028.
+
+**Both are kept indefinitely** - a deliberate choice, so an accounting dispute
+from two festivals ago can still be answered. There is no prune.
+
+### The money pages stopped writing direct
+
+Contributions, sponsors and budgets were the last pages writing to Supabase
+**from the browser** with the anon key. Nothing could be logged, because a
+server-side helper cannot see a write it never receives - and those are the
+pages where a record of who changed what matters most. They now go through
+`/api/events?resource=contributions|sponsors|budgets`
+([api/_lib/ledger.ts](api/_lib/ledger.ts)), permission-checked by
+`resolvePageAccess` like every other screen. A contribution writes `residents`
+and `contributions` under one `requestId`, because the page presents them as
+one thing. **The count is still 12.** Do not move these back.
+
+## Two levels of admin
+
+[api/_lib/authority.ts](api/_lib/authority.ts) is the only place that answers
+who outranks whom.
+
+| Situation | Who may |
+|---|---|
+| Grant or revoke **event admin** | society admin only |
+| Grant or revoke committee / read-only | event admin, or society admin |
+| Change or remove a **society admin** | society admin only |
+| Everything else an event admin does | event admin, **or** society admin |
+
+The third row is the point: an event admin cannot demote or remove somebody
+who is a society admin, even on their own event. Without it the hierarchy is
+decorative - an event admin could simply remove the person above them.
+
+`requireEventAdmin()` and `requireEventCommittee()` now admit a society admin,
+which closes a real hole: an event whose only admin went quiet could not be
+recovered by anybody, because there was no way in from outside the event.
+`assertAdminRemains()` is unchanged and separate - it stops an event losing its
+last admin, which is a different question from who may do the removing.
+
+Settings hides the Admin option unless the viewer is a society admin. The
+server is still the authority; that is only so the form does not offer a
+control that would be refused.
+
 ## Motion
 
 - `useCountUp(target)` and `usePrefersReducedMotion()` live in

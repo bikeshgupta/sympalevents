@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BudgetRow, getFirstEventId, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
-import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
@@ -205,10 +205,22 @@ function BudgetActions({ budget }: { budget: BudgetRow }) {
 }
 
 async function addBudgetItem(formData: FormData) {
-  if (!supabase) throw new Error("Supabase is not configured");
   const eventId = await getFirstEventId();
-  const { error } = await supabase.from("budgets").insert({
-    event_id: eventId,
+  await apiFetch("/api/events?resource=budgets", {
+    method: "POST",
+    body: { eventId, ...budgetFields(formData) },
+  });
+}
+
+async function updateBudget(id: string, formData: FormData) {
+  await apiFetch(`/api/events?resource=budgets&id=${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: budgetFields(formData),
+  });
+}
+
+function budgetFields(formData: FormData) {
+  return {
     category: formString(formData, "category"),
     item: formString(formData, "item"),
     estimated_qty: formNumber(formData, "qty"),
@@ -217,31 +229,9 @@ async function addBudgetItem(formData: FormData) {
     actual_cost: formNumber(formData, "actual"),
     funding_type: formString(formData, "fundingType"),
     status: formString(formData, "status", "Planned"),
-  });
-
-  if (error) throw error;
-}
-
-async function updateBudget(id: string, formData: FormData) {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase
-    .from("budgets")
-    .update({
-      category: formString(formData, "category"),
-      item: formString(formData, "item"),
-      estimated_qty: formNumber(formData, "qty"),
-      unit: formString(formData, "unit"),
-      unit_cost: formNumber(formData, "unitCost"),
-      actual_cost: formNumber(formData, "actual"),
-      funding_type: formString(formData, "fundingType"),
-      status: formString(formData, "status", "Planned"),
-    })
-    .eq("id", id);
-  if (error) throw error;
+  };
 }
 
 async function deleteBudget(id: string) {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase.from("budgets").delete().eq("id", id);
-  if (error) throw error;
+  await apiFetch(`/api/events?resource=budgets&id=${encodeURIComponent(id)}`, { method: "DELETE" });
 }

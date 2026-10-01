@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFirstEventId, SponsorRow, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
-import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
 import { PageTools } from "@/features/shared/page-tools";
@@ -215,10 +215,24 @@ function SponsorActions({ sponsor }: { sponsor: SponsorRow }) {
 }
 
 async function addSponsor(formData: FormData) {
-  if (!supabase) throw new Error("Supabase is not configured");
   const eventId = await getFirstEventId();
-  const { error } = await supabase.from("sponsors").insert({
-    event_id: eventId,
+  // Through the API so the write is attributable and audited - see
+  // api/_lib/ledger.ts for why these three pages stopped writing direct.
+  await apiFetch("/api/events?resource=sponsors", {
+    method: "POST",
+    body: { eventId, ...sponsorFields(formData) },
+  });
+}
+
+async function updateSponsor(id: string, formData: FormData) {
+  await apiFetch(`/api/events?resource=sponsors&id=${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: sponsorFields(formData),
+  });
+}
+
+function sponsorFields(formData: FormData) {
+  return {
     sponsor_name: formString(formData, "name"),
     flat_no: formString(formData, "flat"),
     contact: formString(formData, "contact"),
@@ -227,31 +241,9 @@ async function addSponsor(formData: FormData) {
     committed_amount: formNumber(formData, "committed"),
     received_amount: formNumber(formData, "received"),
     status: formString(formData, "status", "Pending"),
-  });
-
-  if (error) throw error;
+  };
 }
 
-async function updateSponsor(id: string, formData: FormData) {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase
-    .from("sponsors")
-    .update({
-      sponsor_name: formString(formData, "name"),
-      flat_no: formString(formData, "flat"),
-      contact: formString(formData, "contact"),
-      category: formString(formData, "category", "Other"),
-      item_slot: formString(formData, "item"),
-      committed_amount: formNumber(formData, "committed"),
-      received_amount: formNumber(formData, "received"),
-      status: formString(formData, "status", "Pending"),
-    })
-    .eq("id", id);
-  if (error) throw error;
-}
-
-async function deleteRecord(table: "sponsors", id: string) {
-  if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase.from(table).delete().eq("id", id);
-  if (error) throw error;
+async function deleteRecord(_table: "sponsors", id: string) {
+  await apiFetch(`/api/events?resource=sponsors&id=${encodeURIComponent(id)}`, { method: "DELETE" });
 }

@@ -6,6 +6,8 @@ import {
   requireEventAdmin,
   sendJson,
 } from "./_lib/server.js";
+import { assertCanManageEventRole } from "./_lib/authority.js";
+import { audit, newRequestId } from "./_lib/audit.js";
 
 const validRoles = new Set(["admin", "committee", "read_only"]);
 const validAccessLevels = new Set(["none", "view", "edit"]);
@@ -174,12 +176,27 @@ export default async function handler(req: any, res: any) {
 
       await requireEventAdmin(eventId, appUser.id);
 
+      const { data: priorUser } = await supabase.from("app_users").select("full_name").eq("id", userId).maybeSingle();
+      const priorName = (priorUser?.full_name as string | null) ?? null;
+
       const { error } = await supabase
         .from("app_users")
         .update({ full_name: fullName, updated_at: new Date().toISOString() })
         .eq("id", userId);
 
       if (error) throw error;
+
+      audit(req, {
+        action: "update",
+        entityType: "app_user",
+        entityId: userId,
+        eventId,
+        actor: { id: appUser.id },
+        before: { full_name: priorName },
+        after: { full_name: fullName },
+        summary: `Corrected a member's display name`,
+      });
+
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -195,7 +212,20 @@ export default async function handler(req: any, res: any) {
       }
 
       await requireEventAdmin(eventId, appUser.id);
+      // Who may do the removing - a society admin outranks an event admin, and
+      // an event admin may not remove one. Separate from assertAdminRemains
+      // below, which is about the event not being left without any admin.
+      await assertCanManageEventRole(supabase, eventId, appUser.id, userId, null);
       await assertAdminRemains(supabase, eventId, userId, null);
+
+      // Read before removing, so the audit row can say what they were.
+      const { data: removedMember } = await supabase
+        .from("event_members")
+        .select("role")
+        .eq("event_id", eventId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      const removedRole = (removedMember?.role as string | null) ?? null;
 
       const { error: permissionError } = await supabase
         .from("event_page_permissions")
@@ -212,6 +242,17 @@ export default async function handler(req: any, res: any) {
         .eq("user_id", userId);
 
       if (memberError) throw memberError;
+
+      audit(req, {
+        action: "delete",
+        entityType: "event_member",
+        entityId: userId,
+        eventId,
+        actor: { id: appUser.id },
+        before: { user_id: userId, role: removedRole },
+        summary: `Removed a member (${removedRole ?? "no role"}) and every page permission they had`,
+      });
+
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -252,7 +293,21 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    // Granting or revoking event admin is the society's call, and nobody
+    // below a society admin may change a society admin's role.
+    await assertCanManageEventRole(supabase, eventId, appUser.id, targetUser.id, role);
     await assertAdminRemains(supabase, eventId, targetUser.id, role);
+
+    // One id for the role change and the page grants that come with it, so
+    // they read back as a single action rather than five unrelated rows.
+    const requestId = newRequestId();
+    const { data: priorMember } = await supabase
+      .from("event_members")
+      .select("role")
+      .eq("event_id", eventId)
+      .eq("user_id", targetUser.id)
+      .maybeSingle();
+    const priorRole = (priorMember?.role as string | null) ?? null;
 
     const { error: memberError } = await supabase.from("event_members").upsert(
       {
@@ -287,6 +342,29 @@ export default async function handler(req: any, res: any) {
       const { error: permissionError } = await supabase.from("event_page_permissions").insert(permissionRows);
       if (permissionError) throw permissionError;
     }
+
+    audit(req, {
+      action: priorRole ? "update" : "create",
+      entityType: "event_member",
+      entityId: targetUser.id,
+      eventId,
+      actor: { id: appUser.id },
+      requestId,
+      before: priorRole ? { role: priorRole } : null,
+      after: { user_id: targetUser.id, role },
+      summary: priorRole ? `Changed a member's role from ${priorRole} to ${role}` : `Added a member as ${role}`,
+    });
+
+    audit(req, {
+      action: "update",
+      entityType: "event_page_permissions",
+      entityId: targetUser.id,
+      eventId,
+      actor: { id: appUser.id },
+      requestId,
+      after: { permissions: normalizedPermissions },
+      summary: `Set page access for a member (${normalizedPermissions.length} page grants)`,
+    });
 
     sendJson(res, 200, { ok: true });
   } catch (error) {

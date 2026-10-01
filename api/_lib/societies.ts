@@ -1,4 +1,5 @@
 import { assertServiceSupabase, optionalAppUser, requireAppUser, sendJson } from "./server.js";
+import { audit } from "./audit.js";
 
 /**
  * Societies - the tenant an event belongs to. Served from api/events.ts on
@@ -198,6 +199,16 @@ async function createSociety(req: ApiRequest, res: ApiResponse) {
     if (isMissingSocietySchema(membership.error)) notMigrated();
     throw membership.error;
   }
+
+  audit(req, {
+    action: "create",
+    entityType: "society",
+    entityId: String(data.id),
+    organizationId: String(data.id),
+    actor: { id: appUser.id },
+    after: { id: data.id, name: data.name, city: data.city },
+    summary: `Created the society "${String(data.name ?? "")}"`,
+  });
 
   sendJson(res, 201, {
     society: {

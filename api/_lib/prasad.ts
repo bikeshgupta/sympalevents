@@ -1,5 +1,6 @@
 import { resolvePageAccess } from "./page-visibility.js";
 import { assertServiceSupabase, getRequestBody, requireAppUser, sendJson } from "./server.js";
+import { audit } from "./audit.js";
 
 /**
  * Prasad slots, served by api/event-schedule.ts on `?resource=prasad` - a
@@ -286,7 +287,16 @@ export async function handlePrasad(req: ApiRequest, res: ApiResponse) {
       throw error;
     }
 
-    sendJson(res, 201, { slotId: data.id });
+    audit(req, {
+      action: "create",
+      entityType: "prasad_item",
+      entityId: String(data.id),
+      eventId,
+      actor: { id: appUser.id },
+      after: { event_id: eventId, ...fields },
+      summary: `Added prasad "${String(fields.item ?? "")}"`,
+    });
+  sendJson(res, 201, { slotId: data.id });
     return;
   }
 
