@@ -1,4 +1,4 @@
-# Migration execution checklist — 014 to 031
+# Migration execution checklist — 014 to 033
 
 **Which of these are applied is the owner's to know, not this file's.** 029 is
 known to be in (the society and event slugs exist). Run the one-query status
@@ -93,6 +93,8 @@ Legend: **A** additive · **D** destructive or data-modifying
 | 029 | Society Home | +`slug` on `organizations` and `events`, +`events.status_override`, +`event_announcements` | A | 023 |
 | 030 | Audit + page views | +`audit_log`, +`event_page_views` | A | — |
 | 031 | Event details | +`events.start_time`, `end_time`, `finance_visibility` (+1 check) | A, safe to run twice | — |
+| 032 | Registration | +registration settings, bookings, payment/check-in history and guarded RPCs | A | 023, 029, 030, 031 |
+| 033 | Draft creation | atomic society/event/module creation; new events start private | A | 032 |
 
 ### Why 023 is the only D
 
@@ -228,6 +230,14 @@ order by 1;
 select exists(select 1 from pg_constraint
   where conname='events_finance_visibility_check'
     and conrelid='public.events'::regclass) as constraint_ok;
+
+-- 032
+select count(*) = 3 as registration_tables from information_schema.tables
+where table_schema='public'
+  and table_name in ('event_registration_settings','event_registrations','event_registration_history');
+
+-- 033
+select to_regprocedure('public.create_event_draft(uuid,jsonb,jsonb)') is not null as draft_creation_ok;
 ```
 
 ### One query to see where you are
@@ -264,7 +274,9 @@ select
      where table_name='events' and column_name='status_override')) as m029,
   (to_regclass('public.audit_log')               is not null) as m030,
   (exists(select 1 from information_schema.columns
-     where table_name='events' and column_name='finance_visibility')) as m031;
+     where table_name='events' and column_name='finance_visibility')) as m031,
+  (to_regclass('public.event_registrations')     is not null) as m032,
+  (to_regprocedure('public.create_event_draft(uuid,jsonb,jsonb)') is not null) as m033;
 ```
 
 ---
@@ -302,3 +314,5 @@ time as their migration lands:
   Customise dashboard → Collections can switch an event to counts only. Until
   then the name, venue and dates still save, and the time and collections
   controls say which migration they are waiting for
+- after **032**: admin-led registration, pricing, payment verification and check-in are active
+- after **033**: new events are created atomically as private drafts

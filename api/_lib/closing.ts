@@ -1,3 +1,4 @@
+import { resolvePageAccess } from "./page-visibility.js";
 import {
   assertServiceSupabase,
   getRequestBody,
@@ -13,6 +14,7 @@ type ApiRequest = {
   query?: {
     eventId?: string | string[];
     resource?: string | string[];
+    photoId?: string | string[];
   };
   headers: {
     authorization?: string;
@@ -463,6 +465,7 @@ async function fetchClosingRow(supabase: Supabase, eventId: string) {
 
 async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiResponse, eventId: string) {
   const viewer = await optionalAppUser(req);
+  if (!(await resolvePageAccess(eventId,viewer?.id ?? null,"closing")).canView) { sendJson(res,403,{error:"Event is not available"}); return; }
 
   const [closingRow, galleryResult, feedbackResult, membersResult, tasksResult, scheduleResult, prasad, auctions] =
     await Promise.all([
@@ -654,7 +657,7 @@ async function handleClosingWrite(
     }
     throw error;
   }
-  audit(req, {
+  audit(null, {
     action: "update",
     entityType: "event_closing",
     entityId: eventId,
@@ -673,6 +676,9 @@ async function handleClosingWrite(
  */
 async function sendPhotoComments(supabase: Supabase, req: ApiRequest, res: ApiResponse, photoId: string) {
   const viewer = await optionalAppUser(req);
+  const photo = await supabase.from("event_gallery_photos").select("event_id").eq("id",photoId).maybeSingle();
+  if (photo.error) throw photo.error;
+  if (!photo.data || !(await resolvePageAccess(photo.data.event_id,viewer?.id ?? null,"closing")).canView) { sendJson(res,403,{error:"Event is not available"}); return; }
 
   const { data, error } = await supabase
     .from("event_gallery_comments")

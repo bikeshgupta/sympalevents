@@ -1,7 +1,8 @@
+import { publicationAccess } from "./_lib/publication.js";
 import { fetchEventModules, isCommitteeOpenPage, sortModules } from "./_lib/page-visibility.js";
 import { isSocietyAdminForEvent } from "./_lib/authority.js";
 import { handleEventTraffic } from "./_lib/traffic.js";
-import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
+import { assertServiceSupabase, handleApiError, requireAppUser, optionalAppUser, sendJson } from "./_lib/server.js";
 
 /**
  * Every page the caller may see for one event, with edit rights - this is
@@ -37,6 +38,9 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    const viewer = await optionalAppUser(req);
+    const publication = await publicationAccess(eventId, viewer?.id ?? null);
+    if (!publication.canRead) { sendJson(res, 200, { role: null, pages: [] }); return; }
     // Modules this event does not have are left out of every branch below,
     // so the sidebar, the drawer, the route guard and Member Access all stop
     // mentioning them at once - they already filter on this one list.
@@ -91,7 +95,7 @@ export default async function handler(req: any, res: any) {
     // were ever added to this event - see api/_lib/authority.ts.
     const role = societyAdmin ? "admin" : member?.role ?? null;
 
-    if (role === "admin") {
+    if (role === "admin" || publication.canManage) {
       sendJson(res, 200, {
         ...vocabulary,
         role,

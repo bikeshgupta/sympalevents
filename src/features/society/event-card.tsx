@@ -98,10 +98,10 @@ function Metadata({ event, status }: { event: SocietyEvent; status: EventStatus 
       facts.push(plural(metrics.contributorCount, "contributor"));
     }
   } else {
-    // One ahead of it is about taking part, not about money raised.
+    // One ahead of it is about contributors, not about money raised.
     if (hasModule(event, "teams") && metrics.teamCount > 0) facts.push(plural(metrics.teamCount, "team"));
     if (hasModule(event, "contributions") && metrics.contributorCount > 0) {
-      facts.push(`${metrics.contributorCount} taking part`);
+      facts.push(`${metrics.contributorCount} contributors`);
     }
     if (facts.length < 2 && hasModule(event, "sponsors") && metrics.sponsorCount > 0) {
       facts.push(plural(metrics.sponsorCount, "sponsor"));

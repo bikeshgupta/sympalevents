@@ -47,7 +47,7 @@ export const moduleGroups: { title: string; pageKeys: string[] }[] = [
   // who may open it is very much a choice, so it has a group of its own.
   { title: "Front page", pageKeys: ["dashboard"] },
   { title: "Money", pageKeys: ["contributions", "sponsors", "budget", "expenses", "auctions"] },
-  { title: "The event", pageKeys: ["event-plan", "teams", "fixtures", "prasad"] },
+  { title: "The event", pageKeys: ["registration", "event-plan", "teams", "fixtures", "prasad"] },
   { title: "People", pageKeys: ["tasks", "volunteers", "contacts"] },
   { title: "Afterwards", pageKeys: ["closing"] },
 ];
@@ -76,9 +76,9 @@ const festival: EventTemplate = {
     { pageKey: "teams", isEnabled: false, visibility: "restricted" },
     { pageKey: "fixtures", isEnabled: false, visibility: "restricted" },
     { pageKey: "tasks", isEnabled: true, visibility: "authenticated" },
-    { pageKey: "volunteers", isEnabled: true, visibility: "restricted" },
+    { pageKey: "volunteers", isEnabled: false, visibility: "restricted" },
     { pageKey: "event-plan", isEnabled: true, visibility: "restricted" },
-    { pageKey: "contacts", isEnabled: true, visibility: "restricted" },
+    { pageKey: "contacts", isEnabled: false, visibility: "restricted" },
     { pageKey: "closing", isEnabled: true, visibility: "public" },
   ],
 };
@@ -89,7 +89,7 @@ const sports: EventTemplate = {
   name: "Sports meet",
   tagline: "Entry fees, a fixture list and results people can follow from the ground.",
   examples: "Box cricket, badminton, carrom, table tennis, athletics",
-  unitLabel: "Team",
+  unitLabel: "Flat",
   modules: [
     { pageKey: "dashboard", isEnabled: true, visibility: "public" },
     { pageKey: "contributions", isEnabled: true, visibility: "restricted", labelOverride: "Entry fees" },
@@ -100,7 +100,7 @@ const sports: EventTemplate = {
     { pageKey: "auctions", isEnabled: false, visibility: "restricted" },
     { pageKey: "prasad", isEnabled: false, visibility: "restricted" },
     { pageKey: "tasks", isEnabled: true, visibility: "authenticated" },
-    { pageKey: "volunteers", isEnabled: true, visibility: "restricted" },
+    { pageKey: "volunteers", isEnabled: false, visibility: "restricted" },
     { pageKey: "teams", isEnabled: true, visibility: "public" },
     { pageKey: "fixtures", isEnabled: true, visibility: "public" },
     { pageKey: "event-plan", isEnabled: true, visibility: "public", labelOverride: "Match days" },
@@ -128,7 +128,7 @@ const cultural: EventTemplate = {
     { pageKey: "teams", isEnabled: false, visibility: "restricted" },
     { pageKey: "fixtures", isEnabled: false, visibility: "restricted" },
     { pageKey: "tasks", isEnabled: true, visibility: "authenticated" },
-    { pageKey: "volunteers", isEnabled: true, visibility: "restricted" },
+    { pageKey: "volunteers", isEnabled: false, visibility: "restricted" },
     { pageKey: "event-plan", isEnabled: true, visibility: "public", labelOverride: "Running order" },
     { pageKey: "contacts", isEnabled: false, visibility: "restricted" },
     { pageKey: "closing", isEnabled: true, visibility: "public", labelOverride: "Photos & reviews" },
@@ -153,9 +153,9 @@ const mixed: EventTemplate = {
     { pageKey: "teams", isEnabled: false, visibility: "restricted" },
     { pageKey: "fixtures", isEnabled: false, visibility: "restricted" },
     { pageKey: "tasks", isEnabled: true, visibility: "authenticated" },
-    { pageKey: "volunteers", isEnabled: true, visibility: "restricted" },
+    { pageKey: "volunteers", isEnabled: false, visibility: "restricted" },
     { pageKey: "event-plan", isEnabled: true, visibility: "public", labelOverride: "Programme" },
-    { pageKey: "contacts", isEnabled: true, visibility: "restricted" },
+    { pageKey: "contacts", isEnabled: false, visibility: "restricted" },
     { pageKey: "closing", isEnabled: true, visibility: "public" },
   ],
 };
@@ -189,7 +189,16 @@ const blank: EventTemplate = {
   ],
 };
 
-export const eventTemplates: EventTemplate[] = [festival, sports, cultural, mixed, blank];
+const garba: EventTemplate = {
+  key: "garba", eventType: "cultural", name: "Garba & Dandiya", unitLabel: "Flat",
+  tagline: "Quick household entry, optional food, verified payments and gate check-in.",
+  examples: "Navratri night, Dandiya evening, community dance",
+  modules: cultural.modules.map(m => ({...m, isEnabled: ["dashboard","event-plan","tasks","closing","expenses","budget"].includes(m.pageKey)})),
+};
+for (const template of [festival,sports,cultural,mixed,blank,garba]) {
+  template.modules.push({pageKey:"registration",isEnabled:template.key!=="blank",visibility:"public"});
+}
+export const eventTemplates: EventTemplate[] = [garba, festival, sports, cultural, mixed, blank];
 
 export function templateByKey(key: string) {
   return eventTemplates.find((template) => template.key === key);

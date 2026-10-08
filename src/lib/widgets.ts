@@ -160,7 +160,7 @@ export type LayoutEntry = {
  * This is computed rather than stored, so an event with no saved layout is
  * not frozen to whatever the defaults were on the day it was created.
  */
-export function defaultLayout(isClosed: boolean): LayoutEntry[] {
+export function defaultLayout(isClosed: boolean, eventType?: string): LayoutEntry[] {
   const money = ["financial-summary", "funding-progress"];
   const schedule = ["schedule"];
 
@@ -169,7 +169,7 @@ export function defaultLayout(isClosed: boolean): LayoutEntry[] {
     ...(isClosed ? ["closing-summary", "closing-reviews"] : []),
     "auctions",
     "announcements",
-    ...(isClosed ? [...schedule, ...money] : [...money, ...schedule]),
+    ...(isClosed || eventType === "cultural" || eventType === "sports" || eventType === "custom" ? [...schedule, ...money] : [...money, ...schedule]),
     "my-responsibilities",
     "gallery",
   ];
@@ -192,8 +192,8 @@ export function defaultLayout(isClosed: boolean): LayoutEntry[] {
  *     which is appended rather than lost;
  *   - a required widget somebody managed to drop, which comes back at the top.
  */
-export function normaliseLayout(stored: unknown, isClosed: boolean): LayoutEntry[] {
-  if (!Array.isArray(stored)) return defaultLayout(isClosed);
+export function normaliseLayout(stored: unknown, isClosed: boolean, eventType?: string): LayoutEntry[] {
+  if (!Array.isArray(stored)) return defaultLayout(isClosed,eventType);
 
   const seen = new Set<string>();
   const entries: LayoutEntry[] = [];
@@ -238,6 +238,7 @@ export function visibleLayout(layout: LayoutEntry[], openPageKeys: Set<string> |
     const widget = widgetByKey.get(entry.key);
     if (!widget) return false;
     if (openPageKeys === null) return true;
+    if (["financial-summary", "funding-progress"].includes(widget.key) && !["contributions","sponsors","budget","expenses"].some(key=>openPageKeys.has(key))) return false;
     return widget.module === null || openPageKeys.has(widget.module);
   });
 }

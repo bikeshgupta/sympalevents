@@ -1,4 +1,5 @@
 import { isSocietyAdminForEvent } from "./authority.js";
+import { publicationAccess } from "./publication.js";
 import { assertServiceSupabase } from "./server.js";
 
 /**
@@ -19,6 +20,7 @@ export type PageVisibility = "public" | "authenticated" | "restricted";
  *  - it stays admin-only and is not something an admin can open up. */
 export const eventPageKeys = [
   "dashboard",
+  "registration",
   "contributions",
   "sponsors",
   "budget",
@@ -44,6 +46,7 @@ export const eventPageKeys = [
  */
 const defaultVisibility: Record<string, PageVisibility> = {
   dashboard: "public",
+  registration: "public",
   budget: "public",
   auctions: "public",
   closing: "public",
@@ -79,10 +82,11 @@ export function isAlwaysOnPage(pageKey: string) {
  * predates 024 behaving exactly as it did. These two arrived after, and a
  * festival should not grow a fixture list because somebody deployed.
  */
-const defaultDisabledPages = new Set<string>(["teams", "fixtures"]);
+const defaultDisabledPages = new Set<string>(["teams", "fixtures", "registration", "volunteers", "contacts"]);
 
 export const defaultPageLabels: Record<string, string> = {
-  dashboard: "Dashboard",
+  dashboard: "Overview",
+  registration: "Participate",
   contributions: "Contributions",
   sponsors: "Sponsors",
   budget: "Budget",
@@ -295,6 +299,8 @@ export type PageAccess = {
 const noAccess: PageAccess = { role: null, canView: false, canEdit: false, isAdmin: false, accessLevel: "none" };
 
 export async function resolvePageAccess(eventId: string, userId: string | null, pageKey: string): Promise<PageAccess> {
+  const publication = await publicationAccess(eventId, userId);
+  if (!publication.canRead) return noAccess;
   const modules = await fetchEventModules(eventId);
   const module = modules[pageKey];
   const visibility = module?.visibility ?? defaultVisibilityFor(pageKey);

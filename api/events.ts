@@ -1,8 +1,8 @@
+import { z } from "zod";
+import { handleRegistration, handlePublication } from "./_lib/registration.js";
 import { handleEventClosing } from "./_lib/closing.js";
 import { handleEventData } from "./_lib/event-data.js";
 import { handleAppearance } from "./_lib/appearance.js";
-import { assertEventWindow, cleanTime, handleEventDetails } from "./_lib/event-details.js";
-import { insertDegrading } from "./_lib/schema-compat.js";
 import { handleShareLink } from "./_lib/share.js";
 import { handleLedger } from "./_lib/ledger.js";
 import { handleResolveEventSlug, handleSocietyHome } from "./_lib/society-home.js";
@@ -32,6 +32,10 @@ import { audit } from "./_lib/audit.js";
  */
 export default async function handler(req: any, res: any) {
   const resource = String(req.query?.resource ?? "");
+  if (resource === "registration" || resource === "publication") {
+    try { return await (resource === "registration" ? handleRegistration(req, res) : handlePublication(req, res)); }
+    catch (error) { return handleApiError(res, error); }
+  }
   if (resource === "closing" || resource === "gallery" || resource === "feedback") {
     return handleEventClosing(req, res);
   }
@@ -55,15 +59,6 @@ export default async function handler(req: any, res: any) {
   if (resource === "appearance") {
     try {
       return await handleAppearance(req, res);
-    } catch (error) {
-      return handleApiError(res, error);
-    }
-  }
-
-  // Name, venue, dates, hours, and whether amounts are shown. Event admin only.
-  if (resource === "details") {
-    try {
-      return await handleEventDetails(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }
@@ -125,260 +120,33 @@ export default async function handler(req: any, res: any) {
     const { appUser } = await requireAppUser(req);
     const body = await getRequestBody(req);
 
-    // Checked before anything is created: a request refused for an end time
-    // before its start must not leave a society behind.
-    const times = readEventTimes(body);
-
-    await assertUnderCreationCap(supabase, appUser.id);
-
-    // An event belongs to a society. When the caller names one, they have to
-    // be entitled to add an event to it; when they do not, a society is made
-    // for them with the event's own name and they become its admin - which an
-    // admin then renames in Settings.
-    //
-    // This used to insert a throwaway `organizations` row per event, called
-    // "<Event> Organization", that nothing ever read again. See 023.
-    const societyId = await resolveSociety(supabase, appUser.id, body);
-
-    const event = await insertEvent(supabase, societyId, body, times);
-
-    const { error: memberError } = await supabase.from("event_members").insert({
-      event_id: event.id,
-      user_id: appUser.id,
-      role: "admin",
+    const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0,10) === v, "Enter a valid date");
+    const parsed = z.object({
+      eventName: z.string().trim().min(2).max(100), startDate: date, endDate: date,
+      startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).or(z.literal("")).optional(),
+      endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).or(z.literal("")).optional(),
+      societyId: z.string().uuid().optional(), societyName: z.string().trim().min(2).max(80).optional(),
+      eventType: z.enum(["festival","sports","cultural","mixed","custom"]), templateKey: z.string().max(40),
+      unitLabel: z.string().trim().min(1).max(24),
+      location: z.string().trim().max(200).optional(), description: z.string().max(2000).optional(),
+      modules: z.array(z.object({pageKey:z.enum(eventPageKeys),visibility:z.enum(["public","authenticated","restricted"]),isEnabled:z.boolean(),labelOverride:z.string().max(28).nullable().optional()})).min(1).max(20),
+    }).safeParse(body);
+    if (!parsed.success) throw Object.assign(new Error(parsed.error.issues[0].message), {statusCode:400});
+    const input = parsed.data;
+    if (!input.societyId && !input.societyName) throw Object.assign(new Error("Choose a society"),{statusCode:400});
+    if (input.endDate < input.startDate || (input.endDate === input.startDate && input.startTime && input.endTime && input.endTime <= input.startTime)) throw Object.assign(new Error("End must be after start"),{statusCode:400});
+    const modules = eventPageKeys.map(pageKey => {
+      const module = input.modules.find(m=>m.pageKey===pageKey);
+      return {page_key:pageKey,visibility:normalizeVisibility(module?.visibility,pageKey),is_enabled:isAlwaysOnPage(pageKey) || Boolean(module?.isEnabled),label_override:cleanModuleLabel(module?.labelOverride)};
     });
-
-    if (memberError) throw memberError;
-
-    audit(req, {
-      action: "create", entityType: "event", entityId: event.id, eventId: event.id,
-      organizationId: societyId, actor: { id: appUser.id },
-      after: { id: event.id, organization_id: societyId, name: body.eventName ?? body.name },
-      summary: `Created the event "${String(body.eventName ?? body.name ?? "")}" and became its admin`,
-    });
-
-    await seedModules(supabase, event.id, body);
-
-    sendJson(res, 201, { eventId: event.id });
+    const created = await supabase.rpc("create_event_draft", {p_user:appUser.id,p_input:input,p_modules:modules});
+    if (created.error) {
+      if (["PGRST202","42883"].includes(created.error.code)) throw Object.assign(new Error("New-event setup is not ready. Apply migrations 032 and 033 before creating events."),{statusCode:503});
+      throw created.error;
+    }
+    audit(req, {action:"create",entityType:"event",entityId:created.data,eventId:created.data,actor:{id:appUser.id},after:{name:input.eventName},summary:"Created a draft event"});
+    sendJson(res, 201, {eventId:created.data});
   } catch (error) {
     handleApiError(res, error);
-  }
-}
-
-/**
- * The society a new event should belong to.
- *
- * `societyId` in the body means "add it to this one", and the caller must be
- * that society's admin or committee. Without one, a society is created and the
- * caller becomes its admin, because an event with no society would not appear
- * in anybody's switcher.
- *
- * The membership insert is allowed to fail softly: `organization_members` only
- * takes app_users ids once 023 has been run, and until then an event still has
- * to be creatable. The society row itself has existed since 001.
- */
-async function resolveSociety(
-  supabase: ReturnType<typeof assertServiceSupabase>,
-  userId: string,
-  body: Record<string, unknown>,
-): Promise<string> {
-  const requested = String(body.societyId ?? "");
-
-  if (requested) {
-    const { data, error } = await supabase
-      .from("organization_members")
-      .select("role")
-      .eq("organization_id", requested)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (!error && (data?.role === "admin" || data?.role === "committee")) return requested;
-
-    const denied = new Error("You cannot add an event to that society");
-    Object.assign(denied, { statusCode: 403 });
-    throw denied;
-  }
-
-  await assertUnderSocietyCap(supabase, userId);
-
-  const { data: society, error: societyError } = await supabase
-    .from("organizations")
-    .insert({ name: String(body.societyName ?? body.eventName ?? "New society").slice(0, 80) })
-    .select("id")
-    .single();
-
-  if (societyError) throw societyError;
-
-  const { error: membershipError } = await supabase
-    .from("organization_members")
-    .insert({ organization_id: society.id, user_id: userId, role: "admin" });
-
-  audit(null, {
-    action: "create", entityType: "society", entityId: society.id as string,
-    organizationId: society.id as string, actor: { id: userId },
-    after: { id: society.id, name: body.societyName ?? body.eventName },
-    summary: "Created a society and became its admin",
-  });
-
-  if (membershipError) {
-    console.warn(
-      "Could not record society membership - run supabase/migrations/023_societies.sql. The event was still created.",
-      membershipError,
-    );
-  }
-
-  return society.id as string;
-}
-
-/** The optional times on a new event, validated. Dates are left to the
- *  database as they always were; only the ordering the times introduce is
- *  checked here. */
-function readEventTimes(body: Record<string, unknown>) {
-  const startTime = cleanTime(body.startTime, "The start time");
-  const endTime = cleanTime(body.endTime, "The end time");
-  const isDate = (value: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ""));
-  if (isDate(body.startDate) && isDate(body.endDate)) {
-    assertEventWindow(String(body.startDate), String(body.endDate), startTime, endTime);
-  }
-  return { startTime, endTime };
-}
-
-/**
- * The event row. `event_type`, `template_key` and `unit_label` arrived with
- * 024, so a project that has not run it still gets an event - it just gets the
- * one shape this app always made.
- */
-async function insertEvent(
-  supabase: ReturnType<typeof assertServiceSupabase>,
-  societyId: string,
-  body: Record<string, unknown>,
-  times: { startTime: string | null; endTime: string | null },
-) {
-  const { startTime, endTime } = times;
-  const base = {
-    organization_id: societyId,
-    name: body.eventName,
-    start_date: body.startDate,
-    end_date: body.endDate,
-    location: body.location ?? "",
-    description: body.description ?? "",
-  };
-
-  // Times of day arrive with 031 and the template columns with 024. Each is
-  // dropped on its own if its migration has not run, so a missing one costs
-  // only itself - not the event's type and template as well.
-  const full: Record<string, unknown> = {
-    ...base,
-    event_type: typeof body.eventType === "string" ? body.eventType : "festival",
-    template_key: typeof body.templateKey === "string" ? body.templateKey : null,
-    unit_label: typeof body.unitLabel === "string" && body.unitLabel.trim() ? body.unitLabel.trim().slice(0, 24) : null,
-    ...(startTime ? { start_time: startTime } : {}),
-    ...(endTime ? { end_time: endTime } : {}),
-  };
-
-  const inserted = await insertDegrading(
-    full,
-    ["event_type", "template_key", "unit_label", "start_time", "end_time"],
-    (row) => supabase.from("events").insert(row).select("id").single(),
-  );
-  if (inserted.error) throw inserted.error;
-  return inserted.data as { id: string };
-}
-
-/**
- * Write the chosen template's modules as this event's own rows.
- *
- * Seeding at creation is the point: until now nothing wrote
- * `event_page_visibility` when an event was made, so every new event fell
- * through to the code defaults and an admin had no idea what it had until they
- * opened Settings. The template is not consulted again after this - these rows
- * are the event's, to edit freely.
- *
- * A failure here never fails the create. An event with no module rows behaves
- * exactly as every event did before this existed, and Settings can fix it.
- */
-async function seedModules(
-  supabase: ReturnType<typeof assertServiceSupabase>,
-  eventId: string,
-  body: Record<string, unknown>,
-) {
-  const submitted = Array.isArray(body.modules) ? (body.modules as Record<string, unknown>[]) : null;
-  if (!submitted?.length) return;
-
-  const rows = submitted
-    .filter((item) => (eventPageKeys as readonly string[]).includes(String(item.pageKey ?? "")))
-    .map((item) => {
-      const pageKey = String(item.pageKey);
-      return {
-        event_id: eventId,
-        page_key: pageKey,
-        visibility: normalizeVisibility(item.visibility, pageKey),
-        is_enabled: isAlwaysOnPage(pageKey) ? true : item.isEnabled !== false,
-        label_override: cleanModuleLabel(item.labelOverride),
-        updated_at: new Date().toISOString(),
-      };
-    });
-
-  if (!rows.length) return;
-
-  const { error } = await supabase.from("event_page_visibility").upsert(rows, { onConflict: "event_id,page_key" });
-  if (error) {
-    console.warn(
-      "Could not seed this event's modules - run supabase/migrations/015 and 024. The event was still created.",
-      error,
-    );
-  }
-}
-
-/**
- * How much one account may create.
- *
- * Anyone signed in can create an event - that is the point of a shared app,
- * and there is no approval queue to put them through. But nothing bounded it
- * either, and an open create endpoint on a public signup is a way to fill
- * somebody else's database. These numbers are far above what a real committee
- * needs and only exist to stop a script.
- */
-const MAX_EVENTS_PER_ADMIN = 40;
-const MAX_SOCIETIES_PER_ADMIN = 10;
-
-async function assertUnderCreationCap(supabase: ReturnType<typeof assertServiceSupabase>, userId: string) {
-  const { count, error } = await supabase
-    .from("event_members")
-    .select("event_id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("role", "admin");
-
-  // A counting failure must not block a legitimate first event; the cap is a
-  // brake, not an authorization check.
-  if (error) {
-    console.warn("Could not count this account's events; letting the create through.", error);
-    return;
-  }
-
-  if ((count ?? 0) >= MAX_EVENTS_PER_ADMIN) {
-    const denied = new Error(
-      `This account already runs ${MAX_EVENTS_PER_ADMIN} events. Ask an admin of the society you want to add to, or close an old event first.`,
-    );
-    Object.assign(denied, { statusCode: 429 });
-    throw denied;
-  }
-}
-
-async function assertUnderSocietyCap(supabase: ReturnType<typeof assertServiceSupabase>, userId: string) {
-  const { count, error } = await supabase
-    .from("organization_members")
-    .select("organization_id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("role", "admin");
-
-  if (error) return;
-
-  if ((count ?? 0) >= MAX_SOCIETIES_PER_ADMIN) {
-    const denied = new Error(
-      `This account already runs ${MAX_SOCIETIES_PER_ADMIN} societies. Add this event to one of them instead.`,
-    );
-    Object.assign(denied, { statusCode: 429 });
-    throw denied;
   }
 }

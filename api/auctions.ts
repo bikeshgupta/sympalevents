@@ -1,3 +1,5 @@
+import { resolvePageAccess } from "./_lib/page-visibility.js";
+import { optionalAppUser } from "./_lib/server.js";
 import { handleAuctionBids } from "./_lib/auction-bids.js";
 import { handleAuctionRegistrations } from "./_lib/auction-registrations.js";
 import {
@@ -67,6 +69,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         return;
       }
 
+      const viewer = await optionalAppUser(req);
+      if (!(await resolvePageAccess(eventId,viewer?.id ?? null,"auctions")).canView) { sendJson(res,403,{error:"Event is not available"}); return; }
       const { data, error } = await supabase
         .from("auctions")
         .select(AUCTION_FIELDS)
