@@ -61,6 +61,16 @@ path for screen data. It returns `{ event, contributions, sponsors, budgets, tas
 expenses, eventPlan, financials, source, fallbackReason }`.
 
 - `source: "supabase"` — real data.
+- **Loading is never the demo.** `useEventData` has no `initialData` of its own: it used to
+  start from the demo dataset, so every event opened as the Ganesh Chaturthi sample until the
+  request returned. While a real event is pending, `AppLayout` renders `EventLoader`
+  ([event-loading.tsx](src/components/shared/event-loading.tsx): the app icon's six people
+  gathering round a hub) instead of any screen, and waits inside an event (route guard,
+  dashboard access check) show `PageSkeleton`, the outline of the page with a light sweep.
+  Neither shows event detail, and both stop for `prefers-reduced-motion`. A page asking for a
+  different variant (the dashboard omits tasks) starts from the same viewer's already-loaded
+  read of that event, never another viewer's. `data` is still never undefined for the 34
+  callers - while pending it is the demo shape, which nothing may draw.
 - `source: "demo"` — Supabase unconfigured/unreadable; `src/data/demo.ts` is served
   instead, and `<DataSourceBadge>` surfaces it. **Every screen must stay readable and
   correct in both modes.**

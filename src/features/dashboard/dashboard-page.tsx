@@ -17,6 +17,7 @@ import { EventActions } from "@/features/registration/event-actions";
 import { ResidentPrimaryAction } from "@/features/dashboard/resident-primary-action";
 import { getEventStatus } from "@/lib/event-status";
 import { organiserOnlyWidgets } from "@/lib/resident-view";
+import { PageSkeleton } from "@/components/shared/event-loading";
 import { useViewMode } from "@/lib/view-mode";
 import { usePicks, pickEntries } from "@/lib/picks";
 import { buildIcs, downloadIcs } from "@/lib/calendar";
@@ -179,12 +180,7 @@ export function DashboardPage() {
   // for a beat and then swapping it would flash controls at residents, and the
   // reverse would flash a stripped page at the committee.
   if (view.isLoading) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-4" aria-busy="true">
-        <div className="h-[420px] animate-pulse rounded-lg bg-muted" />
-        <div className="h-24 animate-pulse rounded-xl bg-muted/70" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (

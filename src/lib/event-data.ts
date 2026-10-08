@@ -1,9 +1,10 @@
+import { useMemo } from "react";
 import type { Announcement } from "@/data/announcements";
 import { toAnnouncement, type AnnouncementPostPayload } from "@/lib/announcement-posts";
 import type { GoodToKnow } from "@/lib/good-to-know";
 import type { HeroOptions } from "@/lib/hero";
 import { useSession } from "@/lib/auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   budgetRows,
   contributionRows,
@@ -311,9 +312,40 @@ export function useEventData(options: UseEventDataOptions = {}) {
   const {data:session} = useSession();
   const includeTasks = options.includeTasks ?? true;
 
-  return useQuery({
-    queryKey: ["event-data", selectedEventId, { includeTasks }, session?.user.appUserId ?? "guest"],
-    initialData: eventDataWithTaskPolicy(demoData, includeTasks),
+  const queryClient = useQueryClient();
+  const viewerKey = session?.user.appUserId ?? "guest";
+  const query = useQuery({
+    queryKey: ["event-data", selectedEventId, { includeTasks }, viewerKey],
+    // Start from this same event, for this same person, if another screen has already read it.
+    // The layout reads the event (with tasks) before any page mounts, and a page that asks for
+    // a different variant (the dashboard leaves the tasks out) would otherwise be pending on
+    // its own key and have nothing to draw. Only the same viewer's data is ever borrowed, and
+    // tasks are only borrowed *from* a read that had them. Stale-ness is kept, so it refetches.
+    initialData: () => {
+      if (!selectedEventId) return undefined;
+      const hit = queryClient
+        .getQueryCache()
+        .findAll({ queryKey: ["event-data", selectedEventId] })
+        .find((entry) => {
+          const key = entry.queryKey as [string, string, { includeTasks?: boolean }, string];
+          const data = entry.state.data as EventData | undefined;
+          return Boolean(data) && key[3] === viewerKey && (key[2]?.includeTasks === true || !includeTasks);
+        });
+      return hit ? eventDataWithTaskPolicy(hit.state.data as EventData, includeTasks) : undefined;
+    },
+    initialDataUpdatedAt: () => {
+      if (!selectedEventId) return undefined;
+      return queryClient
+        .getQueryCache()
+        .findAll({ queryKey: ["event-data", selectedEventId] })
+        .find((entry) => {
+          const key = entry.queryKey as [string, string, { includeTasks?: boolean }, string];
+          return Boolean(entry.state.data) && key[3] === viewerKey && (key[2]?.includeTasks === true || !includeTasks);
+        })?.state.dataUpdatedAt;
+    },
+    // No `initialData`: it used to be the demo dataset, so every event opened as the Ganesh
+    // Chaturthi sample for as long as the request took. The query is now genuinely pending
+    // until the real event arrives, and AppLayout shows a loader for that time.
     queryFn: async (): Promise<EventData> => {
       if (!isSupabaseConfigured) {
         return {
@@ -397,4 +429,10 @@ export function useEventData(options: UseEventDataOptions = {}) {
       }
     },
   });
+
+  // Callers read `data` unconditionally (34 of them), so it is never undefined: while the
+  // first read is pending it is the demo shape, which nothing may draw - AppLayout renders a
+  // loader instead of any screen while `isPending` is true for a real event.
+  const fallback = useMemo(() => eventDataWithTaskPolicy(demoData, includeTasks), [includeTasks]);
+  return { ...query, data: query.data ?? fallback };
 }

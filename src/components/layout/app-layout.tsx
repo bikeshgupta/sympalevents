@@ -15,6 +15,7 @@ import { useResolvedEventSlug } from "@/lib/event-slug";
 import { useScrollToTopOnNavigate } from "@/lib/scroll";
 import { useTrafficHeartbeat } from "@/lib/traffic";
 import { themeVariables } from "@/lib/themes";
+import { EventLoader } from "@/components/shared/event-loading";
 import { useEventData } from "@/lib/event-data";
 import { isOrganiserPage } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
@@ -25,7 +26,7 @@ function pageKeyFromHref(href: string) {
 }
 
 export function AppLayout() {
-  const { data } = useEventData();
+  const { data, isPending: isEventDataPending } = useEventData();
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
   const { selectedEvent, selectedEventId, societies, setSelectedEventId, isLoading: isEventLoading } =
@@ -142,6 +143,18 @@ export function AppLayout() {
     );
   }
 
+
+  // The first read of an event. Until it lands `data` is the demo shape, which must never be
+  // drawn as somebody's event - that was the Ganesh Chaturthi flash. Covers the three ways an
+  // event is not known yet: the list of the person's events, a readable address still being
+  // turned into an id, and the event's own data. A deployment with no event at all (demo
+  // mode) is none of these, so it still opens straight onto the demo.
+  //
+  // After every hook, like the redirect above.
+  const waitingForRoute = Boolean(eventIdFromPath && eventIdFromPath !== selectedEventId);
+  if (isEventLoading || (societySlug && eventSlug && resolved.isLoading) || waitingForRoute || (selectedEventId && isEventDataPending)) {
+    return <EventLoader />;
+  }
 
   return (
     // The event's colour preset, set as CSS variables on the root rather than

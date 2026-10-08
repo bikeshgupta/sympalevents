@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { PageSkeleton } from "@/components/shared/event-loading";
 import { WelcomePanel } from "@/features/onboarding/welcome-panel";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
@@ -12,7 +13,7 @@ export function RouteGuard() {
   const { events, selectedEventId, isLoading: isEventLoading } = useEventContext();
 
   if (access.isLoading || isEventLoading) {
-    return <div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">Checking access...</div>;
+    return <PageSkeleton />;
   }
 
   /**
