@@ -20,6 +20,7 @@ export function callToAction(event: SocietyEvent, status: EventStatus) {
   if (status === "cancelled") return "See details";
   if (status === "completed") return "Relive the event";
   if (status === "live") return "See what's happening";
+  if (hasModule(event,"registration")) return "Registration details";
   if (event.eventType === "sports" && hasModule(event, "teams")) return "View tournament";
   return "Explore";
 }

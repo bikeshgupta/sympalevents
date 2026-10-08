@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 
 export const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: Gauge },
+  { label: "Overview", href: "/dashboard", icon: Gauge },
+  { label: "Participate", href: "/registration", icon: Users },
   { label: "Contributions", href: "/contributions", icon: HandCoins },
   { label: "Sponsors", href: "/sponsors", icon: HeartHandshake },
   { label: "Budget", href: "/budget", icon: CircleDollarSign },

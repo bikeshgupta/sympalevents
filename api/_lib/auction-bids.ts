@@ -1,3 +1,5 @@
+import { resolvePageAccess } from "./page-visibility.js";
+import { optionalAppUser } from "./server.js";
 import { assertServiceSupabase, getRequestBody, handleApiError, requireAppUser, sendJson } from "./server.js";
 
 type ApiRequest = {
@@ -28,6 +30,8 @@ export async function handleAuctionBids(req: ApiRequest, res: ApiResponse) {
     // needs a verified identity, so requireAppUser runs there instead of here.
     if (req.method === "GET") {
       const eventId = String(req.query?.eventId ?? "");
+      const viewer = await optionalAppUser(req);
+      if (!(await resolvePageAccess(eventId,viewer?.id ?? null,"auctions")).canView) { sendJson(res,403,{error:"Event is not available"}); return; }
       const auctionId = String(req.query?.auctionId ?? "");
 
       if (!eventId || !auctionId) {
@@ -42,7 +46,7 @@ export async function handleAuctionBids(req: ApiRequest, res: ApiResponse) {
           .eq("event_id", eventId)
           .eq("auction_id", auctionId)
           .order("created_at", { ascending: true }),
-        supabase.from("auctions").select("starting_bid,min_increment").eq("id", auctionId).maybeSingle(),
+        supabase.from("auctions").select("starting_bid,min_increment").eq("event_id",eventId).eq("id", auctionId).maybeSingle(),
       ]);
 
       if (bidsResult.error) throw bidsResult.error;
@@ -78,6 +82,7 @@ export async function handleAuctionBids(req: ApiRequest, res: ApiResponse) {
       const { appUser } = await requireAppUser(req);
       const body = (await getRequestBody(req)) as { eventId?: string; auctionId?: string; amount?: number };
       const eventId = String(body.eventId ?? "");
+      if (!(await resolvePageAccess(eventId,appUser.id,"auctions")).canView) { sendJson(res,403,{error:"Event is not available"}); return; }
       const auctionId = String(body.auctionId ?? "");
       const amount = Number(body.amount);
 

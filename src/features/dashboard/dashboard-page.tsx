@@ -13,6 +13,7 @@ import { useEventPath } from "@/lib/event-path";
 import { usePageAccess } from "@/lib/page-access";
 import { cn } from "@/lib/utils";
 import { layoutRows, normaliseLayout, visibleLayout } from "@/lib/widgets";
+import { EventActions } from "@/features/registration/event-actions";
 
 export function DashboardPage() {
   const { data, isFetching } = useEventData({ includeTasks: false });
@@ -144,6 +145,7 @@ export function DashboardPage() {
           </Link>
         </div>
       ) : null}
+      <EventActions event={event} />
       {rows.map((row) => {
         const rendered = row.entries.map((entry) => ({ entry, node: renderWidget(entry, context) }));
         // A widget that decides it has nothing to draw (the closing note

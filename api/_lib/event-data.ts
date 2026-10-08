@@ -1,4 +1,5 @@
 import { resolvePageAccess } from "./page-visibility.js";
+import { publicationAccess } from "./publication.js";
 import { selectDegrading } from "./schema-compat.js";
 import { fetchMySocieties } from "./societies.js";
 import { fetchSchedule } from "./schedule.js";
@@ -86,13 +87,13 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
     roleByEvent.size
       ? supabase
           .from("events")
-          .select("id,name,slug,start_date,end_date,location,organization_id")
+          .select("id,name,slug,start_date,end_date,location,organization_id,status_override")
           .in("id", [...roleByEvent.keys()])
       : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
     societyIds.length
       ? supabase
           .from("events")
-          .select("id,name,slug,start_date,end_date,location,organization_id")
+          .select("id,name,slug,start_date,end_date,location,organization_id,status_override")
           .in("organization_id", societyIds)
       : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
   ]);
@@ -100,7 +101,12 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
   // `slug` arrives with 029. Until it is run, ask again without it rather than
   // failing the one call every page makes.
   const missingSlug = (error: { code?: string; message?: string } | null) =>
-    Boolean(error && (["42703", "PGRST204"].includes(error.code ?? "") || error.message?.includes("slug")));
+    Boolean(
+      error &&
+        (["42703", "PGRST204"].includes(error.code ?? "") ||
+          error.message?.includes("slug") ||
+          error.message?.includes("status_override")),
+    );
 
   if (missingSlug(byMembership.error) || missingSlug(bySociety.error)) {
     const [legacyMembership, legacySociety] = await Promise.all([
@@ -126,6 +132,7 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
 
   const merged = new Map<string, Record<string, unknown>>();
   for (const row of [...(byMembership.data ?? []), ...(bySociety.data ?? [])]) {
+    if (row.status_override === "draft" && !(await publicationAccess(String(row.id), viewer.id)).canRead) continue;
     merged.set(String(row.id), row);
   }
 
@@ -185,6 +192,7 @@ const eventColumns = [
   "start_time",
   "end_time",
   "finance_visibility",
+  "status_override",
 ];
 const coreEventColumns = ["id", "name", "start_date", "end_date", "location", "status"];
 
@@ -492,6 +500,7 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
       // simply blank.
       detailsReady: "start_time" in event && "end_time" in event && "finance_visibility" in event,
       status: event.status ?? "planning",
+      statusOverride: "status_override" in event ? event.status_override ?? null : null,
       eventType: ("event_type" in event ? (event.event_type as string) : null) ?? "festival",
       // The word this event uses for the unit a person belongs to - "Flat" in
       // a housing society, "Team" in a league. Null means the app's default.

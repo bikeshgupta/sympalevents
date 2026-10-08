@@ -1,3 +1,4 @@
+import { useSession } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import {
   budgetRows,
@@ -25,6 +26,7 @@ export type AppEvent = {
   societySlug?: string | null;
   dates: string;
   location: string;
+  statusOverride?: "draft" | "cancelled" | null;
   startDate: string;
   endDate: string;
   /** Hours of the first and last day, `HH:MM` on the event's clock. Null or
@@ -235,6 +237,7 @@ type EventDataResponse = {
     slug?: string | null;
     societySlug?: string | null;
     location: string;
+    statusOverride?: "draft" | "cancelled" | null;
     startDate: string;
     endDate: string;
     startTime?: string | null;
@@ -276,10 +279,11 @@ type EventDataResponse = {
  */
 export function useEventData(options: UseEventDataOptions = {}) {
   const { selectedEventId } = useEventContext();
+  const {data:session} = useSession();
   const includeTasks = options.includeTasks ?? true;
 
   return useQuery({
-    queryKey: ["event-data", selectedEventId, { includeTasks }],
+    queryKey: ["event-data", selectedEventId, { includeTasks }, session?.user.appUserId ?? "guest"],
     initialData: eventDataWithTaskPolicy(demoData, includeTasks),
     queryFn: async (): Promise<EventData> => {
       if (!isSupabaseConfigured) {
@@ -316,6 +320,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
             dates: dateRange(payload.event.startDate, payload.event.endDate),
             location: payload.event.location,
             startDate: payload.event.startDate,
+            statusOverride: payload.event.statusOverride,
             endDate: payload.event.endDate,
             startTime: payload.event.startTime ?? null,
             endTime: payload.event.endTime ?? null,

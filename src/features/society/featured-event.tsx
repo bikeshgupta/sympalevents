@@ -95,7 +95,7 @@ function headlineMetric(event: SocietyEvent) {
     return `${metrics.teamCount} ${metrics.teamCount === 1 ? "team" : "teams"} entered`;
   }
   if (hasModule(event, "contributions") && metrics.contributorCount > 0) {
-    return `${metrics.contributorCount} taking part`;
+    return `${metrics.contributorCount} contributors`;
   }
   return "";
 }

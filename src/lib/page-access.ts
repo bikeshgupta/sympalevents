@@ -32,7 +32,8 @@ export const visibilityHints: Record<PageVisibility, string> = {
 };
 
 export const pageLabels: Record<string, string> = {
-  dashboard: "Dashboard",
+  dashboard: "Overview",
+  registration: "Participate",
   contributions: "Contributions",
   sponsors: "Sponsors",
   budget: "Budget",

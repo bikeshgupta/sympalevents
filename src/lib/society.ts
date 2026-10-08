@@ -1,3 +1,4 @@
+import { useSession } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { EventStatusOverride } from "@/lib/event-status";
@@ -57,8 +58,9 @@ export type SocietyHome = {
 };
 
 export function useSocietyHome(slug?: string) {
+  const {data:session}=useSession();
   return useQuery({
-    queryKey: ["society-home", slug ?? "mine"],
+    queryKey: ["society-home", slug ?? "mine", session?.user.appUserId ?? "guest"],
     queryFn: () =>
       apiFetch<SocietyHome>(
         `/api/events?resource=society-home${slug ? `&slug=${encodeURIComponent(slug)}` : ""}`,

@@ -49,8 +49,8 @@ function todayDateInputValue() {
 
 const contributionStatuses = ["Received", "Committed", "Returned"];
 
-/** Standard per-flat contribution, pre-filled when adding a new record. */
-const DEFAULT_EXPECTED_CONTRIBUTION = 1000;
+/** No universal contribution amount: the organiser enters this event's amount. */
+const DEFAULT_EXPECTED_CONTRIBUTION = 0;
 
 /** Renders a stored ISO date for humans; blank/"-" placeholders become an em dash. */
 function formatPaymentDate(value: string) {

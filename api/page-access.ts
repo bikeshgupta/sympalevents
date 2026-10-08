@@ -19,6 +19,7 @@ import {
 } from "./_lib/server.js";
 import { audit } from "./_lib/audit.js";
 import { isSocietyAdminForEvent } from "./_lib/authority.js";
+import { publicationAccess } from "./_lib/publication.js";
 
 /**
  * Two resources on one function, dispatched on `?resource=` - the same
@@ -138,7 +139,7 @@ async function saveVisibility(req: any, res: any) {
     const supabase = assertServiceSupabase();
     const { error } = await supabase
       .from("event_page_visibility")
-      .upsert(rows, { onConflict: "event_id,page_key" });
+      .upsert(rows as Record<string, unknown>[], { onConflict: "event_id,page_key" });
 
     if (error && ["42P01", "PGRST205"].includes(error.code ?? "")) {
       const missing = new Error(
@@ -200,6 +201,13 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    const authHeader = String(req.headers.authorization ?? "");
+    const viewerId = authHeader.startsWith("Bearer ") ? (await requireAppUser(req)).appUser.id : null;
+    if (!(await publicationAccess(eventId, viewerId)).canRead) {
+      sendJson(res, 404, { error: "Event not found" });
+      return;
+    }
+
     if (String(req.query.resource ?? "") === "visibility") {
       await readVisibility(eventId, req, res);
       return;
@@ -211,7 +219,6 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const authHeader = String(req.headers.authorization ?? "");
     const isSettings = pageKey === "settings";
     const visibility = isSettings ? "restricted" : (await fetchPageVisibility(eventId))[pageKey] ?? "restricted";
 

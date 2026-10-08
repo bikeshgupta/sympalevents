@@ -1,3 +1,4 @@
+import { RegistrationPage } from "@/features/registration/registration-page";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RouteGuard } from "@/components/layout/route-guard";
@@ -37,6 +38,7 @@ function eventRoutes(indexElement = <Navigate to="dashboard" replace />) {
   return (
     <Route element={<RouteGuard />}>
       <Route index element={indexElement} />
+      <Route path="registration" element={<RegistrationPage />} />
       <Route path="dashboard" element={<DashboardPage />} />
       <Route path="customise-dashboard" element={<CustomiseDashboardPage />} />
       <Route path="contributions" element={<ContributionsPage />} />

@@ -60,7 +60,7 @@ export function CreateEventWizard() {
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState<Step>(1);
-  const [templateKey, setTemplateKey] = useState("festival");
+  const [templateKey, setTemplateKey] = useState("garba");
   const [modules, setModules] = useState<ModuleDraft[]>(() => toDraft(eventTemplates[0]));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +141,7 @@ export function CreateEventWizard() {
 
       await queryClient.invalidateQueries({ queryKey: ["my-events"] });
       setSelectedEventId(eventId);
-      navigate("/dashboard");
+      navigate(`/e/${eventId}/dashboard`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the event");
       setSaving(false);
@@ -383,7 +383,7 @@ export function CreateEventWizard() {
             {error ? <p className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
 
             <div className="mt-6 flex flex-wrap items-center gap-2">
-              <p className="text-sm text-muted-foreground">Dashboard and Settings are always on.</p>
+              <p className="text-sm text-muted-foreground">Your event stays private until you publish it.</p>
               <span className="flex-1" />
               <Button type="button" variant="outline" onClick={() => chooseTemplate(templateKey)} disabled={saving}>
                 Reset to template
@@ -392,7 +392,7 @@ export function CreateEventWizard() {
                 Back
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Creating..." : "Create event"}
+                {saving ? "Creating..." : "Create draft"}
               </Button>
             </div>
           </form>

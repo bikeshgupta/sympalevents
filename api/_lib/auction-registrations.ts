@@ -1,4 +1,5 @@
 import { isSocietyAdminForEvent } from "./authority.js";
+import { resolvePageAccess } from "./page-visibility.js";
 import { assertServiceSupabase, getRequestBody, handleApiError, requireAppUser, sendJson } from "./server.js";
 
 type ApiRequest = {
@@ -31,6 +32,10 @@ export async function handleAuctionRegistrations(req: ApiRequest, res: ApiRespon
 
       if (!eventId || !auctionId) {
         sendJson(res, 400, { error: "eventId and auctionId are required" });
+        return;
+      }
+      if (!(await resolvePageAccess(eventId, appUser.id, "auctions")).canView) {
+        sendJson(res, 403, { error: "Event is not available" });
         return;
       }
 
@@ -104,6 +109,10 @@ export async function handleAuctionRegistrations(req: ApiRequest, res: ApiRespon
         sendJson(res, 400, { error: "eventId and auctionId are required" });
         return;
       }
+      if (!(await resolvePageAccess(eventId, appUser.id, "auctions")).canView) {
+        sendJson(res, 403, { error: "Event is not available" });
+        return;
+      }
       if (!displayName) {
         sendJson(res, 400, { error: "Name is required" });
         return;
@@ -147,6 +156,10 @@ export async function handleAuctionRegistrations(req: ApiRequest, res: ApiRespon
 
       if (!eventId || !auctionId) {
         sendJson(res, 400, { error: "eventId and auctionId are required" });
+        return;
+      }
+      if (!(await resolvePageAccess(eventId, appUser.id, "auctions")).canView) {
+        sendJson(res, 403, { error: "Event is not available" });
         return;
       }
 

@@ -1,6 +1,6 @@
 import { AlertTriangle, CalendarDays } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { EventCard } from "@/features/society/event-card";
 import { groupByMonth, pickFeaturedEvent, residentVisibleEvents } from "@/features/society/event-presentation";
 import { FeaturedEvent } from "@/features/society/featured-event";
@@ -39,6 +39,7 @@ export function SocietyHomePage() {
   const { data, isLoading, error } = useSocietyHome(societySlug);
   // One clock for the whole page, so every card and the featured pick agree.
   const now = useMemo(() => new Date(), []);
+  const [managing, setManaging] = useState(false);
 
   // Drafts never reach this page, and a cancelled event only stays while its
   // date is still ahead - see residentVisibleEvents for why.
@@ -87,10 +88,36 @@ export function SocietyHomePage() {
       {data?.ready === false ? (
         <p className="mt-4 flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <span>
-            Run <code className="break-all font-mono">{data.migration}</code> in Supabase to finish setting up societies.
-          </span>
+          <span>Society events are being set up. Please check back shortly.</span>
         </p>
+      ) : null}
+
+      {data?.canManage ? (
+        <div className="mt-4 flex flex-wrap gap-4 text-sm font-medium">
+          <Link className="text-primary" to="/new-event">
+            Create event
+          </Link>
+          <button type="button" className="text-primary" onClick={() => setManaging((value) => !value)}>
+            {managing ? "Hide drafts" : "Manage drafts"}
+          </button>
+        </div>
+      ) : null}
+
+      {managing && data?.canManage ? (
+        <section className="mt-4 space-y-2">
+          <h2 className="font-semibold">Draft events</h2>
+          {data.events.some((event) => event.statusOverride === "draft") ? (
+            data.events
+              .filter((event) => event.statusOverride === "draft")
+              .map((event) => (
+                <Link className="block rounded-xl border p-4" key={event.id} to={eventPath(event)}>
+                  {event.name} · Continue setup →
+                </Link>
+              ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No drafts. Create an event to begin.</p>
+          )}
+        </section>
       ) : null}
 
       {featured ? (
