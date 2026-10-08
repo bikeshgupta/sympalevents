@@ -46,7 +46,10 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(data?.error ?? "Request failed");
+    // The message is for people; `code` is for a caller that has to branch on
+    // *why* (the registrations list asks before adding a second booking for a
+    // flat, and needs to tell that 409 from any other).
+    throw Object.assign(new Error(data?.error ?? "Request failed"), { code: data?.code, status: response.status, details: data });
   }
 
   return data as T;

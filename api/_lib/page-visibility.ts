@@ -31,6 +31,9 @@ export const eventPageKeys = [
   "volunteers",
   "event-plan",
   "contacts",
+  // Event-day entry. A module, not an organiser page, so an admin can give a
+  // volunteer edit access to this page and to nothing else - see api/_lib/gate.ts.
+  "gate",
   // Sports modules. Off by default for every other kind of event - see
   // defaultEnabled below and src/data/event-templates.ts.
   "teams",
@@ -82,7 +85,7 @@ export function isAlwaysOnPage(pageKey: string) {
  * predates 024 behaving exactly as it did. These two arrived after, and a
  * festival should not grow a fixture list because somebody deployed.
  */
-const defaultDisabledPages = new Set<string>(["teams", "fixtures", "registration", "volunteers", "contacts"]);
+const defaultDisabledPages = new Set<string>(["teams", "fixtures", "registration", "volunteers", "contacts", "gate"]);
 
 export const defaultPageLabels: Record<string, string> = {
   dashboard: "Overview",
@@ -97,6 +100,7 @@ export const defaultPageLabels: Record<string, string> = {
   volunteers: "Volunteers",
   "event-plan": "Events",
   contacts: "Contacts",
+  gate: "Gate",
   teams: "Teams",
   fixtures: "Fixtures",
   closing: "Closing",

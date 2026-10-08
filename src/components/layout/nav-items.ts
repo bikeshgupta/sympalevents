@@ -5,6 +5,9 @@ import {
   Contact,
   Gauge,
   LayoutDashboard,
+  Megaphone,
+  MessageSquareText,
+  ScanLine,
   Gavel,
   HandCoins,
   HeartHandshake,
@@ -20,8 +23,11 @@ export const navItems = [
   // Only ever offered to an organiser: the server lists it for admins and
   // committee members and for nobody else, and the nav shows what it lists.
   { label: "Command centre", href: "/command", icon: LayoutDashboard },
+  { label: "Communications", href: "/communications", icon: MessageSquareText },
   { label: "Overview", href: "/dashboard", icon: Gauge },
+  { label: "Updates", href: "/updates", icon: Megaphone },
   { label: "Participate", href: "/registration", icon: Users },
+  { label: "Gate", href: "/gate", icon: ScanLine },
   { label: "Contributions", href: "/contributions", icon: HandCoins },
   { label: "Sponsors", href: "/sponsors", icon: HeartHandshake },
   { label: "Budget", href: "/budget", icon: CircleDollarSign },

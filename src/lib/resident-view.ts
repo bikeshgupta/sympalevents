@@ -32,6 +32,8 @@ export type ViewMode = "organiser" | "resident";
  */
 export const organiserOnlyPages = new Set([
   "command",
+  "communications",
+  "gate",
   "contributions",
   "sponsors",
   "budget",

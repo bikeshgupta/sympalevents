@@ -1,4 +1,5 @@
 import { loadAnnouncements } from "./announcements.js";
+import { readEventReadiness } from "./readiness.js";
 import { fetchEventModules, resolvePageAccess } from "./page-visibility.js";
 import { selectDegrading } from "./schema-compat.js";
 import { assertServiceSupabase, requireAppUser, sendJson } from "./server.js";
@@ -65,14 +66,6 @@ export type Metric = {
   note?: string;
   tone: "default" | "warn" | "good";
   page: string;
-};
-
-export type ReadinessItem = {
-  key: string;
-  label: string;
-  status: "complete" | "missing" | "optional";
-  detail?: string;
-  page?: string;
 };
 
 function fail(message: string, statusCode: number): never {
@@ -203,7 +196,6 @@ export async function handleCommandCentre(req: ApiRequest, res: ApiResponse) {
     : null;
 
   const posts = await loadAnnouncements(supabase, eventId, dashboard.canEdit);
-  const published = posts.filter((post) => post.status === "published").length;
   const drafts = posts.filter((post) => post.status === "draft").length;
 
   const waiting = dashboard.canEdit
@@ -395,67 +387,8 @@ export async function handleCommandCentre(req: ApiRequest, res: ApiResponse) {
   }
 
   // ---- readiness ----------------------------------------------------------
-  const readiness: ReadinessItem[] = [];
-  const venue = String(event.location ?? "").trim();
-  readiness.push({
-    key: "details",
-    label: "Event details",
-    status: venue && event.start_date && event.end_date ? "complete" : "missing",
-    detail: venue ? undefined : "Add the venue",
-    page: "settings",
-  });
-  readiness.push({
-    key: "hero",
-    label: "Hero",
-    status: "complete",
-    detail: event.hero_image_url ? "Your own photograph" : "Using artwork for this kind of event",
-    page: "settings",
-  });
-  if (registration) {
-    const cfg = registration.config;
-    const enabled = cfg?.enabled === true;
-    readiness.push({
-      key: "registration",
-      label: "Registration",
-      status: enabled ? "complete" : "missing",
-      detail: enabled ? undefined : "Registration is switched off",
-      page: "registration",
-    });
-    const paid =
-      Number(cfg?.adult_price ?? 0) > 0 ||
-      Number(cfg?.child_price ?? 0) > 0 ||
-      (cfg?.food_enabled === true && Number(cfg?.food_price ?? 0) > 0);
-    if (enabled && paid) {
-      const instructions = String(cfg?.payment_instructions ?? "").trim();
-      readiness.push({
-        key: "payment",
-        label: "Payment instructions",
-        status: instructions.length >= 5 ? "complete" : "missing",
-        detail: instructions.length >= 5 ? undefined : "Residents will not know how to pay",
-        page: "registration",
-      });
-    }
-  }
-  if (programme) {
-    readiness.push({
-      key: "programme",
-      label: "Programme",
-      status: programme.items > 0 ? "complete" : "missing",
-      detail: programme.items > 0 ? plural(programme.items, "item") : "Nothing scheduled yet",
-      page: "event-plan",
-    });
-  }
-  readiness.push({
-    key: "announcements",
-    label: "Announcements",
-    status: published > 0 ? "complete" : "optional",
-    detail: published > 0 ? `${published} published` : "None yet",
-    page: "dashboard",
-  });
-
-  const counted = readiness.filter((item) => item.status !== "optional");
-  const complete = counted.filter((item) => item.status === "complete").length;
-  const percent = counted.length ? Math.round((complete / counted.length) * 100) : 100;
+  // One answer, shared with publishing - see api/_lib/readiness.ts.
+  const readiness = await readEventReadiness(supabase, eventId);
 
   sendJson(res, 200, {
     event: {
@@ -469,6 +402,6 @@ export async function handleCommandCentre(req: ApiRequest, res: ApiResponse) {
     },
     metrics: metrics.slice(0, 4),
     attention,
-    readiness: { items: readiness, percent },
+    readiness,
   });
 }

@@ -103,6 +103,7 @@ export default async function handler(req: any, res: any) {
           // First: it is where an organiser starts. Not a module, so it is not
           // in the list above and cannot be reordered or switched off.
           { pageKey: "command", label: "Command centre" },
+          { pageKey: "communications", label: "Communications" },
           ...modules.map((item) => ({ pageKey: item.pageKey, label: item.label })),
           { pageKey: "settings", label: "Settings" },
         ].map((item) => ({
@@ -144,7 +145,10 @@ export default async function handler(req: any, res: any) {
 
     // A committee member is an organiser too, and starts at the command centre.
     if (role === "committee") {
-      pages.unshift({ pageKey: "command", label: "Command centre", canView: true, canEdit: false, accessLevel: "view" as const });
+      pages.unshift(
+        { pageKey: "command", label: "Command centre", canView: true, canEdit: false, accessLevel: "view" as const },
+        { pageKey: "communications", label: "Communications", canView: true, canEdit: false, accessLevel: "view" as const },
+      );
     }
 
     sendJson(res, 200, { ...vocabulary, role, pages });

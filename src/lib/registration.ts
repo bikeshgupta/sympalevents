@@ -5,6 +5,8 @@ import type {
   Registration,
   RegistrationConfig,
 } from "../../shared/registration";
+export type RegistrationFilter = "all" | "unpaid" | "submitted" | "confirmed" | "checked_in" | "cancelled" | "refunds";
+
 export type RegistrationPayload = {
   config: RegistrationConfig;
   mine: Registration | null;
@@ -12,6 +14,8 @@ export type RegistrationPayload = {
   signedIn: boolean;
   registrations: Registration[] | null;
   hasMore: boolean;
+  /** What is on each filter chip, for an organiser. */
+  counts?: Record<RegistrationFilter, number> | null;
   summary: {
     attendees: number;
     households?: number;
@@ -23,7 +27,7 @@ export type RegistrationPayload = {
     refundAmount?: number;
   };
 };
-export function useRegistration(eventId?: string, page = 0, search = "") {
+export function useRegistration(eventId?: string, page = 0, search = "", filter: RegistrationFilter = "all") {
   const { data: session } = useSession();
   const client = useQueryClient();
   const url = `/api/events?resource=registration&eventId=${encodeURIComponent(eventId ?? "")}`;
@@ -34,11 +38,12 @@ export function useRegistration(eventId?: string, page = 0, search = "") {
       session?.user.appUserId ?? "guest",
       page,
       search,
+      filter,
     ],
     enabled: Boolean(eventId),
     queryFn: () =>
       apiFetch<RegistrationPayload>(
-        `${url}&page=${page}&search=${encodeURIComponent(search)}`,
+        `${url}&page=${page}&search=${encodeURIComponent(search)}&filter=${filter}`,
         { requireAuth: false },
       ),
   });

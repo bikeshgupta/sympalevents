@@ -47,14 +47,16 @@ export const pageLabels: Record<string, string> = {
   fixtures: "Fixtures",
   closing: "Closing",
   contacts: "Contacts",
+  gate: "Gate",
   settings: "Settings",
   // The organisers' own view - not a module, so not configurable (see below).
   command: "Command centre",
+  communications: "Communications",
 };
 
 /** Every page whose visibility an admin can set. "settings" is not one of
  *  them - it is the screen that controls the others, so it stays admin-only. */
-export const configurablePageKeys = Object.keys(pageLabels).filter((pageKey) => pageKey !== "settings" && pageKey !== "command");
+export const configurablePageKeys = Object.keys(pageLabels).filter((pageKey) => pageKey !== "settings" && pageKey !== "command" && pageKey !== "communications");
 
 /**
  * Pages that can never be anonymous. "tasks" names people and carries their
@@ -84,6 +86,10 @@ export function visibilityOptionsFor(pageKey: string): PageVisibility[] {
 const pageKeyAliases: Record<string, string> = {
   events: "event-plan",
   "customise-dashboard": "dashboard",
+  // A resident's pass is their own registration, shown to be scanned.
+  pass: "registration",
+  // The history of what the dashboard card shows a few of.
+  updates: "dashboard",
 };
 
 /**

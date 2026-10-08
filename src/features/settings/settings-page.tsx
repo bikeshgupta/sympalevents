@@ -12,6 +12,7 @@ import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-edito
 import { AddressCard } from "@/features/settings/address-card";
 import { AppearanceCard } from "@/features/settings/appearance-card";
 import { EventDetailsCard } from "@/features/settings/event-details-card";
+import { DuplicateEventCard } from "@/features/settings/duplicate-event-card";
 import { ShareCard } from "@/features/settings/share-card";
 import { TrafficCard } from "@/features/settings/traffic-card";
 import { SocietyCard } from "@/features/settings/society-card";
@@ -378,6 +379,7 @@ export function SettingsPage() {
         <EventDetailsCard />
         <AppearanceCard />
         <ShareCard />
+        <DuplicateEventCard />
         <AddressCard />
         <TrafficCard />
         <Card>

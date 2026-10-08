@@ -32,6 +32,10 @@ test('a resident gets exactly one action, chosen by state', () => {
   // Organiser-led registration: nothing to press "Register now" for.
   assert.equal(resolveResidentAction({ ...base, status: 'upcoming', canOpen: all, registrationOpen: true }).label, 'How to register');
   assert.equal(resolveResidentAction({ ...base, status: 'upcoming', canOpen: all, hasBooking: true }).label, 'View my registration');
+  // Paid for: what they need now is the code to show at the gate.
+  assert.deepEqual(resolveResidentAction({ ...base, status: 'upcoming', canOpen: all, hasBooking: true, bookingConfirmed: true }),
+    { headline: "You're registered", label: 'View my pass', page: 'pass' });
+  assert.equal(resolveResidentAction({ ...base, status: 'live', canOpen: all, hasBooking: true, bookingConfirmed: true }).page, 'pass');
   assert.equal(resolveResidentAction({ ...base, status: 'upcoming', canOpen: open('event-plan') }).label, 'View schedule');
   assert.equal(resolveResidentAction({ ...base, status: 'upcoming', canOpen: open() }), null);
 

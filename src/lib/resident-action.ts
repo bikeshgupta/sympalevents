@@ -14,13 +14,17 @@ import type { EventStatus } from "./event-status";
 
 export type ResidentActionPage = "registration" | "event-plan" | "closing";
 
+/** Where the button goes. A pass is the registration page's own booking, shown
+ *  to be scanned, so it is opened by the same permission. */
+export type ResidentActionTarget = ResidentActionPage | "pass";
+
 export type ResidentAction = {
   /** The short line above the button. */
   headline: string;
   /** What the button says. Null for a notice with nothing to do. */
   label: string | null;
   /** The page the button opens. */
-  page: ResidentActionPage | null;
+  page: ResidentActionTarget | null;
 };
 
 export type ResidentActionInput = {
@@ -33,10 +37,12 @@ export type ResidentActionInput = {
   selfService: boolean;
   /** They already have an active booking. */
   hasBooking: boolean;
+  /** ...and its payment is confirmed, so there is a pass to show. */
+  bookingConfirmed?: boolean;
 };
 
 export function resolveResidentAction(input: ResidentActionInput): ResidentAction | null {
-  const { status, canOpen, registrationOpen, selfService, hasBooking } = input;
+  const { status, canOpen, registrationOpen, selfService, hasBooking, bookingConfirmed } = input;
   const canRegister = canOpen("registration");
   const canSchedule = canOpen("event-plan");
   const canRelive = canOpen("closing");
@@ -53,6 +59,14 @@ export function resolveResidentAction(input: ResidentActionInput): ResidentActio
 
   // Booked already: that is the thing they will want, before and during.
   if (hasBooking && canRegister) {
+    // Once it is paid for, what they need is the code to show.
+    if (bookingConfirmed) {
+      return {
+        headline: status === "live" ? "You're all set" : "You're registered",
+        label: "View my pass",
+        page: "pass",
+      };
+    }
     return {
       headline: status === "live" ? "You are registered" : "You're registered",
       label: "View my registration",

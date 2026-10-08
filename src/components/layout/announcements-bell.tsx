@@ -2,6 +2,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Bell, Gavel, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useEventPath } from "@/lib/event-path";
 import { Button } from "@/components/ui/button";
 import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
 import { activeAnnouncements, leadTimeLabel, resolveAnnouncements } from "@/lib/announcements";
@@ -35,6 +36,7 @@ export function AnnouncementsBell({ event, announcements }: { event?: AppEvent; 
   const auctionItems = useMemo(() => publishedAuctions(auctions), [auctions]);
   const activeAuctions = auctionItems.filter((auction) => auctionRuntimeStatus(auction, now) !== "closed");
   const unreadCount = active.length + activeAuctions.length;
+  const path = useEventPath();
 
   return (
     <DropdownMenu.Root onOpenChange={(open) => open && setNow(new Date())}>
@@ -104,6 +106,17 @@ export function AnnouncementsBell({ event, announcements }: { event?: AppEvent; 
           ) : (
             <p className="px-2 py-4 text-sm text-muted-foreground">No announcements right now.</p>
           )}
+
+          {event?.id ? (
+            <DropdownMenu.Item asChild>
+              <Link
+                to={path("/updates")}
+                className="mt-1 block rounded-sm px-2 py-2 text-sm font-medium text-primary outline-none hover:bg-muted focus-visible:bg-muted"
+              >
+                See all updates
+              </Link>
+            </DropdownMenu.Item>
+          ) : null}
 
           {auctionItems.length ? (
             <>

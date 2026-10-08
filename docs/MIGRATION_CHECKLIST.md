@@ -1,4 +1,4 @@
-# Migration execution checklist — 014 to 033
+# Migration execution checklist — 014 to 038
 
 **Which of these are applied is the owner's to know, not this file's.** 029 is
 known to be in (the society and event slugs exist). Run the one-query status
@@ -294,6 +294,8 @@ state. The ones worth knowing about:
 | 016 | Re-running resets Tasks visibility (STOP 2). |
 | 017 | Widens a check constraint. Reverting fails if any task has been set to `Invalid` by then. |
 | 018 | Creates a storage bucket. Dropping it would delete uploaded bills. |
+| 034–036, 038 | Additive: new columns with defaults and new tables. Dropping the tables loses votes, questions and the record of prepared messages. |
+| 037 | Adds `pass_token` to every booking. Dropping it invalidates every QR pass already shown to a resident. Re-running is safe. |
 
 ## What happens to the app as each lands
 
@@ -316,3 +318,29 @@ time as their migration lands:
   controls say which migration they are waiting for
 - after **032**: admin-led registration, pricing, payment verification and check-in are active
 - after **033**: new events are created atomically as private drafts
+- after **034**: an organiser can write, draft, publish, pin and delete announcements
+  from the dashboard card. Before it, the card still shows nothing and posting
+  answers with the migration's name
+- after **035**: the hero's focal point, "name is in the photo" and subtitle start saving
+- after **036**: polls and ask-me-anything posts work. Plain messages never needed it
+- after **037**: every booking gets a QR pass and a booking code, and Gate mode
+  (check-in, meals, walk-ins, cash at the gate) works. Until then the Gate page
+  says which migration it is waiting for, and the resident's pass page shows
+  no QR code
+- after **038**: Communications starts recording what was prepared and for whom.
+  Writing and copying a message works without it
+
+### Applying 034-038
+
+They are independent of each other except that 036 needs 034 and 034 needs 029.
+Each is safe to re-run. None changes an existing row's meaning. A one-line check
+for each, to run after it:
+
+```sql
+select
+  (select count(*) from information_schema.columns where table_name='event_announcements' and column_name in ('status','published_at','pinned','kind')) = 4 as m034,
+  exists(select 1 from information_schema.columns where table_name='events' and column_name='hero_options') as m035,
+  to_regclass('public.announcement_poll_votes') is not null as m036,
+  (select count(*) from information_schema.columns where table_name='event_registrations' and column_name in ('pass_token','booking_code','is_walk_in')) = 3 as m037,
+  to_regclass('public.communication_campaigns') is not null as m038;
+```

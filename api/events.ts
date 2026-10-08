@@ -9,6 +9,9 @@ import { handleResolveEventSlug, handleSocietyHome } from "./_lib/society-home.j
 import { handleDashboardLayout } from "./_lib/layout.js";
 import { handleAnnouncements } from "./_lib/announcements.js";
 import { handleCommandCentre } from "./_lib/command-centre.js";
+import { handleGate } from "./_lib/gate.js";
+import { handleCommunications } from "./_lib/communications.js";
+import { handleDuplicateEvent } from "./_lib/duplicate-event.js";
 import { handleSocieties } from "./_lib/societies.js";
 import {
   cleanModuleLabel,
@@ -71,6 +74,33 @@ export default async function handler(req: any, res: any) {
   if (resource === "announcements") {
     try {
       return await handleAnnouncements(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // Messages for WhatsApp, and a record that they were prepared.
+  if (resource === "communications") {
+    try {
+      return await handleCommunications(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // Run an event again: copy its shape, none of what happened in it.
+  if (resource === "duplicate") {
+    try {
+      return await handleDuplicateEvent(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // Event-day entry: search, check in, serve food, walk-ins. See api/_lib/gate.ts.
+  if (resource === "gate") {
+    try {
+      return await handleGate(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }

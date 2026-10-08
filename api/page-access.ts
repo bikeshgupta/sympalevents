@@ -222,7 +222,7 @@ export default async function handler(req: any, res: any) {
     // Settings and the command centre are not modules an admin can open up:
     // one controls the others, the other is the organisers' own view. Neither
     // is in event_page_visibility, so neither has a visibility to read.
-    const isCommand = pageKey === "command";
+    const isCommand = pageKey === "command" || pageKey === "communications";
     const isSettings = pageKey === "settings";
     const visibility = isSettings || isCommand ? "restricted" : (await fetchPageVisibility(eventId))[pageKey] ?? "restricted";
 

@@ -47,7 +47,7 @@ export const moduleGroups: { title: string; pageKeys: string[] }[] = [
   // who may open it is very much a choice, so it has a group of its own.
   { title: "Front page", pageKeys: ["dashboard"] },
   { title: "Money", pageKeys: ["contributions", "sponsors", "budget", "expenses", "auctions"] },
-  { title: "The event", pageKeys: ["registration", "event-plan", "teams", "fixtures", "prasad"] },
+  { title: "The event", pageKeys: ["registration", "gate", "event-plan", "teams", "fixtures", "prasad"] },
   { title: "People", pageKeys: ["tasks", "volunteers", "contacts"] },
   { title: "Afterwards", pageKeys: ["closing"] },
 ];
@@ -197,6 +197,9 @@ const garba: EventTemplate = {
 };
 for (const template of [festival,sports,cultural,mixed,blank,garba]) {
   template.modules.push({pageKey:"registration",isEnabled:template.key!=="blank",visibility:"public"});
+  // Gate mode is for events people book and then walk into. Off elsewhere, and
+  // restricted everywhere: it is given to a volunteer, never opened to a crowd.
+  template.modules.push({pageKey:"gate",isEnabled:template.key==="garba",visibility:"restricted"});
 }
 export const eventTemplates: EventTemplate[] = [garba, festival, sports, cultural, mixed, blank];
 

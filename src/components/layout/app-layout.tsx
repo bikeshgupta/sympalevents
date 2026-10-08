@@ -1,17 +1,17 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Eye, LogOut, UserPen, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, NavLink, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
 import { EventSwitcher } from "@/components/layout/event-switcher";
 import { NavDrawer } from "@/components/layout/nav-drawer";
+import { NavList } from "@/components/layout/nav-list";
 import { ProfileNameDialog } from "@/components/layout/profile-name-dialog";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
-import { useEventPath } from "@/lib/event-path";
 import { useResolvedEventSlug } from "@/lib/event-slug";
 import { useScrollToTopOnNavigate } from "@/lib/scroll";
 import { useTrafficHeartbeat } from "@/lib/traffic";
@@ -19,7 +19,6 @@ import { themeVariables } from "@/lib/themes";
 import { useEventData } from "@/lib/event-data";
 import { isOrganiserPage } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
-import { cn } from "@/lib/utils";
 import { navItems } from "./nav-items";
 
 function pageKeyFromHref(href: string) {
@@ -32,7 +31,6 @@ export function AppLayout() {
   const { data: eventAccess } = useEventAccess();
   const { selectedEvent, selectedEventId, societies, setSelectedEventId, isLoading: isEventLoading } =
     useEventContext();
-  const eventPath = useEventPath();
   const { eventId: eventIdFromRoute, societySlug, eventSlug } = useParams();
   const location = useLocation();
 
@@ -76,18 +74,28 @@ export function AppLayout() {
   // sidebar and the drawer together. Anything the server did not name (the
   // demo tour, or Settings) keeps its place from the array.
   const navByPageKey = new Map(navItems.map((item) => [pageKeyFromHref(item.href), item]));
-  const orderedFromServer = accessiblePages
+  const fromServer = accessiblePages
     .filter((page) => page.canView)
     .map((page) => navByPageKey.get(page.pageKey))
     .filter((item): item is (typeof navItems)[number] => Boolean(item));
+  // Updates is not a module of its own: it is the history of what the home
+  // page's announcements card shows a few of, so it is open to exactly whoever
+  // may open that page and sits right under it.
+  const updatesItem = navByPageKey.get("updates");
+  const orderedFromServer = updatesItem
+    ? fromServer.flatMap((item) => (pageKeyFromHref(item.href) === "dashboard" ? [item, updatesItem] : [item]))
+    : fromServer;
   // A resident's menu is the pages for attending the event; the ones for
   // running it are left out. Presentation only: the server's list above is
   // still what decides what they may open, and a direct link still works.
   const view = useViewMode();
   const residentMenu = view.mode === "resident" && !isDemoNav;
+  // The organiser's menu is folded into groups; a resident's is short enough to
+  // stay flat, and the demo is a tour of everything.
+  const groupMenu = !residentMenu && !isDemoNav;
   const visibleNavItems = (
     // The demo has no organisers, so no command centre to offer.
-    isDemoNav ? navItems.filter((item) => item.href !== "/command") : orderedFromServer
+    isDemoNav ? navItems.filter((item) => !["/command", "/communications", "/updates"].includes(item.href)) : orderedFromServer
   )
     .filter((item) => !residentMenu || !isOrganiserPage(pageKeyFromHref(item.href)))
     .map((item) => {
@@ -153,22 +161,8 @@ export function AppLayout() {
             society there is nowhere to go back to, so it stays a plain block
             rather than a link that leads nowhere. */}
         <SocietyBrand society={society} eventName={event?.name} resident={residentMenu} />
-        <nav className="space-y-1 p-3">
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.href}
-              to={eventPath(item.href)}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
-                  isActive && "bg-accent text-primary",
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </NavLink>
-          ))}
+        <nav aria-label="Pages" className="space-y-1 p-3">
+          <NavList items={visibleNavItems} grouped={groupMenu} variant="sidebar" />
         </nav>
       </aside>
 
@@ -313,6 +307,7 @@ export function AppLayout() {
             next to the drawer because the drawer is what opens it. */}
         <NavDrawer
           items={visibleNavItems}
+          grouped={groupMenu}
           session={session}
           userName={userName}
           onEditName={() => setEditingName(true)}

@@ -1,4 +1,8 @@
 import { CommandCentrePage } from "@/features/command/command-centre-page";
+import { CommunicationsPage } from "@/features/communications/communications-page";
+import { GatePage } from "@/features/gate/gate-page";
+import { UpdatesPage } from "@/features/updates/updates-page";
+import { PassPage } from "@/features/registration/pass-page";
 import { EventIndex } from "@/features/command/event-index";
 import { RegistrationPage } from "@/features/registration/registration-page";
 import { Navigate, Route, Routes } from "react-router-dom";
@@ -41,7 +45,11 @@ function eventRoutes(indexElement = <EventIndex />) {
     <Route element={<RouteGuard />}>
       <Route index element={indexElement} />
       <Route path="command" element={<CommandCentrePage />} />
+      <Route path="communications" element={<CommunicationsPage />} />
       <Route path="registration" element={<RegistrationPage />} />
+      <Route path="pass" element={<PassPage />} />
+      <Route path="updates" element={<UpdatesPage />} />
+      <Route path="gate" element={<GatePage />} />
       <Route path="dashboard" element={<DashboardPage />} />
       <Route path="customise-dashboard" element={<CustomiseDashboardPage />} />
       <Route path="contributions" element={<ContributionsPage />} />

@@ -1,12 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Flame, Music, PartyPopper, Plus, Trophy } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Flame, Music, PartyPopper, Plus, Trophy } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { enabledModuleCount, eventTemplates, type EventTemplate } from "@/data/event-templates";
+import { DuplicateEventForm } from "@/features/settings/duplicate-event-form";
 import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
+import { moduleLabelFor } from "@/lib/module-labels";
 import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
@@ -30,6 +32,7 @@ import { cn } from "@/lib/utils";
  */
 
 const templateIcons: Record<string, typeof Flame> = {
+  garba: Music,
   festival: Flame,
   sports: Trophy,
   cultural: Music,
@@ -39,7 +42,7 @@ const templateIcons: Record<string, typeof Flame> = {
 
 type Step = 1 | 2 | 3;
 
-const stepNames: Record<Step, string> = { 1: "Type", 2: "Details", 3: "Modules" };
+const stepNames: Record<Step, string> = { 1: "Type", 2: "Details", 3: "Review" };
 
 /** A real choice in the society select, not an empty value - see the effect. */
 const NEW_SOCIETY = "__new__";
@@ -55,7 +58,7 @@ function toDraft(template: EventTemplate): ModuleDraft[] {
 
 export function CreateEventWizard() {
   const { data: session, isLoading: isSessionLoading } = useSession();
-  const { societies, setSelectedEventId } = useEventContext();
+  const { societies, events, setSelectedEventId } = useEventContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -64,6 +67,12 @@ export function CreateEventWizard() {
   const [modules, setModules] = useState<ModuleDraft[]>(() => toDraft(eventTemplates[0]));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Copying an earlier event is offered here, where somebody is deciding what to
+  // start from, rather than only buried in that event's Settings.
+  const [copyFrom, setCopyFrom] = useState("");
+  const [showCopy, setShowCopy] = useState(false);
+  const [showModules, setShowModules] = useState(false);
+  const copyable = useMemo(() => events.filter((item) => item.role === "admin"), [events]);
 
   const [eventName, setEventName] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -141,7 +150,8 @@ export function CreateEventWizard() {
 
       await queryClient.invalidateQueries({ queryKey: ["my-events"] });
       setSelectedEventId(eventId);
-      navigate(`/e/${eventId}/dashboard`);
+      // A draft with a checklist: the command centre is where it gets finished.
+      navigate(`/e/${eventId}/command`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the event");
       setSaving(false);
@@ -192,8 +202,7 @@ export function CreateEventWizard() {
           <section className="mt-8">
             <h2 className="text-lg font-semibold">What kind of event is this?</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Pick the closest fit. It only sets the starting point - every module is yours to change on the last step,
-              and again in Settings afterwards.
+              Pick the closest fit. It only sets the starting point - you can change anything afterwards, in Settings.
             </p>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -234,6 +243,47 @@ export function CreateEventWizard() {
             </div>
 
             <p className="mt-5 text-sm text-muted-foreground">{template.tagline}</p>
+
+            {copyable.length ? (
+              <div className="mt-6 rounded-lg border bg-card">
+                <button
+                  type="button"
+                  aria-expanded={showCopy}
+                  onClick={() => setShowCopy((value) => !value)}
+                  className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span>Running one of your events again? Copy it instead</span>
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", showCopy && "rotate-180")} aria-hidden />
+                </button>
+                {showCopy ? (
+                  <div className="space-y-3 border-t p-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="copy-from">Which event?</Label>
+                      <select
+                        id="copy-from"
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                        value={copyFrom}
+                        onChange={(field) => setCopyFrom(field.target.value)}
+                      >
+                        <option value="">Choose an event</option>
+                        {copyable.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {copyFrom ? (
+                      <DuplicateEventForm
+                        key={copyFrom}
+                        eventId={copyFrom}
+                        defaultName={`${copyable.find((item) => item.id === copyFrom)?.name ?? ""} (copy)`}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="mt-6 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => navigate(-1)}>
@@ -370,14 +420,62 @@ export function CreateEventWizard() {
 
         {step === 3 ? (
           <form className="mt-8" onSubmit={handleCreate}>
-            <h2 className="text-lg font-semibold">Turn modules on or off</h2>
+            <h2 className="text-lg font-semibold">Review and create</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Started from the <span className="font-medium text-foreground">{template.name}</span> template. Change
-              anything - these are the same switches you will find in Settings afterwards.
+              Started from the <span className="font-medium text-foreground">{template.name}</span> template. Your event
+              stays private - only organisers can see it - until you publish it.
             </p>
 
-            <div className="mt-5">
-              <ModuleEditor modules={modules} onChange={setModules} disabled={saving} />
+            <dl className="mt-5 divide-y rounded-lg border bg-card text-sm">
+              <div className="flex flex-wrap justify-between gap-2 p-3">
+                <dt className="text-muted-foreground">Event</dt>
+                <dd className="font-medium">{eventName}</dd>
+              </div>
+              <div className="flex flex-wrap justify-between gap-2 p-3">
+                <dt className="text-muted-foreground">When</dt>
+                <dd className="font-medium">
+                  {startDate}
+                  {endDate !== startDate ? ` to ${endDate}` : ""}
+                  {startTime ? `, ${startTime}${endTime ? `-${endTime}` : ""}` : ""}
+                </dd>
+              </div>
+              <div className="flex flex-wrap justify-between gap-2 p-3">
+                <dt className="text-muted-foreground">Where</dt>
+                <dd className="font-medium">{location || "Not set yet"}</dd>
+              </div>
+              <div className="p-3">
+                <dt className="text-muted-foreground">It will have</dt>
+                <dd className="mt-1.5 flex flex-wrap gap-1.5">
+                  {modules
+                    .filter((module) => module.isEnabled)
+                    .map((module) => (
+                      <span key={module.pageKey} className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-primary">
+                        {module.labelOverride ?? moduleLabelFor(module.pageKey)}
+                      </span>
+                    ))}
+                </dd>
+              </div>
+            </dl>
+
+            <p className="mt-3 text-sm text-muted-foreground">
+              After you create it, the command centre lists what is still needed before you publish.
+            </p>
+
+            <div className="mt-4 rounded-lg border bg-card">
+              <button
+                type="button"
+                aria-expanded={showModules}
+                onClick={() => setShowModules((value) => !value)}
+                className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span>Customise modules (optional)</span>
+                <ChevronDown className={cn("h-4 w-4 transition-transform", showModules && "rotate-180")} aria-hidden />
+              </button>
+              {showModules ? (
+                <div className="border-t p-4">
+                  <ModuleEditor modules={modules} onChange={setModules} disabled={saving} />
+                </div>
+              ) : null}
             </div>
 
             {error ? <p className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}

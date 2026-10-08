@@ -63,6 +63,7 @@ export function ResidentPrimaryAction({
     registrationOpen: registration ? isRegistrationOpen(registration.config, attendees, now) : false,
     selfService: registration?.config.self_service ?? false,
     hasBooking: registration?.mine?.status === "active",
+    bookingConfirmed: ["verified", "free"].includes(registration?.mine?.payment_status ?? ""),
   });
   if (!action) return null;
 

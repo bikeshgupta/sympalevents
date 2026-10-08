@@ -688,8 +688,119 @@ is dealt with), and a readiness checklist with a percentage. The event page
 - Every metric and attention item links to a **page**, not a filtered list: the
   pages have no URL filter. Adding one (e.g. registrations `?status=submitted`)
   is the natural next step.
-- Not built: event-day gate mode, the registrations quick-add/filter screen, and
-  communications.
+- `communications` is special-cased the same way (an organiser page, not a module).
+
+## Registrations (organiser's screen)
+
+The "Attendees & entry" tab of `/registration` is
+[registrations-manager.tsx](src/features/registration/registrations-manager.tsx).
+The booking form and card moved to `registration-parts.tsx`, shared with the
+resident's page.
+
+- **Quick add is always the first thing**: name and flat, nothing else required;
+  family / food / guests is one click further (the existing `BookingForm`). Adding a
+  household for a flat that already has a booking **warns and asks, never blocks**
+  (`409 {code: "duplicate_flat"}`, then resend with `confirm_duplicate`): two families
+  can share a flat number.
+- **Filters are server-side** (`applyFilter` in `api/_lib/registration.ts`, used by the
+  list, the chip counts and the export so they cannot disagree): All (active bookings
+  only - **cancelled bookings no longer clutter the default list**; they have their own
+  chip), Not paid, Submitted, Confirmed, Checked in, Refunds, Cancelled.
+- **Table on desktop, cards below `lg`**, details opening in place with the existing
+  `BookingCard`. Bulk **Verify selected** is one version-checked RPC per booking,
+  reported individually, with a confirmation that states the rupee total.
+- **Export CSV is server-generated, event-scoped, organiser-only and audited**
+  ([api/_lib/csv.ts](api/_lib/csv.ts)): follows the current filter and search, carries
+  no audit fields, prefixes cells that start `= + - @` so a resident-typed name cannot
+  run as a formula, and starts with a BOM so Excel reads Devanagari.
+- **A pass token never appears in a list response** - the manager's rows are stripped
+  of it; only a person's own `mine` row carries it.
+
+## Passes and the gate
+
+[037](supabase/migrations/037_passes_and_gate.sql), **not run yet**: `pass_token`,
+`booking_code`, `is_walk_in` on `event_registrations`, and four functions
+(`gate_check_in`, `gate_serve_food`, `gate_cash_received`, `gate_walk_in`).
+
+- **The QR carries only `SYMPAL1:<token>`.** The token is 122 random bits, unique, and
+  derived from nothing visible (not the id, flat, amount or payment reference), so
+  photographing a pass reveals only what it shows on its face. `booking_code` is the
+  first eight characters of the id for reading aloud; it identifies, it is not a secret.
+- **The QR encoder is hand-written** ([src/lib/qr.ts](src/lib/qr.ts), byte mode, level M,
+  versions 1-10) for the reason `xlsx.ts` is: no dependency was approved. It was verified
+  by decoding its output with an independent decoder (jsQR) across every version; that
+  decoder is *not* a project dependency, so `tests/qr.test.mjs` checks structure only.
+  Anything over 213 bytes throws rather than truncating. The code is black on white with
+  a four-module quiet zone whatever the event's theme.
+- **`/pass`** (an alias of the registration page for access) shows the QR only once the
+  booking is paid or free; otherwise it says what is outstanding. Never the payment
+  reference, so a shared picture is safe. The last pass is **cached on the device** with
+  an explicit "Offline copy, last updated" line for a bad signal; storage can throw and
+  is wrapped. The primary action says "View my pass" once it is confirmed.
+- **Gate is a module** (`gate`, off by default, on for the Garba template, restricted). An
+  admin gives a volunteer **edit access to the Gate page and nothing else** in Member
+  Access - that *is* the scoped permission. A registration manager can use it too.
+- **Two levels inside the gate**: *operating* (search, check in, serve food, walk-ins) is
+  the volunteer's; *overriding* (admitting an unpaid booking, recording cash) needs edit
+  access to Registration, because it is a decision about money. A volunteer meeting an
+  unpaid booking is told to fetch an organiser. `override` in a request is ignored unless
+  the caller may use it, and every override is audited.
+- **Idempotent and honest.** Check-in and meals are idempotent in SQL (a repeat scan
+  returns the booking as it stands, even with a stale version). Nothing is optimistic: a
+  check-in shows as done only after the server answers, and the buttons are off while the
+  phone is offline. **There is deliberately no offline queue yet.**
+- **Walk-ins** go through `gate_walk_in`, not `book_event`, because `book_event` refuses
+  once the registration deadline has passed - exactly when walk-ins happen. It keeps the
+  capacity limit.
+- **Scanning uses the browser's `BarcodeDetector`** (Chrome and Edge, not iPhone Safari)
+  and the button is disabled where it is missing; search by name, flat or booking code
+  (or a pasted token) is the full fallback. The camera stops when the dialog closes.
+
+## Publishing, copying and creating events
+
+- **Publishing is checked on the server** ([api/_lib/readiness.ts](api/_lib/readiness.ts)),
+  with the same answer the command centre draws as a checklist. *Blocking* gaps
+  (no venue; a paid registration with no payment instructions) refuse with 422. Other
+  gaps (registration switched off, no programme) return 409 `readiness_warnings` and the
+  organiser confirms to go on. Cancelling asks first with `preview: true` and the
+  confirmation states how many bookings, how many paid, and how much.
+- **Run an event again** (`?resource=duplicate`, Settings and the wizard) copies the
+  *shape*: type, template, hours, venue, modules, appearance, layout, registration setup
+  (**switched off**, deadline cleared) and the programme moved by the same number of days.
+  It never copies registrations or payments, contributions, sponsors, budgets, expenses,
+  tasks, announcements, photos, auctions, members or access. The copy is a draft.
+- **The wizard's last step is a plain-language review** (what it will have, when, where);
+  the module switches are behind "Customise modules" and it lands on the command centre,
+  whose checklist says what is still needed.
+
+## Communications
+
+`/communications` (organiser page, `api/_lib/communications.ts`,
+[038](supabase/migrations/038_communications.sql) for history): write once, copy into
+WhatsApp. **Nothing is sent** - sending needs consent and opt-out this app does not have.
+
+- Templates are pure ([message-templates.ts](src/lib/message-templates.ts)) and built from
+  the event's own facts. **A message never names a recipient**; the audience is who to
+  paste it to. Audiences are segments of *registered* households (paid, unpaid, food
+  booked, not arrived yet) - there is no resident directory, so "households that have not
+  registered" is something this app cannot know and does not claim.
+- A segment shows its **flat numbers to the organiser only**, for personal follow-up, and
+  they are never put in the text. No name, phone or payment reference leaves the server.
+- History records **intent when copied or shared, not delivery**, and the stored count is
+  recomputed server-side, never taken from the request.
+
+## Updates, and the grouped organiser menu
+
+- **`/updates`** (an alias of the dashboard for access; sits under Overview in everybody's
+  menu) is the record behind the announcements card: same posts, same poll and question
+  components, "Earlier" for anything closed. The bell links to it.
+- **The organiser's menu is grouped** ([nav-groups.ts](src/components/layout/nav-groups.ts),
+  pure, tested): Registrations, Programme, Team and Finance fold their pages; a group of
+  one is just the link; the first block (Command centre, Overview, Updates) is never
+  folded. It is a presentation of the same list - **nothing the server allowed is hidden**
+  - and the group holding the current page opens by itself. **Module order from Settings
+  now orders pages *within* a group** (and the resident's flat menu), not the groups.
+  The sidebar and drawer share `NavList`; a resident's menu stays flat.
 
 ## Hero options
 

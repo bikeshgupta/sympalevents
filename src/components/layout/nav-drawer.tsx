@@ -1,11 +1,10 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Eye, LogIn, LogOut, Menu, UserPen, X } from "lucide-react";
 import { useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { NavList } from "@/components/layout/nav-list";
 import { Button } from "@/components/ui/button";
 import { signOut, type AuthSession } from "@/lib/auth";
-import { useEventPath } from "@/lib/event-path";
-import { cn } from "@/lib/utils";
 import type { navItems } from "./nav-items";
 
 /**
@@ -42,12 +41,15 @@ import type { navItems } from "./nav-items";
  */
 export function NavDrawer({
   items,
+  grouped,
   session,
   userName,
   onEditName,
   viewSwitch,
 }: {
   items: typeof navItems;
+  /** Fold the organiser's pages into groups - see nav-groups.ts. */
+  grouped: boolean;
   session: AuthSession | null | undefined;
   userName: string;
   /** Opens the name editor, which the layout owns so the header dropdown and
@@ -58,9 +60,6 @@ export function NavDrawer({
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
-  // The drawer's links carry the event in the address too, so a shared link
-  // stays shareable as somebody moves around from it.
-  const eventPath = useEventPath();
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -162,22 +161,7 @@ export function NavDrawer({
 
           <nav aria-label="Pages" className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
             {items.length ? (
-              items.map((item) => (
-                <NavLink
-                  key={item.href}
-                  to={eventPath(item.href)}
-                  onClick={close}
-                  className={({ isActive }) =>
-                    cn(
-                      "flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
-                      isActive && "bg-accent text-primary",
-                    )
-                  }
-                >
-                  <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  {item.label}
-                </NavLink>
-              ))
+              <NavList items={items} grouped={grouped} variant="drawer" onNavigate={close} />
             ) : (
               <p className="px-3 py-2 text-sm text-muted-foreground">
                 No pages are open to you on this event yet.
