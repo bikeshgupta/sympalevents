@@ -182,7 +182,7 @@ export async function handleEventClosing(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    await handleClosingWrite(supabase, res, appUser.id, body, String(req.method));
+    await handleClosingWrite(supabase, req, res, appUser.id, body, String(req.method));
   } catch (error) {
     handleApiError(res, error);
   }
@@ -595,6 +595,7 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
 
 async function handleClosingWrite(
   supabase: Supabase,
+  req: ApiRequest,
   res: ApiResponse,
   userId: string,
   body: Record<string, unknown>,
@@ -658,7 +659,7 @@ async function handleClosingWrite(
     entityType: "event_closing",
     entityId: eventId,
     eventId,
-    actor: { id: appUser.id },
+    actor: { id: userId },
     after: updates as Record<string, unknown>,
     summary: "Updated the closing note or credits",
   });

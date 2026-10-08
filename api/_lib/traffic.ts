@@ -138,7 +138,7 @@ async function recordBeat(req: ApiRequest, res: ApiResponse) {
 
   const { data: existing, error: readError } = await supabase
     .from("event_visits")
-    .select("id,last_seen_at,page_views")
+    .select("id,page_key,last_seen_at,page_views")
     .eq("id", visitId)
     .maybeSingle();
 

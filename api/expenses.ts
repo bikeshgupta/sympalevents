@@ -345,6 +345,10 @@ type ExistingExpense = {
   submitted_by: string | null;
   reimbursement_status: ReimbursementStatus | null;
   bill_path: string | null;
+  /** Read so the audit trail can say what was settled, edited or removed,
+   *  not just which row. Both columns have existed since 001. */
+  item: string | null;
+  amount: number | null;
   claimsReady: boolean;
 };
 
@@ -352,7 +356,7 @@ async function loadExpense(expenseId: string): Promise<ExistingExpense> {
   const supabase = assertServiceSupabase();
   const rich = await supabase
     .from("expenses")
-    .select("id,event_id,submitted_by,reimbursement_status,bill_path")
+    .select("id,event_id,submitted_by,reimbursement_status,bill_path,item,amount")
     .eq("id", expenseId)
     .maybeSingle();
 
@@ -362,12 +366,14 @@ async function loadExpense(expenseId: string): Promise<ExistingExpense> {
     return { ...(rich.data as Omit<ExistingExpense, "claimsReady">), claimsReady: true };
   }
 
-  const plain = await supabase.from("expenses").select("id,event_id").eq("id", expenseId).maybeSingle();
+  const plain = await supabase.from("expenses").select("id,event_id,item,amount").eq("id", expenseId).maybeSingle();
   if (plain.error) throw plain.error;
   if (!plain.data) throw fail("That expense no longer exists. Refresh the page.", 404);
   return {
     id: plain.data.id,
     event_id: plain.data.event_id,
+    item: (plain.data.item as string | null) ?? null,
+    amount: plain.data.amount === null || plain.data.amount === undefined ? null : Number(plain.data.amount),
     submitted_by: null,
     reimbursement_status: null,
     bill_path: null,
@@ -416,7 +422,7 @@ async function listExpenses(req: ApiRequest, res: ApiResponse) {
   });
 }
 
-async function createExpense(userId: string, body: Record<string, unknown>, res: ApiResponse) {
+async function createExpense(req: ApiRequest, userId: string, body: Record<string, unknown>, res: ApiResponse) {
   const eventId = String(body.eventId ?? "");
   if (!uuidPattern.test(eventId)) {
     sendJson(res, 400, { error: "eventId is required" });
@@ -482,7 +488,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const body = (await getRequestBody(req)) as Record<string, unknown>;
 
     if (method === "POST") {
-      await createExpense(appUser.id, body, res);
+      await createExpense(req, appUser.id, body, res);
       return;
     }
 
@@ -528,10 +534,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         action: "delete",
         entityType: "expense",
         entityId: expenseId,
-        eventId,
+        eventId: existing.event_id,
         actor: { id: appUser.id },
         before: existing as Record<string, unknown>,
-        summary: `Deleted expense "${String((existing as Record<string, unknown>).item ?? "")}"`,
+        summary: `Deleted expense "${existing.item ?? ""}"`,
       });
       sendJson(res, 200, { ok: true });
       return;
