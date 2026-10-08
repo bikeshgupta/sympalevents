@@ -2,69 +2,37 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 /**
- * What an event looks like while it is on its way.
+ * What an event looks like while it is on its way: the outline of the page with a light
+ * sweep, so nothing jumps when the real content lands.
  *
- * These replace the Ganesh Chaturthi sample that used to stand in for every event until the
- * real one arrived (`useEventData` started from the demo dataset). Neither shows any event
- * detail, so there is nothing in them that can be wrong about somebody's event.
+ * It replaces the Ganesh Chaturthi sample that used to stand in for every event until the
+ * real one arrived (`useEventData` started from the demo dataset). It shows no event detail,
+ * so there is nothing in it that can be wrong about somebody's event. A full-screen spinner
+ * ahead of it was tried and rejected: it read as the app loading twice.
  *
- *  - `EventLoader` - full screen, for the first load of an event: the app icon's six people
- *    appear one by one around a hub, then the ring turns slowly.
- *  - `PageSkeleton` - the outline of the event page with a light sweep, for waits inside an
- *    event, so the page does not jump when the real content lands.
+ * The very first one in a session is **unveiled from the top down** with a soft fade edge
+ * (`.unveil`, globals.css). Later ones, and the ones that follow it while access is checked,
+ * appear whole - re-running the reveal on each would look like several separate loads.
  *
- * Both stop moving for people who ask for reduced motion (see globals.css).
+ * Stops moving for people who ask for reduced motion.
  */
 
-const figure = (angle: number, delay: number) => (
-  <g key={angle} className="loader-fig" style={{ animationDelay: `${delay}s` }}>
-    <g transform={`rotate(${angle} 100 100)`}>
-      <circle cx="100" cy="22" r="9" fill="url(#loader-gold)" />
-      <path d="M82 52 a18 18 0 0 1 36 0 z" fill="url(#loader-gold)" />
-    </g>
-  </g>
-);
+let hasUnveiled = false;
 
-export function EventLoader() {
-  // A wait that goes on is worth saying something about, and a way out of it.
-  const [slow, setSlow] = useState(false);
+export function PageSkeleton() {
+  // Decided once, on mount: the module flag flips as soon as the first one is on screen.
+  const [unveil] = useState(() => !hasUnveiled);
   useEffect(() => {
-    const timer = window.setTimeout(() => setSlow(true), 12000);
-    return () => window.clearTimeout(timer);
+    hasUnveiled = true;
   }, []);
 
   return (
     <div
       role="status"
-      aria-live="polite"
-      className="flex min-h-screen flex-col items-center justify-center gap-6 bg-primary px-6 text-center text-primary-foreground"
+      aria-busy="true"
+      aria-label="Loading"
+      className={`mx-auto max-w-5xl space-y-4${unveil ? " unveil" : ""}`}
     >
-      <svg viewBox="0 0 200 200" className="h-36 w-36 overflow-visible" aria-hidden="true">
-        <defs>
-          <linearGradient id="loader-gold" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#FFE4A0" />
-            <stop offset="1" stopColor="#F6BE60" />
-          </linearGradient>
-        </defs>
-        <g className="loader-ring">{[0, 60, 120, 180, 240, 300].map((angle, index) => figure(angle, index * 0.18))}</g>
-        <circle className="loader-hub" cx="100" cy="100" r="11" fill="#FFE4A0" />
-      </svg>
-      <div>
-        <p className="font-display text-xl font-medium">Getting your event ready</p>
-        <p className="mt-1 text-sm text-primary-foreground/80">{slow ? "This is taking longer than usual." : "One moment"}</p>
-      </div>
-      {slow ? (
-        <Button type="button" variant="secondary" className="h-11" onClick={() => window.location.reload()}>
-          Try again
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
-export function PageSkeleton() {
-  return (
-    <div role="status" aria-busy="true" aria-label="Loading" className="mx-auto max-w-5xl space-y-4">
       <div className="skeleton-sheen h-[300px] rounded-xl bg-muted sm:h-[380px]" />
       <div className="relative z-10 -mt-16 grid grid-cols-4 gap-2 px-3 sm:px-6">
         {[0, 1, 2, 3].map((key) => (
@@ -78,6 +46,36 @@ export function PageSkeleton() {
       </div>
       <div className="skeleton-sheen h-24 rounded-xl bg-muted" />
       <div className="skeleton-sheen h-24 rounded-xl bg-muted" />
+    </div>
+  );
+}
+
+/**
+ * The whole screen while an event's first read is in flight: a placeholder for the header
+ * (which would otherwise name the wrong event) and the page skeleton. After 12 seconds it says
+ * the wait is unusual and offers a way out.
+ */
+export function EventLoadingShell() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), 12000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="skeleton-sheen h-16 border-b bg-card" aria-hidden="true" />
+      <main className="px-4 pt-5 lg:px-6">
+        <PageSkeleton />
+        {slow ? (
+          <div role="alert" className="mx-auto mt-6 flex max-w-5xl flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            This is taking longer than usual.
+            <Button type="button" variant="outline" className="h-10" onClick={() => window.location.reload()}>
+              Try again
+            </Button>
+          </div>
+        ) : null}
+      </main>
     </div>
   );
 }

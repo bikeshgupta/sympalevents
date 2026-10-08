@@ -203,20 +203,25 @@
 /*
  * Event loading - src/components/shared/event-loading.tsx.
  *
- * The six figures are the app icon's own, in its own two golds (#FFE4A0 -> #F6BE60), which is
- * why these are literals: the icon is a fixed drawing, not a theme colour. Everything else
- * here reads the semantic tokens.
- *
- * The figures end each loop at opacity 0, so a reduced-motion visitor (whose animations the
- * global block above collapses to a single frame) would be left looking at nothing. They are
- * pinned visible and still instead.
+ * `.unveil` reveals a block from the top down, once. The edge is a soft fade rather than a
+ * line, so there is never a hard border travelling down the screen: the mask is a gradient
+ * 2.5x the block's height, and the animation slides it from "all of it transparent" to "all of
+ * it solid". The class is taken off when the animation ends (onAnimationEnd), because a mask
+ * left on an element clips for ever.
  */
-.loader-ring { transform-origin: 100px 100px; animation: loader-spin 14s linear infinite; }
-.loader-fig { transform-origin: 100px 100px; opacity: 0; animation: loader-fig 3.6s ease-in-out infinite; }
-.loader-hub { transform-origin: 100px 100px; animation: loader-hub 3.6s ease-in-out infinite; }
-@keyframes loader-fig { 0% { opacity: 0; transform: scale(0.4); } 18%, 78% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.4); } }
-@keyframes loader-hub { 0%, 100% { transform: scale(0.85); opacity: 0.7; } 40% { transform: scale(1.12); opacity: 1; } }
-@keyframes loader-spin { to { transform: rotate(360deg); } }
+.unveil {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 70%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 70%);
+  -webkit-mask-size: 100% 250%;
+  mask-size: 100% 250%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: unveil 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+@keyframes unveil {
+  from { -webkit-mask-position: 0 100%; mask-position: 0 100%; }
+  to { -webkit-mask-position: 0 0; mask-position: 0 0; }
+}
 
 .skeleton-sheen { position: relative; overflow: hidden; }
 .skeleton-sheen::after {
@@ -230,7 +235,6 @@
 @keyframes skeleton-sheen { to { transform: translateX(100%); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .loader-ring, .loader-fig, .loader-hub { animation: none; }
-  .loader-fig { opacity: 1; }
+  .unveil { animation: none; -webkit-mask-image: none; mask-image: none; }
   .skeleton-sheen::after { display: none; }
 }

@@ -1,6 +1,6 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Eye, LogOut, UserPen, UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
 import { EventSwitcher } from "@/components/layout/event-switcher";
@@ -15,7 +15,7 @@ import { useResolvedEventSlug } from "@/lib/event-slug";
 import { useScrollToTopOnNavigate } from "@/lib/scroll";
 import { useTrafficHeartbeat } from "@/lib/traffic";
 import { themeVariables } from "@/lib/themes";
-import { EventLoader } from "@/components/shared/event-loading";
+import { EventLoadingShell } from "@/components/shared/event-loading";
 import { useEventData } from "@/lib/event-data";
 import { isOrganiserPage } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
@@ -58,6 +58,10 @@ export function AppLayout() {
   // this layout and belong to no event.
   useTrafficHeartbeat();
   const navigate = useNavigate();
+  // Whether this layout has shown the loading screen: if it has, the page that replaces it is
+  // unveiled from the top rather than snapping in.
+  const shownLoader = useRef(false);
+  const [revealDone, setRevealDone] = useState(false);
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   // What this event calls each module. A sports meet's Contributions page is
   // "Entry fees" and its Events page is "Match days"; the nav says so, because
@@ -153,7 +157,8 @@ export function AppLayout() {
   // After every hook, like the redirect above.
   const waitingForRoute = Boolean(eventIdFromPath && eventIdFromPath !== selectedEventId);
   if (isEventLoading || (societySlug && eventSlug && resolved.isLoading) || waitingForRoute || (selectedEventId && isEventDataPending)) {
-    return <EventLoader />;
+    shownLoader.current = true;
+    return <EventLoadingShell />;
   }
 
   return (
@@ -328,7 +333,13 @@ export function AppLayout() {
 
         {/* `pb-20` below `lg` is the room the floating menu button needs; a
             page's last row would otherwise sit under it permanently. */}
-        <main className="mx-auto w-full max-w-7xl px-4 pb-20 pt-5 lg:px-6 lg:pb-5">
+        <main
+          className={`mx-auto w-full max-w-7xl px-4 pb-20 pt-5 lg:px-6 lg:pb-5${shownLoader.current && !revealDone ? " unveil" : ""}`}
+          // Children animate too and their animationend bubbles up; only this one's counts.
+          onAnimationEnd={(event) => {
+            if (event.target === event.currentTarget && event.animationName === "unveil") setRevealDone(true);
+          }}
+        >
           {view.isPreview ? (
             <div
               role="status"
