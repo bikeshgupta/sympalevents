@@ -118,7 +118,7 @@ export function NavDrawer({
               </div>
               <button
                 type="button"
-                aria-label="Edit your name"
+                aria-label="My profile"
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => {
                   close();

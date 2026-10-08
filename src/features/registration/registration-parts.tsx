@@ -4,6 +4,7 @@ import { useEventPath } from "@/lib/event-path";
 import { CalendarCheck, Check, Users, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useProfileDefaults } from "@/lib/profile";
 import { formatCurrency } from "@/lib/utils";
 import {
   paymentLabels,
@@ -36,6 +37,10 @@ export function BookingForm({
   const [guests, setGuests] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [key] = useState(() => crypto.randomUUID());
+  // A resident's own booking starts from their profile; an organiser adding somebody else's
+  // household must not be handed their own name and flat.
+  const mine = useProfileDefaults();
+  const prefill = !admin && mine.loaded;
   const total = quoteBooking(c, { adults, children, food_count: food });
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -72,15 +77,17 @@ export function BookingForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Contact name">
           <Input
+            key={prefill ? "profile" : "blank"}
             name="name"
             required
             minLength={2}
             maxLength={100}
             autoComplete="name"
+            defaultValue={prefill ? mine.name : undefined}
           />
         </Field>
         <Field label="Flat / household">
-          <Input name="flat" required maxLength={40} placeholder="D104" />
+          <Input key={prefill ? "profile" : "blank"} name="flat" required maxLength={40} placeholder="D104" defaultValue={prefill ? mine.flat : undefined} />
         </Field>
         {(!admin || expanded) && (
           <>

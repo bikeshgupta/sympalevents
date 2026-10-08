@@ -335,9 +335,12 @@ time as their migration lands:
 - after **040**: Get involved (`/volunteers`) works: organisers ask for helpers and
   performers, residents sign up. Until then the page says which migration it needs
 
-### Applying 034-040
+- after **041**: the profile page can save a photograph, flat and phone. Until then it
+  still changes the name and says which migration it is waiting for
 
-They are independent of each other except that 036 needs 034 and 034 needs 029. (039 and 040 stand alone.)
+### Applying 034-041
+
+They are independent of each other except that 036 needs 034 and 034 needs 029. (039, 040 and 041 stand alone.)
 Each is safe to re-run. None changes an existing row's meaning. A one-line check
 for each, to run after it:
 
@@ -349,5 +352,6 @@ select
   (select count(*) from information_schema.columns where table_name='event_registrations' and column_name in ('pass_token','booking_code','is_walk_in')) = 3 as m037,
   to_regclass('public.communication_campaigns') is not null as m038,
   (select count(*) from information_schema.columns where table_name='events' and column_name in ('good_to_know','copied_from')) = 2 as m039,
-  to_regclass('public.event_signups') is not null and to_regclass('public.event_opportunities') is not null as m040;
+  to_regclass('public.event_signups') is not null and to_regclass('public.event_opportunities') is not null as m040,
+  (select count(*) from information_schema.columns where table_name='app_users' and column_name in ('custom_photo_url','flat','phone')) = 3 as m041;
 ```

@@ -9,6 +9,7 @@ import { formatEventTimestamp, formatEventTimestampTime } from "@/features/dashb
 import { useSession } from "@/lib/auth";
 import { useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
+import { useProfileDefaults } from "@/lib/profile";
 import { istInputToIso, isoToIstInput, useOpportunities, type Opportunity, type OpportunityKind } from "@/lib/opportunities";
 import { cn } from "@/lib/utils";
 
@@ -193,6 +194,7 @@ function OpportunityCard({ item, signedIn, canManage, act, onEdit }: { item: Opp
 
 function JoinForm({ item, busy, onSubmit, onCancel }: { item: Opportunity; busy: boolean; onSubmit: (body: Record<string, unknown>) => Promise<void>; onCancel: () => void }) {
   const performance = item.kind === "performance";
+  const mine = useProfileDefaults();
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -226,7 +228,7 @@ function JoinForm({ item, busy, onSubmit, onCancel }: { item: Opportunity; busy:
       ) : null}
       <div className="space-y-1.5">
         <Label htmlFor={id("contact")}>Phone number {performance ? "" : "(optional)"}</Label>
-        <Input id={id("contact")} name="contact" type="tel" inputMode="tel" required={performance} maxLength={40} autoComplete="tel" />
+        <Input key={mine.loaded ? "profile" : "blank"} defaultValue={mine.phone} id={id("contact")} name="contact" type="tel" inputMode="tel" required={performance} maxLength={40} autoComplete="tel" />
         <p className="text-xs text-muted-foreground">Only the organisers see this.</p>
       </div>
       <div className="space-y-1.5">

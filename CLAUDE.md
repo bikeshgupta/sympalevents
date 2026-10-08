@@ -114,6 +114,19 @@ against Google's public keys and map the user into Supabase `app_users`.
   transfer. Contact details and payment references stay off anything set to `public`.
   See the Privacy section of the UI rules before putting a new personal field on a
   screen an admin might open up.
+- **A person's profile is theirs** (`/profile`, [profile-page.tsx](src/features/profile/profile-page.tsx),
+  reached from the account menu and the drawer; `api/me.ts`, migration 041): name, a chosen
+  photograph, and a flat and phone that only **start forms filled in** (a resident's own
+  registration, a Get involved sign-up). **Flat and phone are private** - returned to their owner
+  and nobody else, never put on any list. A chosen photograph has its own column
+  (`custom_photo_url`) because `photo_url` follows Google on every sign-in; `/api/me` returns the
+  chosen one as `photo_url` so the session and every avatar read it. It uploads through
+  `/api/uploads` with the `profiles` folder (any signed-in person, filed under their own id,
+  1MB ceiling, resized on the device) and the API only accepts a URL **in that person's own
+  folder on this app's storage** (`isOwnAvatarUrl`, `shared/profile.ts`) - any other URL would
+  let somebody point an avatar that appears on public pages at a third party. Before 041 the
+  page still changes the name and says what is waiting. Not yet used: other people's avatars
+  on credits and reviews still read `app_users.photo_url`.
 - **A person's display name is theirs.** `requireAppUser` no longer rewrites
   `app_users.full_name` from the Google profile on every request - it used to, which
   meant a corrected name was silently overwritten within seconds. Google's name seeds

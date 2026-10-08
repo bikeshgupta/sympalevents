@@ -1,12 +1,11 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Eye, LogOut, UserPen, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
 import { EventSwitcher } from "@/components/layout/event-switcher";
 import { NavDrawer } from "@/components/layout/nav-drawer";
 import { NavList } from "@/components/layout/nav-list";
-import { ProfileNameDialog } from "@/components/layout/profile-name-dialog";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { signOut, useSession } from "@/lib/auth";
@@ -57,7 +56,7 @@ export function AppLayout() {
   // rather than per page: /login, /new-event and /s/<token> are outside
   // this layout and belong to no event.
   useTrafficHeartbeat();
-  const [editingName, setEditingName] = useState(false);
+  const navigate = useNavigate();
   const accessiblePages = Array.isArray(eventAccess?.pages) ? eventAccess.pages : [];
   // What this event calls each module. A sports meet's Contributions page is
   // "Entry fees" and its Events page is "Match days"; the nav says so, because
@@ -253,10 +252,10 @@ export function AppLayout() {
                     <button
                       type="button"
                       className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-muted"
-                      onClick={() => setEditingName(true)}
+                      onClick={() => navigate("/profile")}
                     >
                       <UserPen className="h-4 w-4" />
-                      Edit your name
+                      My profile
                     </button>
                   </DropdownMenu.Item>
                   {canRequestCommitteeAccess && residentMenu ? (
@@ -310,16 +309,9 @@ export function AppLayout() {
           grouped={groupMenu}
           session={session}
           userName={userName}
-          onEditName={() => setEditingName(true)}
+          onEditName={() => navigate("/profile")}
           viewSwitch={view.isOrganiser ? { isPreview: view.isPreview, onToggle: () => view.setPreview(!view.isPreview) } : undefined}
         />
-        {session && editingName ? (
-          <ProfileNameDialog
-            currentName={session.user.name ?? ""}
-            email={session.user.email}
-            onOpenChange={setEditingName}
-          />
-        ) : null}
 
         {/* `pb-20` below `lg` is the room the floating menu button needs; a
             page's last row would otherwise sit under it permanently. */}

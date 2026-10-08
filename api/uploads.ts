@@ -41,7 +41,11 @@ const EXT_BY_MIME: Record<string, string> = {
 // below, if it should differ from "committee") for any new upload surface.
 // "closing" holds the celebration photographs on the closing page; like
 // "auctions" it is committee-only, decided explicitly rather than inherited.
-const ALLOWED_FOLDERS = new Set(["auctions", "closing", "events"]);
+// "profiles" is a person's own photograph: not tied to an event, and filed under their own id.
+const ALLOWED_FOLDERS = new Set(["auctions", "closing", "events", "profiles"]);
+
+/** Profile photographs are resized on the device to a few tens of KB; this is only a ceiling. */
+const MAX_PROFILE_BYTES = 1024 * 1024;
 
 /** Must match MAX_PHOTOS_PER_PERSON in api/_lib/closing.ts, which enforces
  *  the same cap on the row insert. */
@@ -62,7 +66,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const folder = String(body.folder ?? "");
     const dataUrl = String(body.dataUrl ?? "");
 
-    if (!eventId || !folder) {
+    if (!folder || (!eventId && folder !== "profiles")) {
       sendJson(res, 400, { error: "eventId and folder are required" });
       return;
     }
@@ -80,7 +84,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     //             album. Capped per person, and checked here as well as on
     //             the row insert: without this, somebody could fill the
     //             bucket with files that never become photographs.
-    if (folder === "closing") {
+    if (folder === "profiles") {
+      // Anybody signed in may set their own photograph; there is nobody to ask. It is
+      // filed under their id (below), so it can only ever be theirs.
+    } else if (folder === "closing") {
       const { count, error: countError } = await supabase
         .from("event_gallery_photos")
         .select("id", { count: "exact", head: true })
@@ -120,12 +127,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       sendJson(res, 400, { error: "The uploaded file is empty" });
       return;
     }
-    if (buffer.length > MAX_BYTES) {
+    if (buffer.length > (folder === "profiles" ? MAX_PROFILE_BYTES : MAX_BYTES)) {
       sendJson(res, 400, { error: `Images must be ${Math.floor(MAX_BYTES / (1024 * 1024))}MB or smaller` });
       return;
     }
 
-    const path = `${folder}/${randomUUID()}.${ext}`;
+    const path = folder === "profiles" ? `profiles/${appUser.id}/${randomUUID()}.${ext}` : `${folder}/${randomUUID()}.${ext}`;
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, buffer, {
       contentType: mimeType,
       upsert: false,

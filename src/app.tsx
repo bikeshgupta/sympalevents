@@ -24,6 +24,7 @@ import { ShareLinkPage } from "@/features/onboarding/share-link";
 import { SocietyHomePage } from "@/features/society/society-home-page";
 import { SocietyRoot } from "@/features/society/society-root";
 import { PrasadPage } from "@/features/prasad/prasad-page";
+import { ProfilePage } from "@/features/profile/profile-page";
 import { VolunteersPage } from "@/features/volunteers/volunteers-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
@@ -80,6 +81,7 @@ export function App() {
       {/* Outside AppLayout: no event is selected yet, so the sidebar and the
           route guard have nothing to be about. */}
       <Route path="/new-event" element={<CreateEventWizard />} />
+      <Route path="/profile" element={<ProfilePage />} />
       {/* The permanent link. Resolves a token and hands over to the path form. */}
       <Route path="/s/:token" element={<ShareLinkPage />} />
 
