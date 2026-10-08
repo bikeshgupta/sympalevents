@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Announcement } from "@/data/announcements";
 import { isInteractiveClosed } from "@/lib/announcements";
 import { useEventPath } from "@/lib/event-path";
+import { openCount, useOpportunities } from "@/lib/opportunities";
 import { useRegistration } from "@/lib/registration";
 import { buildChecklist, progress, type ChecklistPage } from "@/lib/your-event";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,6 @@ export function YourEventCard({
   signedIn,
   openPageKeys,
   announcements,
-  openOpportunities = 0,
   now,
 }: {
   eventId?: string;
@@ -34,13 +34,15 @@ export function YourEventCard({
   /** What this viewer may open; `null` in the demo. */
   openPageKeys: Set<string> | null;
   announcements?: Announcement[];
-  openOpportunities?: number;
   now: Date;
 }) {
   const path = useEventPath();
   const registrationVisible = Boolean(eventId) && openPageKeys !== null && openPageKeys.has("registration");
   const { query } = useRegistration(registrationVisible && signedIn ? eventId : undefined);
   const registration = query.data;
+  // The same query the Get involved card makes, so asking twice costs one request.
+  const volunteersVisible = Boolean(eventId) && openPageKeys !== null && openPageKeys.has("volunteers");
+  const opportunities = useOpportunities(eventId, volunteersVisible && signedIn).query.data;
 
   const unvotedPolls = (announcements ?? [])
     .filter((post) => post.kind === "poll" && post.status !== "draft" && post.viewerVoted === false && !isInteractiveClosed(post, now))
@@ -62,7 +64,7 @@ export function YourEventCard({
         }
       : null,
     unvotedPolls,
-    openOpportunities,
+    openOpportunities: openCount(opportunities?.items),
   });
 
   if (!items.length) return null;

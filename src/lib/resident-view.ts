@@ -39,7 +39,6 @@ export const organiserOnlyPages = new Set([
   "budget",
   "expenses",
   "tasks",
-  "volunteers",
   "contacts",
   "settings",
 ]);

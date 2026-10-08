@@ -14,6 +14,8 @@ export type RegistrationPayload = {
   signedIn: boolean;
   registrations: Registration[] | null;
   hasMore: boolean;
+  /** Counts for everybody: households joined, and by tower (never a block under three). */
+  participation?: { households: number; byBlock: { block: string; households: number }[] } | null;
   /** What is on each filter chip, for an organiser. */
   counts?: Record<RegistrationFilter, number> | null;
   summary: {

@@ -6,7 +6,7 @@ import { AnnouncementsCard } from "@/features/dashboard/announcements-card";
 import { DashboardAuctions } from "@/features/dashboard/dashboard-auctions";
 import type { EventPhase } from "@/features/dashboard/dashboard-utils";
 import { EventHero } from "@/features/dashboard/widgets/event-hero";
-import { EventSchedule } from "@/features/dashboard/widgets/event-schedule";
+import { EventSchedule, type SchedulePicks } from "@/features/dashboard/widgets/event-schedule";
 import { FinancialSummary } from "@/features/dashboard/widgets/financial-summary";
 import { FundingProgress } from "@/features/dashboard/widgets/funding-progress";
 import { GalleryPreview } from "@/features/dashboard/widgets/gallery-preview";
@@ -37,6 +37,8 @@ export type DashboardContext = {
   isFetching: boolean;
   isClosed: boolean;
   signedIn: boolean;
+  /** The resident's view: adds starring to the schedule; the organiser's is unchanged. */
+  picks?: SchedulePicks;
   source: DataSource;
   fallbackReason?: string;
   /** The event's announcements - drafts included for an editor. */
@@ -163,6 +165,7 @@ export function renderWidget(entry: LayoutEntry, ctx: DashboardContext): ReactNo
           now={ctx.now}
           phase={ctx.phase}
           variant={entry.variant}
+          picks={ctx.picks}
         />
       );
 

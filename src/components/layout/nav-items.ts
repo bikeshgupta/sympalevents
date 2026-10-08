@@ -35,7 +35,7 @@ export const navItems = [
   { label: "Auctions", href: "/auctions", icon: Gavel },
   { label: "Prasad", href: "/prasad", icon: Utensils },
   { label: "Tasks", href: "/tasks", icon: ListChecks },
-  { label: "Volunteers", href: "/volunteers", icon: Users },
+  { label: "Get involved", href: "/volunteers", icon: Users },
   { label: "Events", href: "/event-plan", icon: CalendarDays },
   { label: "Teams", href: "/teams", icon: Users },
   { label: "Fixtures", href: "/fixtures", icon: ClipboardList },

@@ -193,7 +193,13 @@ const garba: EventTemplate = {
   key: "garba", eventType: "cultural", name: "Garba & Dandiya", unitLabel: "Flat",
   tagline: "Quick household entry, optional food, verified payments and gate check-in.",
   examples: "Navratri night, Dandiya evening, community dance",
-  modules: cultural.modules.map(m => ({...m, isEnabled: ["dashboard","event-plan","tasks","closing","expenses","budget"].includes(m.pageKey)})),
+  // "Get involved" is on for a Garba night - volunteers for the gate and food, and an open
+  // call for performers - and open to any signed-in resident, since asking is the point.
+  modules: cultural.modules.map(m => ({
+    ...m,
+    isEnabled: ["dashboard","event-plan","tasks","closing","expenses","budget","volunteers"].includes(m.pageKey),
+    visibility: m.pageKey === "volunteers" ? "authenticated" as const : m.visibility,
+  })),
 };
 for (const template of [festival,sports,cultural,mixed,blank,garba]) {
   template.modules.push({pageKey:"registration",isEnabled:template.key!=="blank",visibility:"public"});

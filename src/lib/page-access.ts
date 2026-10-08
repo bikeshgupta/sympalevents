@@ -41,7 +41,7 @@ export const pageLabels: Record<string, string> = {
   auctions: "Auctions",
   prasad: "Prasad",
   tasks: "Tasks",
-  volunteers: "Volunteers",
+  volunteers: "Get involved",
   "event-plan": "Events",
   teams: "Teams",
   fixtures: "Fixtures",

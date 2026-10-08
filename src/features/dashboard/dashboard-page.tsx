@@ -18,9 +18,13 @@ import { ResidentPrimaryAction } from "@/features/dashboard/resident-primary-act
 import { getEventStatus } from "@/lib/event-status";
 import { organiserOnlyWidgets } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
+import { usePicks, pickEntries } from "@/lib/picks";
+import { buildIcs, downloadIcs } from "@/lib/calendar";
 import { YourEventCard } from "@/features/dashboard/your-event-card";
 import { HappeningNowCard } from "@/features/dashboard/happening-now-card";
 import { GoodToKnowCard } from "@/features/dashboard/good-to-know-card";
+import { GetInvolvedCard } from "@/features/dashboard/get-involved-card";
+import { CommunityCard } from "@/features/dashboard/community-card";
 
 export function DashboardPage() {
   const { data, isFetching } = useEventData({ includeTasks: false });
@@ -33,6 +37,7 @@ export function DashboardPage() {
   const view = useViewMode();
   const isResident = view.mode === "resident";
   const eventPath = useEventPath();
+  const picks = usePicks(data.event.id ?? "demo");
   const [now, setNow] = useState(() => new Date());
   const event = data.event;
   const eventDays = useMemo(() => getEventDays(event), [event]);
@@ -116,6 +121,16 @@ export function DashboardPage() {
     isFetching,
     isClosed,
     signedIn: Boolean(session?.user),
+    picks:
+      isResident && data.source !== "demo"
+        ? {
+            isPicked: picks.isPicked,
+            toggle: picks.toggle,
+            count: picks.count,
+            exportCalendar: () =>
+              downloadIcs(`${event.name} - my picks`, buildIcs(pickEntries(timeline, picks.keys, event.name))),
+          }
+        : undefined,
     source: data.source,
     fallbackReason: data.fallbackReason,
     announcements: data.announcements,
@@ -246,6 +261,12 @@ export function DashboardPage() {
           </section>
         );
       })}
+      {isResident && data.source !== "demo" ? (
+        <CommunityCard event={event} canSeeRegistration={openPageKeys !== null && openPageKeys.has("registration")} />
+      ) : null}
+      {isResident && data.source !== "demo" ? (
+        <GetInvolvedCard eventId={event.id} canSee={openPageKeys !== null && openPageKeys.has("volunteers")} />
+      ) : null}
       {isResident && data.source !== "demo" ? <GoodToKnowCard event={event} /> : null}
     </div>
   );

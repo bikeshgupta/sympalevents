@@ -4,6 +4,7 @@ import {
   defaultRegistrationConfig,
   registrationConfigSchema,
 } from "../../shared/registration.js";
+import { groupByBlock } from "../../shared/participation.js";
 import { audit } from "./audit.js";
 import { toCsv } from "./csv.js";
 import { resolvePageAccess } from "./page-visibility.js";
@@ -244,8 +245,28 @@ export async function handleRegistration(req: Request, res: Response) {
       );
       counts = Object.fromEntries(filters.map((name, index) => [name, counted[index].count ?? 0]));
     }
+    // Social proof for everybody who may open this page: how many households
+    // have joined and how that splits by tower. Counts only, and nothing under
+    // three households is named (shared/participation.ts). A failure here costs
+    // the resident a card, never the page.
+    let participation: { households: number; byBlock: { block: string; households: number }[] } | null = null;
+    try {
+      const flats = await db
+        .from("event_registrations")
+        .select("flat")
+        .eq("event_id", eventId)
+        .eq("status", "active")
+        .limit(5000);
+      if (!flats.error) {
+        const list = ((flats.data ?? []) as { flat: string | null }[]).map((row) => String(row.flat ?? ""));
+        participation = { households: list.length, byBlock: groupByBlock(list) };
+      }
+    } catch {
+      participation = null;
+    }
     // Private booking rows only go to their owner or an authorised organiser.
     sendJson(res, 200, {
+      participation,
       config,
       mine: mineResult.data?.[0] ?? null,
       canManage,

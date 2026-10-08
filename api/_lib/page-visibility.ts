@@ -97,7 +97,7 @@ export const defaultPageLabels: Record<string, string> = {
   auctions: "Auctions",
   prasad: "Prasad",
   tasks: "Tasks",
-  volunteers: "Volunteers",
+  volunteers: "Get involved",
   "event-plan": "Events",
   contacts: "Contacts",
   gate: "Gate",

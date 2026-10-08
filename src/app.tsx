@@ -24,6 +24,7 @@ import { ShareLinkPage } from "@/features/onboarding/share-link";
 import { SocietyHomePage } from "@/features/society/society-home-page";
 import { SocietyRoot } from "@/features/society/society-root";
 import { PrasadPage } from "@/features/prasad/prasad-page";
+import { VolunteersPage } from "@/features/volunteers/volunteers-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
 import { SponsorsPage } from "@/features/sponsors/sponsors-page";
@@ -60,7 +61,7 @@ function eventRoutes(indexElement = <EventIndex />) {
       <Route path="auctions" element={<AuctionsPage />} />
       <Route path="closing" element={<ClosingPage />} />
       <Route path="prasad" element={<PrasadPage />} />
-      <Route path="volunteers" element={<PlaceholderPage title="Volunteers" />} />
+      <Route path="volunteers" element={<VolunteersPage />} />
       <Route path="events" element={<Navigate to="../event-plan" replace />} />
       <Route path="event-plan" element={<EventPlanPage />} />
       <Route path="teams" element={<TeamsPage />} />

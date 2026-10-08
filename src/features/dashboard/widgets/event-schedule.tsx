@@ -3,11 +3,20 @@ import type { EventPhase, TimelineStatus } from "@/features/dashboard/dashboard-
 import type { EventPlanRow } from "@/lib/event-data";
 import type { KeyboardEvent } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check, ChevronDown, Clock3, ListChecks, MapPin } from "lucide-react";
+import { BellPlus, Check, ChevronDown, Clock3, ListChecks, MapPin, Star } from "lucide-react";
 import { formatEventDate, formatEventTime, getDateInEventZone, getDayWindow, getTimelineItemStatus, getWindowProgress, toEventZoneTimestamp } from "@/features/dashboard/dashboard-utils";
 import { gapLabel } from "@/lib/announcements";
 import { parseAgenda } from "@/lib/agenda";
+import { itemKey } from "@/lib/picks";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+export type SchedulePicks = {
+  isPicked: (item: EventPlanRow) => boolean;
+  toggle: (item: EventPlanRow) => void;
+  count: number;
+  /** Downloads the starred items as a calendar file with an alert on each. */
+  exportCalendar: () => void;
+};
 
 /**
  * The day-by-day schedule.
@@ -30,6 +39,7 @@ export function EventSchedule({
   now,
   phase,
   variant = "detailed",
+  picks,
 }: {
   days: Array<{ key: string; label: string; date: string }>;
   selectedDay: string;
@@ -40,6 +50,8 @@ export function EventSchedule({
   now: Date;
   phase: EventPhase;
   variant?: WidgetVariant;
+  /** A resident's starred items. Absent for the organiser's view, which is unchanged. */
+  picks?: SchedulePicks;
 }) {
   const currentItem = items.find((item) => getTimelineItemStatus(item, now) === "current");
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -179,6 +191,7 @@ export function EventSchedule({
                   isLast={index === items.length - 1}
                   showNowLabel={item !== currentItem}
                   now={now}
+                  picks={picks}
                 />
               ))}
             </div>
@@ -186,6 +199,22 @@ export function EventSchedule({
             <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
               No activities planned for this day yet. Add them on the Events page, along with the agenda inside
               each one - the timings, or the running order of a cultural evening.
+            </div>
+          ) : null}
+          {picks && variant === "detailed" && items.length ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-sm">
+              {picks.count ? (
+                <button
+                  type="button"
+                  onClick={picks.exportCalendar}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-md font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <BellPlus className="h-4 w-4" aria-hidden="true" />
+                  Remind me about my {picks.count} {picks.count === 1 ? "pick" : "picks"}
+                </button>
+              ) : (
+                <p className="text-muted-foreground">Tap the star on anything you do not want to miss, and add it to your calendar with a reminder.</p>
+              )}
             </div>
           ) : null}
         </div>
@@ -302,12 +331,14 @@ function TimelineItem({
   isLast,
   showNowLabel,
   now,
+  picks,
 }: {
   item: EventPlanRow;
   status: TimelineStatus;
   isLast: boolean;
   showNowLabel: boolean;
   now: Date;
+  picks?: SchedulePicks;
 }) {
   const isCurrent = status === "current";
   const isCompleted = status === "completed";
@@ -348,7 +379,21 @@ function TimelineItem({
         ) : null}
         <div className="flex items-start justify-between gap-2">
           <p className="font-medium leading-snug">{item.activity}</p>
-          <StatusPill status={status} />
+          <div className="flex shrink-0 items-center gap-1">
+            <StatusPill status={status} />
+            {picks && status !== "completed" ? (
+              <button
+                type="button"
+                onClick={() => picks.toggle(item)}
+                aria-pressed={picks.isPicked(item)}
+                aria-label={`${picks.isPicked(item) ? "Remove from" : "Add to"} my picks: ${item.activity}`}
+                data-pick={itemKey(item)}
+                className="-my-2 -mr-2 inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Star className={`h-5 w-5 ${picks.isPicked(item) ? "fill-primary text-primary" : ""}`} aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
         </div>
         <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
           {item.endTime ? (

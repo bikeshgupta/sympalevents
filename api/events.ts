@@ -10,6 +10,8 @@ import { handleDashboardLayout } from "./_lib/layout.js";
 import { handleAnnouncements } from "./_lib/announcements.js";
 import { handleCommandCentre } from "./_lib/command-centre.js";
 import { handleGate } from "./_lib/gate.js";
+import { handleOg } from "./_lib/og.js";
+import { handleOpportunities } from "./_lib/opportunities.js";
 import { handleCommunications } from "./_lib/communications.js";
 import { handleDuplicateEvent } from "./_lib/duplicate-event.js";
 import { handleSocieties } from "./_lib/societies.js";
@@ -39,6 +41,12 @@ export default async function handler(req: any, res: any) {
   const resource = String(req.query?.resource ?? "");
   if (resource === "registration" || resource === "publication") {
     try { return await (resource === "registration" ? handleRegistration(req, res) : handlePublication(req, res)); }
+    catch (error) { return handleApiError(res, error); }
+  }
+  // Link previews for crawlers only (vercel.json); serves HTML, not JSON.
+  if (resource === "og") return handleOg(req, res);
+  if (resource === "opportunities") {
+    try { return await handleOpportunities(req, res); }
     catch (error) { return handleApiError(res, error); }
   }
   if (resource === "closing" || resource === "gallery" || resource === "feedback") {

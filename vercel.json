@@ -2,6 +2,61 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/e/:id/:rest*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|slackbot|linkedinbot|discordbot|skypeuripreview|iframely|embedly|pinterest|redditbot|applebot|googlebot|bingbot).*"
+        }
+      ],
+      "destination": "/api/events?resource=og&id=:id&path=/e/:id/:rest*"
+    },
+    {
+      "source": "/e/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|slackbot|linkedinbot|discordbot|skypeuripreview|iframely|embedly|pinterest|redditbot|applebot|googlebot|bingbot).*"
+        }
+      ],
+      "destination": "/api/events?resource=og&id=:id&path=/e/:id"
+    },
+    {
+      "source": "/society/:society/events/:event/:rest*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|slackbot|linkedinbot|discordbot|skypeuripreview|iframely|embedly|pinterest|redditbot|applebot|googlebot|bingbot).*"
+        }
+      ],
+      "destination": "/api/events?resource=og&society=:society&event=:event&path=/society/:society/events/:event/:rest*"
+    },
+    {
+      "source": "/society/:society/events/:event",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|slackbot|linkedinbot|discordbot|skypeuripreview|iframely|embedly|pinterest|redditbot|applebot|googlebot|bingbot).*"
+        }
+      ],
+      "destination": "/api/events?resource=og&society=:society&event=:event&path=/society/:society/events/:event"
+    },
+    {
+      "source": "/s/:token",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|slackbot|linkedinbot|discordbot|skypeuripreview|iframely|embedly|pinterest|redditbot|applebot|googlebot|bingbot).*"
+        }
+      ],
+      "destination": "/api/events?resource=og&token=:token&path=/s/:token"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
