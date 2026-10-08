@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/lib/auth";
 import { useEventContext, type EventOption } from "@/lib/event-context";
+import { eventBasePath } from "@/lib/event-slug";
 import { useSocietyActions } from "@/lib/societies";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +109,15 @@ export function EventSwitcher({ eventName, eventSubtitle }: { eventName: string;
   const navigate = useNavigate();
   const [joinOpen, setJoinOpen] = useState(false);
 
+  // Choosing an event lands on its dashboard. Setting the selection alone was
+  // not enough: when the address already names an event, the address wins, so
+  // the switcher appeared to do nothing.
+  function goToEvent(event: EventOption) {
+    setSelectedEventId(event.id);
+    const base = eventBasePath({ id: event.id, slug: event.slug, societySlug: event.societySlug });
+    navigate(`${base}/dashboard`);
+  }
+
   // Events whose society this person is not a member of still belong
   // somewhere, so an "Other events" group catches anything the society list
   // does not name - an event shared by link, or one whose society row predates
@@ -165,7 +175,7 @@ export function EventSwitcher({ eventName, eventSubtitle }: { eventName: string;
                     key={event.id}
                     event={event}
                     selected={event.id === selectedEventId}
-                    onSelect={() => setSelectedEventId(event.id)}
+                    onSelect={() => goToEvent(event)}
                   />
                 ))}
               </DropdownMenu.Group>
@@ -183,7 +193,7 @@ export function EventSwitcher({ eventName, eventSubtitle }: { eventName: string;
                     key={event.id}
                     event={event}
                     selected={event.id === selectedEventId}
-                    onSelect={() => setSelectedEventId(event.id)}
+                    onSelect={() => goToEvent(event)}
                   />
                 ))}
               </DropdownMenu.Group>

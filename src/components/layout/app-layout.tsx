@@ -156,6 +156,17 @@ export function AppLayout() {
 
       <div className="lg:pl-64">
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur lg:px-6">
+          {/* The app icon is the way home: every event in the society, not
+              just the one open. Its own link, so the event title beside it can
+              be a pure switcher. */}
+          <Link
+            to={society?.slug ? `/society/${society.slug}` : "/society"}
+            aria-label="All events"
+            title="All events"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <img src="/favicon.svg" alt="" className="h-8 w-8 rounded-md" />
+          </Link>
           <div className="min-w-0 flex-1">
             <EventSwitcher
               eventName={event?.name ?? "SymPal Events"}
