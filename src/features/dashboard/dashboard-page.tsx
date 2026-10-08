@@ -24,6 +24,7 @@ import { YourEventCard } from "@/features/dashboard/your-event-card";
 import { HappeningNowCard } from "@/features/dashboard/happening-now-card";
 import { GoodToKnowCard } from "@/features/dashboard/good-to-know-card";
 import { GetInvolvedCard } from "@/features/dashboard/get-involved-card";
+import { PreviousEditionCard } from "@/features/dashboard/previous-edition-card";
 import { CommunityCard } from "@/features/dashboard/community-card";
 
 export function DashboardPage() {
@@ -267,6 +268,7 @@ export function DashboardPage() {
       {isResident && data.source !== "demo" ? (
         <GetInvolvedCard eventId={event.id} canSee={openPageKeys !== null && openPageKeys.has("volunteers")} />
       ) : null}
+      {isResident && data.source !== "demo" && data.previousEdition ? <PreviousEditionCard edition={data.previousEdition} /> : null}
       {isResident && data.source !== "demo" ? <GoodToKnowCard event={event} /> : null}
     </div>
   );

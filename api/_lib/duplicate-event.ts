@@ -134,6 +134,8 @@ export async function handleDuplicateEvent(req: ApiRequest, res: ApiResponse) {
     hero_options: source.hero_options ?? null,
     dashboard_layout: source.dashboard_layout ?? null,
     finance_visibility: source.finance_visibility ?? undefined,
+    // Which edition this is a copy of: how the new event's page can show last time's photographs (039).
+    copied_from: eventId,
   });
 
   // Registration setup, switched off.

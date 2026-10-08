@@ -171,8 +171,18 @@ export type CollectionsView = {
   sponsors: number;
 };
 
+/** The photographs of the edition this event was copied from. See api/_lib/previous-edition.ts. */
+export type PreviousEdition = {
+  eventId: string;
+  name: string;
+  startDate: string;
+  photoCount: number;
+  photos: { url: string; caption: string }[];
+};
+
 type EventData = {
   source: DataSource;
+  previousEdition?: PreviousEdition | null;
   /** The event's own announcements. Absent (demo, or a server that predates
    *  them) means "use the committed file", which is empty. */
   announcements?: Announcement[];
@@ -271,6 +281,7 @@ type EventDataResponse = {
   };
   financials: EventData["financials"];
   announcements?: AnnouncementPostPayload[];
+  previousEdition?: PreviousEdition | null;
   /** Absent from a server that predates counts-only events. */
   collections?: CollectionsView;
   contributions: ContributionRow[];
@@ -374,6 +385,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
           expenses: payload.expenses,
           eventPlan: payload.eventPlan,
           announcements: payload.announcements?.map(toAnnouncement),
+          previousEdition: payload.previousEdition ?? null,
         };
       } catch (error) {
         const fallbackReason = error instanceof Error ? error.message : "Could not load this event";

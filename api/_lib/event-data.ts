@@ -1,4 +1,5 @@
 import { loadAnnouncements } from "./announcements.js";
+import { loadPreviousEdition } from "./previous-edition.js";
 import { cleanGoodToKnow } from "./good-to-know.js";
 import { cleanHeroOptions } from "./hero-options.js";
 import { resolvePageAccess } from "./page-visibility.js";
@@ -192,6 +193,7 @@ const eventColumns = [
   "hero_image_url",
   "hero_options",
   "good_to_know",
+  "copied_from",
   "template_key",
   "theme",
   "share_token",
@@ -486,8 +488,10 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
   // to somebody who can edit the dashboard; everybody else is sent what is
   // published. Never throws - see loadAnnouncements.
   const announcements = await loadAnnouncements(supabase, eventId, dashboard.canEdit, viewerId);
+  const previousEdition = await loadPreviousEdition(supabase, "copied_from" in event ? event.copied_from : null, viewerId);
 
   sendJson(res, 200, {
+    previousEdition,
     event: {
       id: event.id,
       name: event.name,

@@ -42,6 +42,8 @@ export type SocietyEvent = {
   heroFocus?: { x: number; y: number } | null;
   /** Page keys this viewer may open - what a card is allowed to mention. */
   modules: string[];
+  /** A photograph from its album, only if this viewer may open that album. */
+  coverPhotoUrl?: string | null;
   metrics: EventMetrics;
 };
 
@@ -59,6 +61,8 @@ export type SocietyHome = {
   canManage?: boolean;
   society: Society | null;
   events: SocietyEvent[];
+  /** The signed-in viewer's own active bookings in this society. Never anybody else's. */
+  myPasses?: { eventId: string; people: number; paymentStatus: string }[];
 };
 
 export function useSocietyHome(slug?: string) {

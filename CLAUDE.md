@@ -474,9 +474,9 @@ a refresh lost it - the effect that calls `rememberEventId` returns early when
 an id is already set. Both the path form and the older `?eventId=` form write
 it through.
 
-**Per-event link previews are out of scope and need server rendering.** The
-`og:*` tags in index.html are static, so a crawler reading any of these URLs
-shows the app's generic title. See "Link previews" above.
+**Per-event link previews are served to crawlers only.** The `og:*` tags in
+index.html stay static for everybody else; see "Link previews" above for the
+crawler-only rewrite that names the event.
 
 ## App icon and installability
 
@@ -560,6 +560,28 @@ Chrome's "Add to Home screen" menu item, and there is no offline support.
   these two tags must be updated by hand** — nothing derives them automatically.
 - To change the preview image: replace `public/og-image.jpg` and update the
   `og:image:width` / `og:image:height` tags to match its real dimensions.
+
+### Per-event previews (crawlers only)
+
+`vercel.json` rewrites the three event address shapes (`/e/<id>/...`,
+`/society/<s>/events/<e>/...`, `/s/<token>`) to `/api/events?resource=og`
+**only when the `user-agent` is a known link-preview crawler** (`has` header
+condition), so a person opening a page never pays for a function call. The
+handler ([api/_lib/og.ts](api/_lib/og.ts), pure half in
+[og-meta.ts](api/_lib/og-meta.ts)) fetches `/index.html`, swaps the title,
+description and `og:*`/`twitter:*` tags, and caches at the CDN for 5 minutes.
+
+- **It names an event only if an anonymous visitor could already read it:** not a
+  draft *and* the dashboard is `public`. Otherwise it returns index.html untouched
+  (the generic card). A restricted event is never named to a crawler.
+- Name, dates, venue and the society's name are the only facts used - all on the
+  public dashboard already.
+- **The image is the event's own uploaded hero when it has one, else the app icon.**
+  Never `og-image.jpg`: that is the Ganesh photograph and would sit on someone's
+  Garba night. Hence also no `og:image:width/height` on these responses.
+- A crawler that does not appear in the user-agent list gets the generic card.
+  Add its name to the regex in `vercel.json` (and nowhere else).
+- Count is still 12: it is a `?resource=` on `api/events.ts`.
 
 ## Announcements (News section)
 
@@ -801,6 +823,57 @@ WhatsApp. **Nothing is sent** - sending needs consent and opt-out this app does 
   - and the group holding the current page opens by itself. **Module order from Settings
   now orders pages *within* a group** (and the resident's flat menu), not the groups.
   The sidebar and drawer share `NavList`; a resident's menu stays flat.
+
+## Engagement: what makes a resident come back
+
+The resident home used to be a description. These make it about *them*. All of it is
+resident-view only (`isResident` in `dashboard-page.tsx`); the organiser's dashboard
+is unchanged.
+
+- **Your event** ([your-event.ts](src/lib/your-event.ts) + `your-event-card.tsx`): a
+  short checklist - register, pay, pass, vote in open polls, get involved - from state
+  the app already holds. `buildChecklist` is pure and tested; it invents no tasks.
+  Only for somebody signed in. Whether the viewer has voted rides on each poll as
+  `viewerVoted` (one query in `loadAnnouncements`, none per poll).
+- **Happening now / Up next**: only while the event is live; the programme the page
+  already holds. **Good to know**: venue, dates and hours from the event itself, plus
+  what the organisers write in Settings -> Good to know (`events.good_to_know`, 039:
+  a directions link and up to 8 heading/text entries, cleaned server-side in
+  `api/_lib/good-to-know.ts`). It is never empty, so a committee that writes nothing
+  still gives directions, **Add to calendar** and **Share**.
+- **Calendar and share** ([calendar.ts](src/lib/calendar.ts), [share.ts](src/lib/share.ts)):
+  a hand-written `.ics` (IST read as fixed +05:30, all-day when no hours, optional
+  `VALARM`) and `navigator.share` with a clipboard fallback. **There is no push channel
+  in this app, so a "reminder" means the phone's own calendar alert** - say so, do not
+  imply the app will notify anybody.
+- **Programme picks** ([picks.ts](src/lib/picks.ts)): a star on each upcoming item,
+  kept in `localStorage` per event (no account, nothing stored server-side), and
+  "Remind me about my N picks" exports exactly those as a calendar file with a 15-minute
+  alert. The `picks` prop on `EventSchedule` is only passed to residents.
+- **Who's coming** ([community-card.tsx](src/features/dashboard/community-card.tsx)):
+  people and households, and households by tower. **Counts only, and a tower under three
+  households is never named** (`shared/participation.ts`: smaller ones fold into
+  "Other", which itself shows only at three or more). The server computes it in the
+  registration GET for everybody who may open Registration. Draws nothing until somebody
+  has registered.
+- **Get involved** (`/volunteers`, was a placeholder; nav label "Get involved"): organisers
+  ask for **helpers** ("Parking help, 4 people" - confirmed while a place is free) or
+  **performers** (an open call - lands *pending*, an organiser confirms or declines).
+  Tables and the locking `join_opportunity` function are 040. API: `?resource=opportunities`
+  ([opportunities.ts](api/_lib/opportunities.ts)). **Residents see counts and what is
+  wanted, never who signed up; names, phone numbers and notes go only to managers
+  (admin or an edit grant on the page) and the person who gave them.** `volunteers` is
+  open to any signed-in resident for the Garba template and is no longer an
+  organiser-only page. Writes answer 501 naming 040; the page says so.
+- **Society front door** ([society-shelves.tsx](src/features/society/society-shelves.tsx)):
+  **Your passes** (the viewer's own active bookings for events not yet finished -
+  `myPasses` in `?resource=society-home`, their rows only) and **Memories** (finished
+  events with a photo or review; the cover only where the viewer may open that album).
+- **Last time** (`previous-edition-card.tsx`, `api/_lib/previous-edition.ts`): up to six
+  photographs from the edition this event was **copied from** (`events.copied_from`,
+  039, set by the duplicate route). Shown only if the earlier event has ended and this
+  viewer could open its closing page. There is deliberately no guessing from names or
+  templates for events that were not created by copying.
 
 ## Hero options
 

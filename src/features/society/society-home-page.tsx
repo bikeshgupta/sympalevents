@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { EventCard } from "@/features/society/event-card";
 import { groupByMonth, pickFeaturedEvent, residentVisibleEvents } from "@/features/society/event-presentation";
 import { FeaturedEvent } from "@/features/society/featured-event";
+import { MemoriesShelf, PassesShelf } from "@/features/society/society-shelves";
 import { SocietyHeader } from "@/features/society/society-header";
 import {
   eventEndInstant,
@@ -120,6 +121,8 @@ export function SocietyHomePage() {
         </section>
       ) : null}
 
+      {data?.myPasses?.length ? <PassesShelf events={events} passes={data.myPasses} now={now} /> : null}
+
       {featured ? (
         <section className="mt-4 sm:mt-5">
           <FeaturedEvent event={featured} to={eventPath(featured)} now={now} />
@@ -193,6 +196,8 @@ export function SocietyHomePage() {
       ) : data?.ready !== false ? (
         <EmptySociety />
       ) : null}
+
+      <MemoriesShelf events={events} now={now} />
     </main>
   );
 }

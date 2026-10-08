@@ -314,7 +314,13 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
       ["event_id", "rating", "comment"],
       ids,
     ),
-    tally<{ event_id: string }>(supabase, "event_gallery_photos", ["event_id"], ids),
+    // The cover for "Memories" rides on the same read that counts them.
+    tally<{ event_id: string; image_url?: string | null; sort_order?: number | null }>(
+      supabase,
+      "event_gallery_photos",
+      ["event_id", "image_url", "sort_order"],
+      ids,
+    ),
     tally<{ event_id: string; resident_id: string | null; received_amount: number | null }>(
       supabase,
       "contributions",
@@ -327,6 +333,36 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
 
   const closedByEvent = new Map(closingRows.map((row) => [String(row.event_id), Boolean(row.is_closed)]));
   const photoCounts = countBy(photoRows);
+  const coverByEvent = new Map<string, { url: string; order: number }>();
+  for (const row of photoRows) {
+    const url = String(row.image_url ?? "");
+    if (!/^https:\/\//.test(url)) continue;
+    const eventId = String(row.event_id);
+    const order = Number(row.sort_order ?? 0);
+    const held = coverByEvent.get(eventId);
+    if (!held || order < held.order) coverByEvent.set(eventId, { url, order });
+  }
+
+  // The viewer's own bookings, so the front door can say "you have a pass for
+  // this" - their rows only, never anybody else's. Quietly absent before 032.
+  const passes: { eventId: string; people: number; paymentStatus: string }[] = [];
+  if (viewer && ids.length) {
+    const mine = await supabase
+      .from("event_registrations")
+      .select("event_id,adults,children,payment_status")
+      .eq("user_id", viewer.id)
+      .eq("status", "active")
+      .in("event_id", ids);
+    if (!mine.error) {
+      for (const row of (mine.data ?? []) as Record<string, unknown>[]) {
+        passes.push({
+          eventId: String(row.event_id),
+          people: Number(row.adults ?? 0) + Number(row.children ?? 0),
+          paymentStatus: String(row.payment_status ?? "unpaid"),
+        });
+      }
+    }
+  }
   const sponsorCounts = countBy(sponsorRows);
   const teamCounts = countBy(teamRows);
   const contributorCounts = contributorCountsByEvent(contributionRows);
@@ -366,6 +402,9 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
       // are the dashboard hero's business, not a card's.
       heroFocus: heroFocus(row.hero_options),
       modules: visibleModules(id),
+      // A cover for the Memories shelf - only where this viewer may open the
+      // album, since the picture is the album's.
+      coverPhotoUrl: visibleModules(id).includes("closing") ? coverByEvent.get(id)?.url ?? null : null,
       metrics: {
         reviewCount: rating?.count ?? 0,
         writtenReviewCount: rating?.written ?? 0,
@@ -389,6 +428,7 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
       logoUrl: society.logo_url,
     },
     events,
+    myPasses: passes,
   });
 }
 
