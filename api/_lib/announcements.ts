@@ -99,6 +99,9 @@ export type AnnouncementPayload = {
   location: string | null;
   status: "draft" | "published";
   pinned: boolean;
+  /** For a poll, when the viewer is signed in: whether they have voted. Lets the
+   *  resident's checklist say "vote" without a request per poll. Never who or what. */
+  viewerVoted?: boolean;
   /** What is particular to a poll or an ask; empty for a message. */
   payload: Record<string, unknown>;
   createdAt: string;
@@ -168,16 +171,33 @@ export async function loadAnnouncements(
   supabase: SupabaseClient,
   eventId: string,
   includeDrafts: boolean,
+  viewerId: string | null = null,
 ): Promise<AnnouncementPayload[]> {
   try {
     const result = await selectDegrading("event_announcements", columns, coreColumns, (select) =>
       supabase.from("event_announcements").select(select).eq("event_id", eventId),
     );
     if (result.error) return [];
-    return ((result.data ?? []) as unknown as Record<string, unknown>[])
+    const posts = ((result.data ?? []) as unknown as Record<string, unknown>[])
       .map(toPayload)
       .filter((post) => includeDrafts || post.status === "published")
       .sort(byFeedOrder);
+
+    // One query for the viewer's votes across every poll, and only for somebody
+    // signed in with a poll to ask about. Read as "did they vote", nothing more.
+    const polls = posts.filter((post) => post.kind === "poll");
+    if (viewerId && polls.length) {
+      const voted = await supabase
+        .from("announcement_poll_votes")
+        .select("announcement_id")
+        .eq("user_id", viewerId)
+        .in("announcement_id", polls.map((post) => post.id));
+      if (!voted.error) {
+        const ids = new Set(((voted.data ?? []) as { announcement_id: string }[]).map((row) => row.announcement_id));
+        for (const post of polls) post.viewerVoted = ids.has(post.id);
+      }
+    }
+    return posts;
   } catch {
     return [];
   }

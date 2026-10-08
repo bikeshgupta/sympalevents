@@ -23,6 +23,7 @@ export type AnnouncementPostPayload = {
   status: "draft" | "published";
   pinned: boolean;
   payload?: Record<string, unknown>;
+  viewerVoted?: boolean;
   createdAt: string;
   publishedAt: string | null;
 };
@@ -45,6 +46,7 @@ export function toAnnouncement(post: AnnouncementPostPayload): Announcement {
     status: post.status,
     pinned: post.pinned,
     payload: post.payload ?? {},
+    viewerVoted: post.viewerVoted,
     createdAt: post.createdAt,
     publishedAt: post.publishedAt,
   };

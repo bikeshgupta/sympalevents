@@ -47,6 +47,8 @@ export type Announcement = {
   status?: "draft" | "published";
   /** Shown before newer posts. */
   pinned?: boolean;
+  /** A poll: has the signed-in viewer voted? Absent when signed out or not a poll. */
+  viewerVoted?: boolean;
   createdAt?: string;
   publishedAt?: string | null;
 };

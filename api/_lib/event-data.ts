@@ -1,4 +1,5 @@
 import { loadAnnouncements } from "./announcements.js";
+import { cleanGoodToKnow } from "./good-to-know.js";
 import { cleanHeroOptions } from "./hero-options.js";
 import { resolvePageAccess } from "./page-visibility.js";
 import { publicationAccess } from "./publication.js";
@@ -190,6 +191,7 @@ const eventColumns = [
   "dashboard_layout",
   "hero_image_url",
   "hero_options",
+  "good_to_know",
   "template_key",
   "theme",
   "share_token",
@@ -483,7 +485,7 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
   // The notices on the dashboard card and in the header bell. Drafts go only
   // to somebody who can edit the dashboard; everybody else is sent what is
   // published. Never throws - see loadAnnouncements.
-  const announcements = await loadAnnouncements(supabase, eventId, dashboard.canEdit);
+  const announcements = await loadAnnouncements(supabase, eventId, dashboard.canEdit, viewerId);
 
   sendJson(res, 200, {
     event: {
@@ -523,6 +525,7 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
       dashboardLayout: "dashboard_layout" in event ? event.dashboard_layout ?? null : null,
       heroImageUrl: "hero_image_url" in event ? (event.hero_image_url as string | null) ?? null : null,
       heroOptions: "hero_options" in event ? cleanHeroOptions(event.hero_options) : null,
+      goodToKnow: "good_to_know" in event ? cleanGoodToKnow(event.good_to_know) : null,
       theme: "theme" in event ? (event.theme as string | null) ?? null : null,
       // The share token is a link, not a secret, but it is only useful to
       // somebody who can hand it out - so it travels only for a committee

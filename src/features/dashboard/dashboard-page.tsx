@@ -18,6 +18,9 @@ import { ResidentPrimaryAction } from "@/features/dashboard/resident-primary-act
 import { getEventStatus } from "@/lib/event-status";
 import { organiserOnlyWidgets } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
+import { YourEventCard } from "@/features/dashboard/your-event-card";
+import { HappeningNowCard } from "@/features/dashboard/happening-now-card";
+import { GoodToKnowCard } from "@/features/dashboard/good-to-know-card";
 
 export function DashboardPage() {
   const { data, isFetching } = useEventData({ includeTasks: false });
@@ -201,13 +204,29 @@ export function DashboardPage() {
         // The resident's one action sits directly under the hero.
         const action =
           isResident && live.some((item) => item.entry.key === "hero") ? (
-            <ResidentPrimaryAction
-              event={event}
-              status={status}
-              now={now}
-              openPageKeys={openPageKeys}
-              nextEvent={nextEvent}
-            />
+            <>
+              <ResidentPrimaryAction
+                event={event}
+                status={status}
+                now={now}
+                openPageKeys={openPageKeys}
+                nextEvent={nextEvent}
+              />
+              {/* Live: what is on this minute. Otherwise: the resident's own
+                  to-do list. Both read data the page already holds. */}
+              {status === "live" ? (
+                <HappeningNowCard timeline={timeline} now={now} canOpenSchedule={openPageKeys === null || openPageKeys.has("event-plan")} />
+              ) : null}
+              {data.source !== "demo" ? (
+                <YourEventCard
+                  eventId={event.id}
+                  signedIn={Boolean(session?.user)}
+                  openPageKeys={openPageKeys}
+                  announcements={data.announcements}
+                  now={now}
+                />
+              ) : null}
+            </>
           ) : null;
 
         if (live.length === 1) {
@@ -227,6 +246,7 @@ export function DashboardPage() {
           </section>
         );
       })}
+      {isResident && data.source !== "demo" ? <GoodToKnowCard event={event} /> : null}
     </div>
   );
 }

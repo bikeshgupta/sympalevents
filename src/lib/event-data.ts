@@ -1,5 +1,6 @@
 import type { Announcement } from "@/data/announcements";
 import { toAnnouncement, type AnnouncementPostPayload } from "@/lib/announcement-posts";
+import type { GoodToKnow } from "@/lib/good-to-know";
 import type { HeroOptions } from "@/lib/hero";
 import { useSession } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
@@ -47,6 +48,8 @@ export type AppEvent = {
   /** Focal point, hidden title and subtitle for the hero. Null is "as it has
    *  always been". See src/lib/hero.ts. */
   heroOptions?: HeroOptions | null;
+  /** Parking, what to bring, who to ask - written by the organisers. */
+  goodToKnow?: GoodToKnow | null;
   status?: string;
   /** festival | sports | cultural | mixed | custom - see migration 024. */
   eventType?: string;
@@ -262,6 +265,7 @@ type EventDataResponse = {
     dashboardLayout?: unknown;
     heroImageUrl?: string | null;
     heroOptions?: HeroOptions | null;
+    goodToKnow?: GoodToKnow | null;
     theme?: string | null;
     shareToken?: string | null;
   };
@@ -345,6 +349,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
             // in the dashboard hero is the fallback, not the only option.
             heroImageUrl: payload.event.heroImageUrl ?? null,
             heroOptions: payload.event.heroOptions ?? null,
+            goodToKnow: payload.event.goodToKnow ?? null,
             status: payload.event.status,
             eventType: payload.event.eventType ?? "festival",
             templateKey: payload.event.templateKey ?? null,
