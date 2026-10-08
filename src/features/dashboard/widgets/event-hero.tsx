@@ -11,6 +11,7 @@ import { parseAgenda } from "@/lib/agenda";
 import { describeEventHours } from "@/lib/event-hours";
 import { eventStartInstant } from "@/lib/event-status";
 import { heroPhotoStyle } from "@/lib/hero";
+import { artworkKeyFor, heroArtworkUrl, usesBundledPhoto } from "@/lib/hero-artwork";
 
 const fallbackHeroStyle = {
   background:
@@ -38,6 +39,12 @@ export function EventHero({
   source: "supabase" | "demo";
   fallbackReason?: string;
 }) {
+  // What is behind the name, in order: the organiser's own photograph; for an
+  // event that predates templates (the Ganesh Chaturthi this app was built
+  // for), the bundled photograph it has always shown; and for everything else
+  // artwork for its kind of event. A Garba night no longer opens on an idol.
+  const bundledPhoto = !event.heroImageUrl && usesBundledPhoto(event);
+  const artwork = !event.heroImageUrl && !bundledPhoto ? artworkKeyFor(event) : null;
   const heroImageUrl = event.heroImageUrl || staticHeroImageUrl;
   // The focal point and "title is already in the picture" belong to the
   // photograph an organiser uploaded: the standard photograph is never
@@ -66,7 +73,11 @@ export function EventHero({
        */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat md:bg-right md:bg-[length:auto_100%]"
-        style={heroPhotoStyle(heroImageUrl, photoOptions)}
+        style={
+          artwork
+            ? { backgroundImage: heroArtworkUrl(artwork), backgroundSize: "cover", backgroundPosition: "center" }
+            : heroPhotoStyle(heroImageUrl, photoOptions)
+        }
         aria-hidden="true"
       />
       {/*

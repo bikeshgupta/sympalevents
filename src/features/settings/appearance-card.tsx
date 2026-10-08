@@ -8,6 +8,7 @@ import { HeroOptionsForm } from "@/features/settings/hero-options-form";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import type { HeroOptions } from "@/lib/hero";
+import { usesBundledPhoto } from "@/lib/hero-artwork";
 import { prepareGalleryPhoto } from "@/lib/images";
 import { usePageAccess } from "@/lib/page-access";
 import { themePresets } from "@/lib/themes";
@@ -167,7 +168,9 @@ export function AppearanceCard() {
         <div>
           <p className="text-sm font-medium">Hero photograph</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            The image behind the event name on the dashboard. Without one, the standard photograph is used.
+            The image behind the event name on the dashboard. Without one, {usesBundledPhoto(data.event)
+              ? "the standard photograph is used."
+              : "this kind of event shows its own artwork."}
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -179,7 +182,7 @@ export function AppearanceCard() {
               />
             ) : (
               <span className="flex h-16 w-28 items-center justify-center rounded-md border bg-muted text-xs text-muted-foreground">
-                Standard
+                {usesBundledPhoto(data.event) ? "Standard" : "Artwork"}
               </span>
             )}
 

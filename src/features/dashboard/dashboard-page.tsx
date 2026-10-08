@@ -14,12 +14,21 @@ import { usePageAccess } from "@/lib/page-access";
 import { cn } from "@/lib/utils";
 import { layoutRows, normaliseLayout, visibleLayout } from "@/lib/widgets";
 import { EventActions } from "@/features/registration/event-actions";
+import { ResidentPrimaryAction } from "@/features/dashboard/resident-primary-action";
+import { getEventStatus } from "@/lib/event-status";
+import { organiserOnlyWidgets } from "@/lib/resident-view";
+import { useViewMode } from "@/lib/view-mode";
 
 export function DashboardPage() {
   const { data, isFetching } = useEventData({ includeTasks: false });
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
   const dashboardAccess = usePageAccess("dashboard");
+  // Which of the two views of this event the person gets. An organiser sees the
+  // dashboard as it has always been; a resident - or an organiser previewing
+  // one - gets a home built around a single action. See src/lib/resident-view.ts.
+  const view = useViewMode();
+  const isResident = view.mode === "resident";
   const eventPath = useEventPath();
   const [now, setNow] = useState(() => new Date());
   const event = data.event;
@@ -107,7 +116,8 @@ export function DashboardPage() {
     source: data.source,
     fallbackReason: data.fallbackReason,
     announcements: data.announcements,
-    canManageAnnouncements: dashboardAccess.canEdit && data.source !== "demo",
+    // A resident preview must look like a resident's: no organiser doors.
+    canManageAnnouncements: dashboardAccess.canEdit && data.source !== "demo" && !isResident,
     totalBudget: financials.totalBudget,
     actualExpenses: financials.actualExpenses,
     fundsReceived,
@@ -128,7 +138,35 @@ export function DashboardPage() {
     onSubmitReview: (input) => closing.saveReview.mutateAsync(input),
   };
 
-  const rows = layoutRows(visibleLayout(layout, openPageKeys));
+  // The resident's home is the same widgets in the same order the committee
+  // arranged them, minus the ones that are the organiser's own (the money maths
+  // and the task list), with one action placed directly under the hero.
+  const rows = layoutRows(
+    visibleLayout(layout, openPageKeys).filter((entry) => !isResident || !organiserOnlyWidgets.has(entry.key)),
+  );
+  const status = getEventStatus(
+    {
+      startDate: event.startDate,
+      endDate: event.endDate,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      statusOverride: event.statusOverride,
+      isClosed,
+    },
+    now,
+  );
+
+  // The access answer decides which view this is. Drawing the organiser's page
+  // for a beat and then swapping it would flash controls at residents, and the
+  // reverse would flash a stripped page at the committee.
+  if (view.isLoading) {
+    return (
+      <div className="mx-auto max-w-5xl space-y-4" aria-busy="true">
+        <div className="h-[420px] animate-pulse rounded-lg bg-muted" />
+        <div className="h-24 animate-pulse rounded-xl bg-muted/70" />
+      </div>
+    );
+  }
 
   return (
     <div className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
@@ -136,7 +174,7 @@ export function DashboardPage() {
           can edit the dashboard, so a resident's view is exactly what it was.
           It is where an admin hides or reorders widgets and decides whether
           amounts are shown or only counts. */}
-      {dashboardAccess.canEdit && data.source !== "demo" ? (
+      {!isResident && dashboardAccess.canEdit && data.source !== "demo" ? (
         <div className="flex justify-end">
           <Link
             to={eventPath("/customise-dashboard")}
@@ -147,7 +185,7 @@ export function DashboardPage() {
           </Link>
         </div>
       ) : null}
-      <EventActions event={event} />
+      {isResident ? null : <EventActions event={event} />}
       {rows.map((row) => {
         const rendered = row.entries.map((entry) => ({ entry, node: renderWidget(entry, context) }));
         // A widget that decides it has nothing to draw (the closing note
@@ -160,8 +198,25 @@ export function DashboardPage() {
         // their own when they have nothing to show - the auctions strip with
         // no published auction, for one - and an empty wrapper still counts
         // for `space-y-4`, leaving a gap where nothing is.
+        // The resident's one action sits directly under the hero.
+        const action =
+          isResident && live.some((item) => item.entry.key === "hero") ? (
+            <ResidentPrimaryAction
+              event={event}
+              status={status}
+              now={now}
+              openPageKeys={openPageKeys}
+              nextEvent={nextEvent}
+            />
+          ) : null;
+
         if (live.length === 1) {
-          return <Fragment key={live[0].entry.key}>{live[0].node}</Fragment>;
+          return (
+            <Fragment key={live[0].entry.key}>
+              {live[0].node}
+              {action}
+            </Fragment>
+          );
         }
 
         return (

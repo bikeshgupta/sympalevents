@@ -296,6 +296,83 @@ reach rather than on a list nobody could read.
 Both surfaces filter on the **same** list — `useEventAccess().pages` — so the sidebar
 and the drawer can never disagree about what a viewer may open. See "Auth and access".
 
+## Resident view and organiser view
+
+One event, two views. A resident wants to know what it is, when, and what to do;
+a committee member wants to run it. They used to open the same app and see the
+same sixteen-item sidebar, so a resident browsing a Garba night met Budget,
+Expenses and Tasks. The rules are in [src/lib/resident-view.ts](src/lib/resident-view.ts)
+(pure, covered by `tests/resident-view.test.mjs`); `useViewMode()` in
+[src/lib/view-mode.ts](src/lib/view-mode.ts) applies them.
+
+- **Presentation, never permission.** The server's `useEventAccess().pages` still
+  decides what anybody may open. A view only decides which of those are put in
+  front of them. A direct link to an organiser page still works if the server
+  allows it - the resident menu is a menu, not a lock. Do not use the view mode
+  to gate anything, and do not skip a server check because "residents do not see
+  that".
+- **Organiser = any role on the event** (admin, committee *or read-only*) or an
+  explicit edit grant on any page. Read-only is included on purpose: those
+  members were given the app deliberately and may hold pages a resident menu
+  would hide. Everybody else - signed out, or signed in with no role - is a
+  resident. With no event (the demo) the app is as it always was.
+- **The access answer must have arrived before either view is drawn**
+  (`isLoading`): `useEventAccess` starts from an empty answer, which is also
+  what a resident looks like, so guessing would flash the wrong menu at every
+  committee member on every load. The dashboard shows a skeleton until then.
+- **An organiser can preview the resident's view** ("View as resident" in the
+  header on `sm` and up, in the drawer on a phone), with a banner that says so
+  and a way back. Kept in `sessionStorage`, not `localStorage`: a per-tab
+  convenience that must not outlive the tab and leave somebody wondering next
+  week where their menu went. Storage can throw; it falls back to memory.
+- **The resident menu** drops `organiserOnlyPages` (contributions, sponsors,
+  budget, expenses, tasks, volunteers, contacts, settings) and says "Home" and
+  "Schedule" where the organiser's says "Overview" and "Events" - unless the
+  event has named a module itself. It is a **deny-list**: a page this file has
+  never heard of reaches a resident the server allows rather than vanishing.
+  The header says "Community event", not "Committee workspace", and "Request
+  access" moves from the header into the account menu.
+  **Budget is in that list.** It is a public page by default and was in every
+  resident's menu before; it is now out of it (still reachable by link). Take it
+  out of `organiserOnlyPages` if the committee wants it back.
+- **The resident's home** is the same widgets in the order the committee arranged
+  them, minus `organiserOnlyWidgets` (Financial summary, My responsibilities),
+  with one card directly under the hero: `ResidentPrimaryAction`. Funding
+  Progress stays - it is where contributors and sponsors are recognised, which
+  the UI rules record as a standing decision. The organiser's "Join the event"
+  block (Publish / Cancel / Manage registration), the Customise link and the
+  announcements Manage door are organiser-only.
+- **One action, chosen by state** (`resolveResidentAction`, pure): booked ->
+  "View my registration"; upcoming and self-service registration open ->
+  "Register now"; upcoming but organiser-led -> "How to register"; no
+  registration page -> "View schedule"; live -> "See what's on"; completed ->
+  "View memories"; cancelled -> a notice with no button. Registration is read
+  only when the viewer may open that page, and the card waits for it rather than
+  flipping its label under somebody's thumb. `isRegistrationOpen` mirrors the
+  server's checks only to decide what to *offer*; `book_event` still decides.
+- Not built: a separate Updates page (the announcements card is on the home), a
+  "Pass" page and QR entry, and the organiser command centre.
+
+## Hero artwork
+
+`events.template_key` (024) was written at creation and never read. It now
+travels with the event (`templateKey`) and the society page, and picks the
+hero's default artwork: [src/lib/hero-artwork.ts](src/lib/hero-artwork.ts) has one
+SVG per template (garba, festival, sports, cultural, mixed, blank -> neutral),
+drawn in code so there is no image to host or license.
+
+- **Order behind the name:** the organiser's photograph; else, for an event that
+  predates templates (**no `template_key` and type `festival`** - the Ganesh
+  Chaturthi this app was built for), the bundled photograph; else artwork. That
+  one exception is deliberate: it is production data real people read, and its
+  hero has always been that photograph. A *new* Festival gets generated artwork.
+  Flip `usesBundledPhoto()` to retire the photograph entirely.
+- **Legibility is part of the contract.** Every piece is dark on the left (where
+  the name sits) with the motif on the right, because the hero's white text and
+  its left-weighted scrim assume that. New artwork must keep both.
+- The society page's featured card uses the same artwork when an event has a
+  template and no photograph; list tiles stay the quiet pale wash.
+
 ## Appearance, and the link that opens an event
 
 **Colour is five named presets, never a picker** ([src/lib/themes.ts](src/lib/themes.ts)).

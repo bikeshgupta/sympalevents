@@ -190,6 +190,7 @@ const eventColumns = [
   "dashboard_layout",
   "hero_image_url",
   "hero_options",
+  "template_key",
   "theme",
   "share_token",
   "start_time",
@@ -509,6 +510,9 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
       detailsReady: "start_time" in event && "end_time" in event && "finance_visibility" in event,
       status: event.status ?? "planning",
       statusOverride: "status_override" in event ? event.status_override ?? null : null,
+      // Which template made this event - null for one that predates templates.
+      // Chooses its default hero artwork; see src/lib/hero-artwork.ts.
+      templateKey: "template_key" in event ? (event.template_key as string | null) ?? null : null,
       eventType: ("event_type" in event ? (event.event_type as string) : null) ?? "festival",
       // The word this event uses for the unit a person belongs to - "Flat" in
       // a housing society, "Team" in a league. Null means the app's default.

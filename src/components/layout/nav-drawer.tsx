@@ -1,5 +1,5 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { LogIn, LogOut, Menu, UserPen, X } from "lucide-react";
+import { Eye, LogIn, LogOut, Menu, UserPen, X } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ export function NavDrawer({
   session,
   userName,
   onEditName,
+  viewSwitch,
 }: {
   items: typeof navItems;
   session: AuthSession | null | undefined;
@@ -52,6 +53,8 @@ export function NavDrawer({
   /** Opens the name editor, which the layout owns so the header dropdown and
    *  this drawer share one dialog rather than a copy each. */
   onEditName: () => void;
+  /** An organiser's switch to the resident's view; absent for everybody else. */
+  viewSwitch?: { isPreview: boolean; onToggle: () => void };
 }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -139,6 +142,23 @@ export function NavDrawer({
               </Button>
             </div>
           )}
+
+          {viewSwitch ? (
+            <div className="border-b px-3 py-2">
+              <button
+                type="button"
+                aria-pressed={viewSwitch.isPreview}
+                onClick={() => {
+                  close();
+                  viewSwitch.onToggle();
+                }}
+                className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {viewSwitch.isPreview ? "Exit resident view" : "View as resident"}
+              </button>
+            </div>
+          ) : null}
 
           <nav aria-label="Pages" className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
             {items.length ? (

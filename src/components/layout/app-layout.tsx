@@ -1,5 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { LogOut, UserPen } from "lucide-react";
+import { Eye, LogOut, UserPen, UserPlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useParams } from "react-router-dom";
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
@@ -17,6 +17,8 @@ import { useScrollToTopOnNavigate } from "@/lib/scroll";
 import { useTrafficHeartbeat } from "@/lib/traffic";
 import { themeVariables } from "@/lib/themes";
 import { useEventData } from "@/lib/event-data";
+import { isOrganiserPage } from "@/lib/resident-view";
+import { useViewMode } from "@/lib/view-mode";
 import { cn } from "@/lib/utils";
 import { navItems } from "./nav-items";
 
@@ -78,9 +80,24 @@ export function AppLayout() {
     .filter((page) => page.canView)
     .map((page) => navByPageKey.get(page.pageKey))
     .filter((item): item is (typeof navItems)[number] => Boolean(item));
+  // A resident's menu is the pages for attending the event; the ones for
+  // running it are left out. Presentation only: the server's list above is
+  // still what decides what they may open, and a direct link still works.
+  const view = useViewMode();
+  const residentMenu = view.mode === "resident" && !isDemoNav;
   const visibleNavItems = (
     isDemoNav ? navItems : orderedFromServer
-  ).map((item) => ({ ...item, label: labelByPageKey.get(pageKeyFromHref(item.href)) ?? item.label }));
+  )
+    .filter((item) => !residentMenu || !isOrganiserPage(pageKeyFromHref(item.href)))
+    .map((item) => {
+      const pageKey = pageKeyFromHref(item.href);
+      // What this event calls a page wins. Failing that, a resident's menu
+      // speaks to somebody attending: "Home" and "Schedule", not "Overview"
+      // and "Events".
+      const residentLabel = residentMenu ? { dashboard: "Home", "event-plan": "Schedule" }[pageKey] : undefined;
+      const label = labelByPageKey.get(pageKey) ?? residentLabel ?? item.label;
+      return { ...item, label };
+    });
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const canRequestCommitteeAccess = Boolean(
     session && selectedEventId && eventAccess.role !== "admin" && eventAccess.role !== "committee",
@@ -134,7 +151,7 @@ export function AppLayout() {
             to put "and how do I get back to the rest of it". Without a
             society there is nowhere to go back to, so it stays a plain block
             rather than a link that leads nowhere. */}
-        <SocietyBrand society={society} eventName={event?.name} />
+        <SocietyBrand society={society} eventName={event?.name} resident={residentMenu} />
         <nav className="space-y-1 p-3">
           {visibleNavItems.map((item) => (
             <NavLink
@@ -179,8 +196,25 @@ export function AppLayout() {
               }
             />
           </div>
+          {/* Only somebody with a role on the event can look at it the way a
+              resident does. On a phone the same switch is in the drawer. */}
+          {view.isOrganiser ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="hidden h-10 gap-1.5 text-xs sm:inline-flex"
+              aria-pressed={view.isPreview}
+              onClick={() => view.setPreview(!view.isPreview)}
+            >
+              <Eye className="h-4 w-4" aria-hidden="true" />
+              {view.isPreview ? "Exit resident view" : "View as resident"}
+            </Button>
+          ) : null}
           <AnnouncementsBell event={event} announcements={data.announcements} />
-          {canRequestCommitteeAccess ? (
+          {/* A resident is not being asked to join the committee in the header;
+              for them the request lives in the account menu. */}
+          {canRequestCommitteeAccess && !residentMenu ? (
             <Button variant="outline" size="sm" onClick={() => void requestCommitteeAccess()}>
               Request access
             </Button>
@@ -230,6 +264,18 @@ export function AppLayout() {
                       Edit your name
                     </button>
                   </DropdownMenu.Item>
+                  {canRequestCommitteeAccess && residentMenu ? (
+                    <DropdownMenu.Item asChild>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-muted"
+                        onClick={() => void requestCommitteeAccess()}
+                      >
+                        <UserPlus className="h-4 w-4" />
+                        Request committee access
+                      </button>
+                    </DropdownMenu.Item>
+                  ) : null}
                   <DropdownMenu.Item asChild>
                     <button
                       type="button"
@@ -269,6 +315,7 @@ export function AppLayout() {
           session={session}
           userName={userName}
           onEditName={() => setEditingName(true)}
+          viewSwitch={view.isOrganiser ? { isPreview: view.isPreview, onToggle: () => view.setPreview(!view.isPreview) } : undefined}
         />
         {session && editingName ? (
           <ProfileNameDialog
@@ -281,6 +328,20 @@ export function AppLayout() {
         {/* `pb-20` below `lg` is the room the floating menu button needs; a
             page's last row would otherwise sit under it permanently. */}
         <main className="mx-auto w-full max-w-7xl px-4 pb-20 pt-5 lg:px-6 lg:pb-5">
+          {view.isPreview ? (
+            <div
+              role="status"
+              className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-accent px-4 py-2.5 text-sm"
+            >
+              <span>
+                <span className="font-semibold">Resident view.</span> This is the shorter menu and home page a resident
+                gets. Organiser tools are hidden.
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={() => view.setPreview(false)}>
+                Back to organiser view
+              </Button>
+            </div>
+          ) : null}
           {requestMessage ? (
             <div className="mb-4 rounded-md border bg-card px-4 py-3 text-sm text-muted-foreground">{requestMessage}</div>
           ) : null}
@@ -303,10 +364,14 @@ export function AppLayout() {
 function SocietyBrand({
   society,
   eventName,
+  resident = false,
 }: {
   society?: { name: string; slug: string | null; logoUrl: string | null } | null;
   eventName?: string;
+  /** A resident is not looking at a committee workspace, so it does not say so. */
+  resident?: boolean;
 }) {
+  const fallback = resident ? "Community event" : "Committee workspace";
   const inner = (
     <>
       {society?.logoUrl ? (
@@ -320,7 +385,7 @@ function SocietyBrand({
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold">{society?.name ?? "SymPal Events"}</p>
         <p className="truncate text-xs text-muted-foreground">
-          {society ? (eventName ?? "Committee workspace") : "Committee workspace"}
+          {society ? (eventName ?? fallback) : fallback}
         </p>
       </div>
     </>

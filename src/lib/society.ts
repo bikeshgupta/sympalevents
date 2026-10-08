@@ -33,6 +33,8 @@ export type SocietyEvent = {
   endTime?: string | null;
   location: string | null;
   eventType: string;
+  /** The template it was made from; null predates templates. */
+  templateKey?: string | null;
   statusOverride: EventStatusOverride;
   isClosed: boolean;
   heroImageUrl: string | null;

@@ -228,6 +228,7 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
       "organization_id",
       "slug",
       "event_type",
+      "template_key",
       "status_override",
       "hero_image_url",
       "hero_options",
@@ -355,6 +356,7 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
       endTime: clock(row.end_time),
       location: (row.location as string | null) ?? null,
       eventType: (row.event_type as string | null) ?? "festival",
+      templateKey: (row.template_key as string | null) ?? null,
       // Fed straight into getEventStatus() on the client - the one helper.
       statusOverride: (row.status_override as "draft" | "cancelled" | null) ?? null,
       isClosed: closedByEvent.get(id) ?? false,

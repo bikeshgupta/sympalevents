@@ -50,6 +50,8 @@ export type AppEvent = {
   status?: string;
   /** festival | sports | cultural | mixed | custom - see migration 024. */
   eventType?: string;
+  /** The template it was made from, or null for an event that predates them. */
+  templateKey?: string | null;
   /** The word this event uses for a person's unit: Flat, House, Team. */
   unitLabel?: string | null;
   /** The committee's dashboard arrangement, or null for this event type's
@@ -255,6 +257,7 @@ type EventDataResponse = {
     detailsReady?: boolean;
     status: string;
     eventType?: string;
+    templateKey?: string | null;
     unitLabel?: string | null;
     dashboardLayout?: unknown;
     heroImageUrl?: string | null;
@@ -344,6 +347,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
             heroOptions: payload.event.heroOptions ?? null,
             status: payload.event.status,
             eventType: payload.event.eventType ?? "festival",
+            templateKey: payload.event.templateKey ?? null,
             unitLabel: payload.event.unitLabel ?? null,
             dashboardLayout: payload.event.dashboardLayout ?? null,
             theme: payload.event.theme ?? null,

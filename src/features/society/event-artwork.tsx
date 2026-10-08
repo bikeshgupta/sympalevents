@@ -1,5 +1,6 @@
 import { eventTypeStyle } from "@/features/society/event-type-style";
 import { focusObjectPosition } from "@/lib/hero";
+import { artworkKeyFor, heroArtworkUrl } from "@/lib/hero-artwork";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 export function EventArtwork({
   eventType,
   imageUrl,
+  templateKey,
   focus,
   className,
   iconClassName,
@@ -32,6 +34,10 @@ export function EventArtwork({
 }: {
   eventType: string;
   imageUrl?: string | null;
+  /** When the event was made from a template and has no photograph, draw that
+   *  template's artwork - the same piece its dashboard hero wears - instead of
+   *  the pale wash. Left out, nothing changes: a list tile stays quiet. */
+  templateKey?: string | null;
   /** Where the organiser anchored the photograph, so a crop keeps what they chose. */
   focus?: { x: number; y: number } | null;
   className?: string;
@@ -51,6 +57,20 @@ export function EventArtwork({
         loading="lazy"
         style={{ objectPosition: focusObjectPosition(focus) }}
         className={cn("object-cover", dim && "saturate-[0.9]", className)}
+      />
+    );
+  }
+
+  if (templateKey) {
+    return (
+      <div
+        aria-hidden
+        className={cn(dim && "saturate-[0.75]", className)}
+        style={{
+          backgroundImage: heroArtworkUrl(artworkKeyFor({ templateKey, eventType })),
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
       />
     );
   }
