@@ -22,6 +22,7 @@ export type AnnouncementPostPayload = {
   location: string | null;
   status: "draft" | "published";
   pinned: boolean;
+  payload?: Record<string, unknown>;
   createdAt: string;
   publishedAt: string | null;
 };
@@ -43,10 +44,13 @@ export function toAnnouncement(post: AnnouncementPostPayload): Announcement {
     location: post.location ?? undefined,
     status: post.status,
     pinned: post.pinned,
+    payload: post.payload ?? {},
     createdAt: post.createdAt,
     publishedAt: post.publishedAt,
   };
 }
+
+export type AnnouncementKind = "message" | "poll" | "ask";
 
 export type AnnouncementInput = {
   title: string;
@@ -59,6 +63,10 @@ export type AnnouncementInput = {
   time: string;
   location: string;
   pinned: boolean;
+  /** Only sent when a post is created; what a post is cannot change afterwards. */
+  kind?: AnnouncementKind;
+  /** A poll's options and rule, or an ask's closing time. */
+  payload?: Record<string, unknown>;
 };
 
 export function useAnnouncementPosts(eventId?: string) {
@@ -84,4 +92,24 @@ export function useAnnouncementPosts(eventId?: string) {
   });
 
   return { create, update, remove };
+}
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/** A date and time typed in the event's own clock (Asia/Kolkata), as the ISO
+ *  instant the server stores. Both blank means "never closes". */
+export function closesAtFromParts(date: string, time: string) {
+  if (!date) return null;
+  const [year, month, day] = date.split("-").map(Number);
+  const [hours = 23, minutes = 59] = (time || "23:59").split(":").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, hours, minutes) - IST_OFFSET_MS).toISOString();
+}
+
+/** The reverse, for filling the form back in when a post is edited. */
+export function closesAtToParts(iso: unknown) {
+  if (typeof iso !== "string" || !iso) return { date: "", time: "" };
+  const shifted = new Date(new Date(iso).getTime() + IST_OFFSET_MS);
+  if (Number.isNaN(shifted.getTime())) return { date: "", time: "" };
+  const text = shifted.toISOString();
+  return { date: text.slice(0, 10), time: text.slice(11, 16) };
 }

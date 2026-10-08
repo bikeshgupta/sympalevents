@@ -38,8 +38,10 @@ export type Announcement = {
   location?: string;
   /** Optional: limit a notice to one event. Leave undefined to show for all. */
   eventId?: string;
-  /** What sort of post this is. Only "message" exists today. */
+  /** What sort of post this is: "message" (the default), "poll" or "ask". */
   kind?: string;
+  /** What is particular to a poll or an ask; see src/lib/announcement-interactions.ts. */
+  payload?: Record<string, unknown>;
   /** Drafts are sent only to somebody who can edit the dashboard. Absent
    *  means published, which is what every notice in this file is. */
   status?: "draft" | "published";

@@ -1,3 +1,5 @@
+import { CommandCentrePage } from "@/features/command/command-centre-page";
+import { EventIndex } from "@/features/command/event-index";
 import { RegistrationPage } from "@/features/registration/registration-page";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -34,10 +36,11 @@ import { TeamsPage } from "@/features/teams/teams-page";
  * at an id. Both render the same tree; which event they are about comes from
  * the path when there is one, and from the switcher otherwise.
  */
-function eventRoutes(indexElement = <Navigate to="dashboard" replace />) {
+function eventRoutes(indexElement = <EventIndex />) {
   return (
     <Route element={<RouteGuard />}>
       <Route index element={indexElement} />
+      <Route path="command" element={<CommandCentrePage />} />
       <Route path="registration" element={<RegistrationPage />} />
       <Route path="dashboard" element={<DashboardPage />} />
       <Route path="customise-dashboard" element={<CustomiseDashboardPage />} />

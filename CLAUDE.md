@@ -587,11 +587,12 @@ the dashboard never fails over a notice board) and a write answers 501 naming
 - **Drafts go only to somebody who can edit the dashboard.** Everyone else is
   sent published posts and nothing else; `resolveAnnouncements()` also drops
   drafts, so the card and bell can never draw one.
-- **`kind` is the extension point** for polls, ask-me-anything and auction
-  posts. It is deliberately not a check constraint: a new kind is an entry in
-  `kinds` in the API plus a renderer, not a migration. Only `message` exists.
-  An auction post should *point at* an existing auction, not copy it - auctions
-  stay their own data (see Auctions).
+- **`kind` is the extension point.** `message`, `poll` and `ask` (ask-me-anything)
+  exist; it is deliberately not a check constraint, so a new kind is an entry in
+  `kinds` in the API plus a renderer, not a migration. A future auction post
+  should *point at* an existing auction, not copy it - auctions stay their own
+  data (see Auctions). What is particular to a kind lives in `payload`; see
+  "Polls and ask-me-anything" below.
 - **The organiser's door is on the card**
   ([announcements-manager.tsx](src/features/dashboard/announcements-manager.tsx)):
   a "Manage" button, shown only when `canManage`. With nothing published a
@@ -610,7 +611,85 @@ the dashboard never fails over a notice board) and a write answers 501 naming
 - More than one post turns the dashboard card into an auto-rotating carousel
   (8s, pauses on hover/focus, dots + arrows). One renders as a static card.
   Pinned posts sort first, then newest published.
-- Not built yet: scheduled publishing, polls, ask-me-anything, auction posts.
+- Not built yet: scheduled publishing, auction posts.
+
+## Polls and ask-me-anything
+
+Two more kinds of announcement post, on the `kind` column 034 left open.
+[036](supabase/migrations/036_polls_and_questions.sql) adds `payload` and three
+tables (`announcement_poll_votes`, `announcement_questions`,
+`announcement_question_votes`). **Not run yet** - until it is, plain messages
+still work (they never ask for `payload`), and a poll or question answers 501
+naming 036.
+
+- **One route, a `part`.** Voting, asking, upvoting, moderating and reading
+  results are `?resource=announcements&part=poll|vote|questions|question|upvote`,
+  handled in [api/_lib/announcement-interactions.ts](api/_lib/announcement-interactions.ts).
+  Still no new function. The payload rules are pure and import-free in
+  [announcement-payload.ts](api/_lib/announcement-payload.ts) and covered by
+  `tests/polls-and-questions.test.mjs`.
+- **A poll** is 2-6 options, a results rule (`always`, `after_vote`,
+  `after_close`) and an optional closing time. The primary key
+  `(announcement_id, user_id)` *is* the rule: one vote each, a change of mind is an
+  upsert. **The server withholds counts the rule hides** - they are `null` in the
+  response, not merely un-drawn. An organiser always sees them. **Who voted for
+  what is never read back out**, by anybody.
+- **Options are locked once anybody has voted** (409), because a vote points at an
+  option id. Reword the question freely; ids are kept when wording is fixed.
+- **Sign-in only, one vote per Google account.** That is the limit of "one person,
+  one vote" without a resident roll, so the copy says "signed-in", never
+  "residents". Anyone who can open the dashboard and has an account can vote.
+- **Results are bars drawn in markup, not the chart library** - the card is on every
+  dashboard and recharts is ~380KB that only the auction panel and the collection
+  timeline have earned. Each bar is a `progressbar` whose label carries the whole
+  meaning, and "Leading" / "Your vote" are words, not just a heavier fill.
+- **Ask-me-anything is moderated.** A question starts `pending` and is invisible to
+  everybody but its asker and the organisers until one approves or answers it - this
+  may be a public page. Anonymous unless the asker ticks otherwise (the user id is
+  always kept, so abuse is traceable), never with a flat. At most 3 waiting per
+  person per post. Organisers approve, answer or hide **in place on the card**;
+  there is no separate moderation page. Upvotes are one per person.
+- **The carousel does not auto-advance while a poll or question box is showing** -
+  rotating away would discard a half-chosen option or a half-typed question, the
+  same reason the auctions strip never auto-advances. Polls and questions load only
+  when their slide is the one on screen.
+- A closed poll or ask drops out of the bell's unread count.
+
+## The command centre
+
+`/command` ([src/features/command/](src/features/command/)) is where an organiser
+starts: **what needs attention now**, not a second dashboard. Four numbers at
+most, an attention list ordered by urgency (each item links to the page where it
+is dealt with), and a readiness checklist with a percentage. The event page
+(Overview) is unchanged and still one click away.
+
+- **Not a module.** `command` is not in `eventPageKeys`, so it has no visibility
+  row, cannot be switched off or reordered, and is not in Page Visibility. Like
+  `settings` it is special-cased in `api/page-access.ts` and `api/event-access.ts`:
+  an admin (society admin included) or a committee member can open it; nobody
+  else, whatever an admin picks. `organiserOnlyPages` lists it, so a resident's
+  menu never does.
+- **Counted on the server** (`GET /api/events?resource=command`,
+  [api/_lib/command-centre.ts](api/_lib/command-centre.ts); function count still 12),
+  so the browser never downloads a ledger to count it. Each section **follows the
+  access the caller already has to the page it counts** - no edit access to
+  Registration, no payment queue; cannot open Tasks, no overdue count. A module
+  the event does not have is absent, not drawn empty, so it works for an event
+  with no money or registration. Each section is read on its own and a failure
+  (usually an unrun migration) drops only that section.
+- **Built from data the app already holds** - registrations (payments to verify,
+  unpaid, refunds, capacity, closing date), overdue tasks, expense claims awaiting
+  reimbursement, programme items, announcement drafts and questions waiting. No new
+  tables.
+- **Where an organiser lands.** The bare event address (`EventIndex`) sends an
+  organiser to `/command` and everybody else to `/dashboard`; the event switcher
+  navigates to that bare address. `/dashboard` and every link into it still land
+  where they always did. The nav lists Command centre first, for organisers only.
+- Every metric and attention item links to a **page**, not a filtered list: the
+  pages have no URL filter. Adding one (e.g. registrations `?status=submitted`)
+  is the natural next step.
+- Not built: event-day gate mode, the registrations quick-add/filter screen, and
+  communications.
 
 ## Hero options
 

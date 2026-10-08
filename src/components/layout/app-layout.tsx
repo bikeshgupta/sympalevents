@@ -86,7 +86,8 @@ export function AppLayout() {
   const view = useViewMode();
   const residentMenu = view.mode === "resident" && !isDemoNav;
   const visibleNavItems = (
-    isDemoNav ? navItems : orderedFromServer
+    // The demo has no organisers, so no command centre to offer.
+    isDemoNav ? navItems.filter((item) => item.href !== "/command") : orderedFromServer
   )
     .filter((item) => !residentMenu || !isOrganiserPage(pageKeyFromHref(item.href)))
     .map((item) => {

@@ -4,6 +4,7 @@ import {
   CircleDollarSign,
   Contact,
   Gauge,
+  LayoutDashboard,
   Gavel,
   HandCoins,
   HeartHandshake,
@@ -16,6 +17,9 @@ import {
 } from "lucide-react";
 
 export const navItems = [
+  // Only ever offered to an organiser: the server lists it for admins and
+  // committee members and for nobody else, and the nav shows what it lists.
+  { label: "Command centre", href: "/command", icon: LayoutDashboard },
   { label: "Overview", href: "/dashboard", icon: Gauge },
   { label: "Participate", href: "/registration", icon: Users },
   { label: "Contributions", href: "/contributions", icon: HandCoins },

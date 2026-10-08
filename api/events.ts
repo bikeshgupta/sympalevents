@@ -8,6 +8,7 @@ import { handleLedger } from "./_lib/ledger.js";
 import { handleResolveEventSlug, handleSocietyHome } from "./_lib/society-home.js";
 import { handleDashboardLayout } from "./_lib/layout.js";
 import { handleAnnouncements } from "./_lib/announcements.js";
+import { handleCommandCentre } from "./_lib/command-centre.js";
 import { handleSocieties } from "./_lib/societies.js";
 import {
   cleanModuleLabel,
@@ -70,6 +71,15 @@ export default async function handler(req: any, res: any) {
   if (resource === "announcements") {
     try {
       return await handleAnnouncements(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // The organiser's "what needs attention now". See api/_lib/command-centre.ts.
+  if (resource === "command") {
+    try {
+      return await handleCommandCentre(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }

@@ -117,6 +117,7 @@ export function renderWidget(entry: LayoutEntry, ctx: DashboardContext): ReactNo
           now={ctx.now}
           posts={ctx.announcements}
           canManage={ctx.canManageAnnouncements}
+          signedIn={ctx.signedIn}
         />
       );
 

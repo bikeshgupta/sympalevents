@@ -115,7 +115,9 @@ export function EventSwitcher({ eventName, eventSubtitle }: { eventName: string;
   function goToEvent(event: EventOption) {
     setSelectedEventId(event.id);
     const base = eventBasePath({ id: event.id, slug: event.slug, societySlug: event.societySlug });
-    navigate(`${base}/dashboard`);
+    // The event's own index decides where: an organiser starts at the command
+    // centre, everybody else at the event page.
+    navigate(base);
   }
 
   // Events whose society this person is not a member of still belong

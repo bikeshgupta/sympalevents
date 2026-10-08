@@ -61,7 +61,14 @@ export function leadTimeLabel(announcement: ResolvedAnnouncement, now: Date) {
   return `in ${gapLabel(diffMs)}`;
 }
 
+/** A poll or an ask-me-anything whose closing time has passed. */
+export function isInteractiveClosed(item: Announcement, now: Date) {
+  if (item.kind !== "poll" && item.kind !== "ask") return false;
+  const closesAt = item.payload?.closesAt;
+  return typeof closesAt === "string" && now.getTime() >= new Date(closesAt).getTime();
+}
+
 /** Notices that have not finished yet - what the header bell counts. */
 export function activeAnnouncements(items: ResolvedAnnouncement[], now: Date) {
-  return items.filter((item) => leadTimeLabel(item, now) !== "Completed");
+  return items.filter((item) => leadTimeLabel(item, now) !== "Completed" && !isInteractiveClosed(item, now));
 }

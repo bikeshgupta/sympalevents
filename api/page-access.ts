@@ -219,11 +219,15 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    // Settings and the command centre are not modules an admin can open up:
+    // one controls the others, the other is the organisers' own view. Neither
+    // is in event_page_visibility, so neither has a visibility to read.
+    const isCommand = pageKey === "command";
     const isSettings = pageKey === "settings";
-    const visibility = isSettings ? "restricted" : (await fetchPageVisibility(eventId))[pageKey] ?? "restricted";
+    const visibility = isSettings || isCommand ? "restricted" : (await fetchPageVisibility(eventId))[pageKey] ?? "restricted";
 
     if (!authHeader.startsWith("Bearer ")) {
-      sendJson(res, 200, isSettings ? anonymousResult("restricted") : anonymousResult(visibility));
+      sendJson(res, 200, isSettings || isCommand ? anonymousResult("restricted") : anonymousResult(visibility));
       return;
     }
 
@@ -264,19 +268,21 @@ export default async function handler(req: any, res: any) {
     // reachable for a committee member; see isCommitteeOpenPage.
     const canView = isSettings
       ? isAdmin
-      : isAdmin ||
+      : isCommand
+        ? isAdmin || role === "committee"
+        : isAdmin ||
         visibility === "public" ||
         visibility === "authenticated" ||
         grantedView ||
         (role === "committee" && isCommitteeOpenPage(pageKey));
-    const canEdit = isSettings ? isAdmin : isAdmin || accessLevel === "edit";
+    const canEdit = isSettings || isCommand ? isAdmin : isAdmin || accessLevel === "edit";
 
     const result: PageAccessResult = {
       canView,
       canEdit,
       role,
       accessLevel,
-      visibility: isSettings ? "admin-only" : visibility,
+      visibility: isSettings || isCommand ? "admin-only" : visibility,
       requiresLogin: false,
       isReadOnly: role === "read_only",
     };

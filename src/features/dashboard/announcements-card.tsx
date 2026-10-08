@@ -1,9 +1,12 @@
-import { Bell, ChevronLeft, ChevronRight, Clock3, MapPin, Megaphone, Sparkles } from "lucide-react";
+import { BarChart3, Bell, ChevronLeft, ChevronRight, Clock3, MapPin, Megaphone, MessageCircleQuestion, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Announcement } from "@/data/announcements";
 import { AnnouncementsManager } from "@/features/dashboard/announcements-manager";
+import { AskPost } from "@/features/dashboard/ask-post";
+import { PollPost } from "@/features/dashboard/poll-post";
 import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
 import { leadTimeLabel, resolveAnnouncements } from "@/lib/announcements";
 import type { AppEvent } from "@/lib/event-data";
@@ -29,14 +32,28 @@ export function AnnouncementsCard({
   now,
   posts,
   canManage = false,
+  signedIn = false,
 }: {
   event: AppEvent;
   now: Date;
   posts?: Announcement[];
   canManage?: boolean;
+  /** Voting and asking need an account; a signed-out visitor is offered one. */
+  signedIn?: boolean;
 }) {
   const items = useMemo(() => resolveAnnouncements(event, posts), [event, posts]);
   const [managing, setManaging] = useState(false);
+  // The command centre's "Post an update" lands here with the manager open.
+  // Read once and cleared, so a refresh does not reopen it.
+  const [params, setParams] = useSearchParams();
+  const wantsManager = params.get("announcements") === "manage";
+  useEffect(() => {
+    if (!wantsManager || !canManage) return;
+    setManaging(true);
+    const next = new URLSearchParams(params);
+    next.delete("announcements");
+    setParams(next, { replace: true });
+  }, [wantsManager, canManage, params, setParams]);
   const drafts = (posts ?? []).filter((post) => post.status === "draft").length;
   const prefersReduced = usePrefersReducedMotion();
   const [index, setIndex] = useState(0);
@@ -46,11 +63,17 @@ export function AnnouncementsCard({
     setIndex(0);
   }, [event.id]);
 
+  // A poll or a question box is something somebody is in the middle of using.
+  // Rotating away from it would throw away a half-chosen option or a half-typed
+  // question - the same reason the auctions strip never auto-advances.
+  const activeKind = items[Math.min(index, items.length - 1)]?.kind;
+  const interactive = activeKind === "poll" || activeKind === "ask";
+
   useEffect(() => {
-    if (items.length < 2 || paused || prefersReduced) return;
+    if (items.length < 2 || paused || prefersReduced || interactive) return;
     const timer = window.setInterval(() => setIndex((current) => (current + 1) % items.length), ROTATE_MS);
     return () => window.clearInterval(timer);
-  }, [items.length, paused, prefersReduced]);
+  }, [items.length, paused, prefersReduced, interactive]);
 
   if (!items.length && !canManage) return null;
 
@@ -83,6 +106,8 @@ export function AnnouncementsCard({
 
   const active = items[Math.min(index, items.length - 1)];
   const lead = leadTimeLabel(active, now);
+  const isPoll = active.kind === "poll";
+  const isAsk = active.kind === "ask";
   const isLive = lead === "Happening now";
   const isDone = lead === "Completed";
   const isSpotlight = active.tone === "spotlight" && !isDone;
@@ -142,8 +167,14 @@ export function AnnouncementsCard({
                 isDone ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground"
               }`}
             >
-              <Sparkles className={`h-3 w-3 ${isDone ? "" : "animate-pulse-soft"}`} aria-hidden="true" />
-              {active.tag}
+              {isPoll ? (
+                <BarChart3 className="h-3 w-3" aria-hidden="true" />
+              ) : isAsk ? (
+                <MessageCircleQuestion className="h-3 w-3" aria-hidden="true" />
+              ) : (
+                <Sparkles className={`h-3 w-3 ${isDone ? "" : "animate-pulse-soft"}`} aria-hidden="true" />
+              )}
+              {isPoll ? "Poll" : isAsk ? "Ask us anything" : active.tag}
             </span>
             {isLive ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
@@ -161,6 +192,9 @@ export function AnnouncementsCard({
           {active.body ? (
             <p className="relative mt-0.5 whitespace-pre-line text-xs leading-snug text-muted-foreground">{active.body}</p>
           ) : null}
+
+          {isPoll ? <PollPost key={active.id} post={active} signedIn={signedIn} enabled /> : null}
+          {isAsk ? <AskPost key={active.id} post={active} signedIn={signedIn} enabled /> : null}
 
           <div className="relative mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {active.day ? (

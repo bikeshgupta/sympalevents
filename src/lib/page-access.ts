@@ -48,11 +48,13 @@ export const pageLabels: Record<string, string> = {
   closing: "Closing",
   contacts: "Contacts",
   settings: "Settings",
+  // The organisers' own view - not a module, so not configurable (see below).
+  command: "Command centre",
 };
 
 /** Every page whose visibility an admin can set. "settings" is not one of
  *  them - it is the screen that controls the others, so it stays admin-only. */
-export const configurablePageKeys = Object.keys(pageLabels).filter((pageKey) => pageKey !== "settings");
+export const configurablePageKeys = Object.keys(pageLabels).filter((pageKey) => pageKey !== "settings" && pageKey !== "command");
 
 /**
  * Pages that can never be anonymous. "tasks" names people and carries their

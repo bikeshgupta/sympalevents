@@ -31,6 +31,7 @@ export type ViewMode = "organiser" | "resident";
  * resident the server allows, rather than silently vanishing.
  */
 export const organiserOnlyPages = new Set([
+  "command",
   "contributions",
   "sponsors",
   "budget",
