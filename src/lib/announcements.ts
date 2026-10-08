@@ -10,14 +10,22 @@ export type ResolvedAnnouncement = Announcement & {
  * Turns a notice's "Day 3" into the event's real calendar date, so notices stay
  * correct when event dates move. A notice naming a day the event does not have
  * simply loses its date rather than breaking.
+ *
+ * `rows` are the event's own announcements as the server sent them. When there
+ * are none to give (the demo, or a server that predates them) the committed
+ * file is used instead - and only then, so a real event never inherits a
+ * notice meant for another. Drafts are dropped here: this feeds what residents
+ * read, and an organiser's drafts are the manager's business.
  */
-export function resolveAnnouncements(event: AppEvent | undefined): ResolvedAnnouncement[] {
+export function resolveAnnouncements(event: AppEvent | undefined, rows?: Announcement[]): ResolvedAnnouncement[] {
   if (!event) return [];
   const days = getEventDays(event);
   const dateFor = (day?: string, date?: string) => date ?? days.find((item) => item.key === day)?.date;
 
-  return allAnnouncements
-    .filter((item) => !item.eventId || item.eventId === event.id)
+  const source = rows ?? allAnnouncements.filter((item) => !item.eventId || item.eventId === event.id);
+
+  return source
+    .filter((item) => item.status !== "draft")
     .map((item) => ({
       ...item,
       resolvedDate: dateFor(item.day, item.date),

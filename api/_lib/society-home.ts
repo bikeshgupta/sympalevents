@@ -3,6 +3,7 @@ import {
   normalizeVisibility,
   type PageVisibility,
 } from "./page-visibility.js";
+import { cleanHeroOptions } from "./hero-options.js";
 import { selectDegrading } from "./schema-compat.js";
 import { assertServiceSupabase, optionalAppUser, sendJson } from "./server.js";
 
@@ -99,6 +100,14 @@ async function tally<T extends Record<string, unknown>>(
 }
 
 /** `18:00:00` from a Postgres `time` column -> `18:00`; null stays null. */
+/** The focal point out of an event's hero options, or null for "centre". */
+function heroFocus(value: unknown): { x: number; y: number } | null {
+  const options = cleanHeroOptions(value);
+  return options?.focusX !== undefined && options.focusY !== undefined
+    ? { x: options.focusX, y: options.focusY }
+    : null;
+}
+
 function clock(value: unknown): string | null {
   const match = String(value ?? "").trim().match(/^(\d{1,2}):(\d{2})/);
   return match ? `${match[1].padStart(2, "0")}:${match[2]}` : null;
@@ -221,6 +230,7 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
       "event_type",
       "status_override",
       "hero_image_url",
+      "hero_options",
       "start_time",
       "end_time",
     ],
@@ -349,6 +359,10 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
       statusOverride: (row.status_override as "draft" | "cancelled" | null) ?? null,
       isClosed: closedByEvent.get(id) ?? false,
       heroImageUrl: (row.hero_image_url as string | null) ?? null,
+      // Where the photograph is anchored, so a card crops it around the part
+      // the organiser chose. Only the focal point: the title and subtitle
+      // are the dashboard hero's business, not a card's.
+      heroFocus: heroFocus(row.hero_options),
       modules: visibleModules(id),
       metrics: {
         reviewCount: rating?.count ?? 0,

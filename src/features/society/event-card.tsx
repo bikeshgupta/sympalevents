@@ -42,6 +42,7 @@ export function EventCard({ event, to, now }: { event: SocietyEvent; to: string;
       <EventArtwork
         eventType={event.eventType}
         imageUrl={event.heroImageUrl}
+        focus={event.heroFocus}
         dim={status === "completed" || cancelled}
         className="h-20 w-20 shrink-0 rounded-lg sm:h-24 sm:w-24"
       />

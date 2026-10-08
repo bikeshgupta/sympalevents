@@ -11,6 +11,7 @@ import { FinancialSummary } from "@/features/dashboard/widgets/financial-summary
 import { FundingProgress } from "@/features/dashboard/widgets/funding-progress";
 import { GalleryPreview } from "@/features/dashboard/widgets/gallery-preview";
 import { MyResponsibilities } from "@/features/dashboard/widgets/my-responsibilities";
+import type { Announcement } from "@/data/announcements";
 import type { ClosingPayload } from "@/lib/closing";
 import type { AppEvent, CollectionsView, ContributionRow, DataSource, EventPlanRow, SponsorRow } from "@/lib/event-data";
 import type { LayoutEntry } from "@/lib/widgets";
@@ -38,6 +39,10 @@ export type DashboardContext = {
   signedIn: boolean;
   source: DataSource;
   fallbackReason?: string;
+  /** The event's announcements - drafts included for an editor. */
+  announcements?: Announcement[];
+  /** Whether this viewer may write them; draws the organiser's door on the card. */
+  canManageAnnouncements: boolean;
 
   totalBudget: number;
   actualExpenses: number;
@@ -106,7 +111,14 @@ export function renderWidget(entry: LayoutEntry, ctx: DashboardContext): ReactNo
       return <DashboardAuctions eventId={ctx.event.id} />;
 
     case "announcements":
-      return <AnnouncementsCard event={ctx.event} now={ctx.now} />;
+      return (
+        <AnnouncementsCard
+          event={ctx.event}
+          now={ctx.now}
+          posts={ctx.announcements}
+          canManage={ctx.canManageAnnouncements}
+        />
+      );
 
     case "financial-summary":
       return (

@@ -179,7 +179,7 @@ export function AppLayout() {
               }
             />
           </div>
-          <AnnouncementsBell event={event} />
+          <AnnouncementsBell event={event} announcements={data.announcements} />
           {canRequestCommitteeAccess ? (
             <Button variant="outline" size="sm" onClick={() => void requestCommitteeAccess()}>
               Request access

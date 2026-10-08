@@ -1,3 +1,6 @@
+import type { Announcement } from "@/data/announcements";
+import { toAnnouncement, type AnnouncementPostPayload } from "@/lib/announcement-posts";
+import type { HeroOptions } from "@/lib/hero";
 import { useSession } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -41,6 +44,9 @@ export type AppEvent = {
   detailsReady?: boolean;
   timezone: string;
   heroImageUrl?: string | null;
+  /** Focal point, hidden title and subtitle for the hero. Null is "as it has
+   *  always been". See src/lib/hero.ts. */
+  heroOptions?: HeroOptions | null;
   status?: string;
   /** festival | sports | cultural | mixed | custom - see migration 024. */
   eventType?: string;
@@ -162,6 +168,9 @@ export type CollectionsView = {
 
 type EventData = {
   source: DataSource;
+  /** The event's own announcements. Absent (demo, or a server that predates
+   *  them) means "use the committed file", which is empty. */
+  announcements?: Announcement[];
   fallbackReason?: string;
   event: AppEvent;
   collections: CollectionsView;
@@ -249,10 +258,12 @@ type EventDataResponse = {
     unitLabel?: string | null;
     dashboardLayout?: unknown;
     heroImageUrl?: string | null;
+    heroOptions?: HeroOptions | null;
     theme?: string | null;
     shareToken?: string | null;
   };
   financials: EventData["financials"];
+  announcements?: AnnouncementPostPayload[];
   /** Absent from a server that predates counts-only events. */
   collections?: CollectionsView;
   contributions: ContributionRow[];
@@ -330,6 +341,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
             // The event's own photograph when it has one; the bundled image
             // in the dashboard hero is the fallback, not the only option.
             heroImageUrl: payload.event.heroImageUrl ?? null,
+            heroOptions: payload.event.heroOptions ?? null,
             status: payload.event.status,
             eventType: payload.event.eventType ?? "festival",
             unitLabel: payload.event.unitLabel ?? null,
@@ -352,6 +364,7 @@ export function useEventData(options: UseEventDataOptions = {}) {
           tasks: includeTasks ? payload.tasks : [],
           expenses: payload.expenses,
           eventPlan: payload.eventPlan,
+          announcements: payload.announcements?.map(toAnnouncement),
         };
       } catch (error) {
         const fallbackReason = error instanceof Error ? error.message : "Could not load this event";

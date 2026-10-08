@@ -38,6 +38,7 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
         <EventArtwork
           eventType={event.eventType}
           imageUrl={event.heroImageUrl}
+          focus={event.heroFocus}
           dim={status === "completed"}
           className="absolute inset-0 h-full w-full transition-transform duration-500 group-hover:scale-[1.02]"
           iconClassName="absolute right-5 top-5 h-16 w-16 opacity-60 sm:right-7 sm:top-7 sm:h-20 sm:w-20"

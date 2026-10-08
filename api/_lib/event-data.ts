@@ -1,3 +1,5 @@
+import { loadAnnouncements } from "./announcements.js";
+import { cleanHeroOptions } from "./hero-options.js";
 import { resolvePageAccess } from "./page-visibility.js";
 import { publicationAccess } from "./publication.js";
 import { selectDegrading } from "./schema-compat.js";
@@ -171,7 +173,7 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
  * The first six are the schema as it was created; each later one belongs to a
  * migration the committee may not have run yet (024 type and unit label, 026
  * layout, 027 hero image, theme and share token, 029 slug, 031 times and the
- * collections setting). See api/_lib/schema-compat.ts for why a missing one
+ * collections setting, 035 hero options). See api/_lib/schema-compat.ts for why a missing one
  * costs only itself.
  */
 const eventColumns = [
@@ -187,6 +189,7 @@ const eventColumns = [
   "unit_label",
   "dashboard_layout",
   "hero_image_url",
+  "hero_options",
   "theme",
   "share_token",
   "start_time",
@@ -476,6 +479,11 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
     societySlug = (societyRow?.slug as string | null) ?? null;
   }
 
+  // The notices on the dashboard card and in the header bell. Drafts go only
+  // to somebody who can edit the dashboard; everybody else is sent what is
+  // published. Never throws - see loadAnnouncements.
+  const announcements = await loadAnnouncements(supabase, eventId, dashboard.canEdit);
+
   sendJson(res, 200, {
     event: {
       id: event.id,
@@ -510,6 +518,7 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
       // frozen to whatever the defaults were the day it was made.
       dashboardLayout: "dashboard_layout" in event ? event.dashboard_layout ?? null : null,
       heroImageUrl: "hero_image_url" in event ? (event.hero_image_url as string | null) ?? null : null,
+      heroOptions: "hero_options" in event ? cleanHeroOptions(event.hero_options) : null,
       theme: "theme" in event ? (event.theme as string | null) ?? null : null,
       // The share token is a link, not a secret, but it is only useful to
       // somebody who can hand it out - so it travels only for a committee
@@ -541,5 +550,6 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
     tasks,
     expenses,
     eventPlan,
+    announcements,
   });
 }

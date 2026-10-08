@@ -1,7 +1,9 @@
-import { Bell, ChevronLeft, ChevronRight, Clock3, MapPin, Sparkles } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, Clock3, MapPin, Megaphone, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Announcement } from "@/data/announcements";
+import { AnnouncementsManager } from "@/features/dashboard/announcements-manager";
 import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
 import { leadTimeLabel, resolveAnnouncements } from "@/lib/announcements";
 import type { AppEvent } from "@/lib/event-data";
@@ -15,9 +17,27 @@ const ROTATE_MS = 8000;
  * are now their own page (see src/features/auctions) backed by a real table,
  * since an auction needs to be created and customized per event rather than
  * hardcoded into one notice.
+ *
+ * `posts` is everything the server sent, drafts included for somebody who can
+ * edit; the card draws only what is published. `canManage` is the organiser's
+ * door - a button that opens the manager - and is the only thing that changes
+ * for them. With nothing published a resident's view is still no card at all,
+ * but an editor keeps one, because it is where they would write the first.
  */
-export function AnnouncementsCard({ event, now }: { event: AppEvent; now: Date }) {
-  const items = useMemo(() => resolveAnnouncements(event), [event]);
+export function AnnouncementsCard({
+  event,
+  now,
+  posts,
+  canManage = false,
+}: {
+  event: AppEvent;
+  now: Date;
+  posts?: Announcement[];
+  canManage?: boolean;
+}) {
+  const items = useMemo(() => resolveAnnouncements(event, posts), [event, posts]);
+  const [managing, setManaging] = useState(false);
+  const drafts = (posts ?? []).filter((post) => post.status === "draft").length;
   const prefersReduced = usePrefersReducedMotion();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -32,7 +52,34 @@ export function AnnouncementsCard({ event, now }: { event: AppEvent; now: Date }
     return () => window.clearInterval(timer);
   }, [items.length, paused, prefersReduced]);
 
-  if (!items.length) return null;
+  if (!items.length && !canManage) return null;
+
+  const manager = canManage ? (
+    <AnnouncementsManager eventId={event.id} posts={posts ?? []} open={managing} onOpenChange={setManaging} />
+  ) : null;
+
+  if (!items.length) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Megaphone className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            <CardTitle>News &amp; Announcements</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3 pb-4">
+          <p className="text-sm text-muted-foreground">
+            Nothing is published yet, so residents do not see this card.
+            {drafts ? ` You have ${drafts} ${drafts === 1 ? "draft" : "drafts"} waiting.` : ""}
+          </p>
+          <Button type="button" onClick={() => setManaging(true)}>
+            {drafts ? "Review drafts" : "Post an announcement"}
+          </Button>
+        </CardContent>
+        {manager}
+      </Card>
+    );
+  }
 
   const active = items[Math.min(index, items.length - 1)];
   const lead = leadTimeLabel(active, now);
@@ -57,7 +104,15 @@ export function AnnouncementsCard({ event, now }: { event: AppEvent; now: Date }
             </span>
             <CardTitle>News &amp; Announcements</CardTitle>
           </div>
-          <Bell className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+          <div className="flex items-center gap-1">
+            {canManage ? (
+              <Button type="button" variant="ghost" size="sm" className="h-10 text-xs" onClick={() => setManaging(true)}>
+                <Megaphone className="h-4 w-4" aria-hidden="true" />
+                Manage{drafts ? ` (${drafts} ${drafts === 1 ? "draft" : "drafts"})` : ""}
+              </Button>
+            ) : null}
+            <Bell className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+          </div>
         </div>
       </CardHeader>
 
@@ -103,7 +158,9 @@ export function AnnouncementsCard({ event, now }: { event: AppEvent; now: Date }
           </div>
 
           <h3 className="relative mt-1.5 text-sm font-semibold leading-snug sm:text-base">{active.title}</h3>
-          <p className="relative mt-0.5 text-xs leading-snug text-muted-foreground">{active.body}</p>
+          {active.body ? (
+            <p className="relative mt-0.5 whitespace-pre-line text-xs leading-snug text-muted-foreground">{active.body}</p>
+          ) : null}
 
           <div className="relative mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {active.day ? (
@@ -171,6 +228,7 @@ export function AnnouncementsCard({ event, now }: { event: AppEvent; now: Date }
           </div>
         ) : null}
       </CardContent>
+      {manager}
     </Card>
   );
 }

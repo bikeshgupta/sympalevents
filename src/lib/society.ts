@@ -36,6 +36,8 @@ export type SocietyEvent = {
   statusOverride: EventStatusOverride;
   isClosed: boolean;
   heroImageUrl: string | null;
+  /** Where the organiser anchored that photograph (0-100 each), or null for centred. */
+  heroFocus?: { x: number; y: number } | null;
   /** Page keys this viewer may open - what a card is allowed to mention. */
   modules: string[];
   metrics: EventMetrics;

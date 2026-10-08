@@ -10,6 +10,7 @@ import { formatRating } from "@/lib/closing";
 import { parseAgenda } from "@/lib/agenda";
 import { describeEventHours } from "@/lib/event-hours";
 import { eventStartInstant } from "@/lib/event-status";
+import { heroPhotoStyle } from "@/lib/hero";
 
 const fallbackHeroStyle = {
   background:
@@ -38,6 +39,13 @@ export function EventHero({
   fallbackReason?: string;
 }) {
   const heroImageUrl = event.heroImageUrl || staticHeroImageUrl;
+  // The focal point and "title is already in the picture" belong to the
+  // photograph an organiser uploaded: the standard photograph is never
+  // re-cropped or stripped of its heading. A subtitle is just text, so it
+  // applies either way.
+  const photoOptions = event.heroImageUrl ? event.heroOptions : null;
+  const hideTitle = photoOptions?.hideTitle === true;
+  const subtitle = event.heroOptions?.subtitle;
   // Only drawn when the committee set an hour; an event with none (every one
   // made before times existed) renders exactly as it always did.
   const hours = describeEventHours(event);
@@ -58,7 +66,7 @@ export function EventHero({
        */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat md:bg-right md:bg-[length:auto_100%]"
-        style={{ backgroundImage: `url("${heroImageUrl}")` }}
+        style={heroPhotoStyle(heroImageUrl, photoOptions)}
         aria-hidden="true"
       />
       {/*
@@ -98,9 +106,23 @@ export function EventHero({
               </div>
             </div>
 
-            <h1 className="mt-3 text-3xl font-semibold leading-[1.1] tracking-tight [text-shadow:0_2px_4px_rgba(0,0,0,0.9),0_6px_24px_rgba(0,0,0,0.85)] sm:text-4xl lg:text-5xl">
+            {/* Hidden when the photograph already carries the name - but kept
+                for screen readers, because the page needs its heading. */}
+            <h1
+              className={
+                hideTitle
+                  ? "sr-only"
+                  : "mt-3 text-3xl font-semibold leading-[1.1] tracking-tight [text-shadow:0_2px_4px_rgba(0,0,0,0.9),0_6px_24px_rgba(0,0,0,0.85)] sm:text-4xl lg:text-5xl"
+              }
+            >
               {event.name}
             </h1>
+
+            {subtitle ? (
+              <p className="mt-2 max-w-xl text-base font-medium leading-snug text-white/95 [text-shadow:0_1px_3px_rgba(0,0,0,0.95),0_2px_12px_rgba(0,0,0,0.8)] sm:text-lg">
+                {subtitle}
+              </p>
+            ) : null}
 
             {/* How it was rated, right under the name, once it is over. On a
                 frosted plate rather than a text shadow: a number this small

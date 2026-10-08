@@ -106,6 +106,8 @@ export function DashboardPage() {
     signedIn: Boolean(session?.user),
     source: data.source,
     fallbackReason: data.fallbackReason,
+    announcements: data.announcements,
+    canManageAnnouncements: dashboardAccess.canEdit && data.source !== "demo",
     totalBudget: financials.totalBudget,
     actualExpenses: financials.actualExpenses,
     fundsReceived,

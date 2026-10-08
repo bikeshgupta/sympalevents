@@ -486,19 +486,82 @@ Chrome's "Add to Home screen" menu item, and there is no offline support.
 
 ## Announcements (News section)
 
-Dashboard notices and the header bell are driven by
-[src/data/announcements.ts](src/data/announcements.ts) — **a plain file, not a
-database table.** To post a notice, add an entry and deploy.
+Dashboard notices and the header bell are posts an organiser writes and publishes
+in the app. They live in `event_announcements` (029, widened by
+[034](supabase/migrations/034_announcement_posts.sql): `status`, `published_at`,
+`pinned`, `kind`). [src/data/announcements.ts](src/data/announcements.ts) is now
+only the demo's fallback and is an empty array - its entries are never merged
+into a real event's list.
 
+**Not run yet.** 034 has to be applied by hand. Until it is, a read returns no
+posts (it degrades one column at a time, and a missing table is "no posts" -
+the dashboard never fails over a notice board) and a write answers 501 naming
+029 and 034.
+
+- **Reads ride with the event.** `?resource=data` carries `announcements`
+  (`loadAnnouncements()` in [api/_lib/announcements.ts](api/_lib/announcements.ts)),
+  so a post adds no request - the bell is on every screen and would otherwise
+  make one per page load. Do not give them a GET of their own.
+- **Writes are `POST | PATCH | DELETE /api/events?resource=announcements`**, folded
+  into `api/events.ts` (the function count is still 12). They need edit access
+  to the **dashboard**: an event admin, or an explicit `edit` grant - the same
+  rule appearance and layout use. A post's event is read from its own row, never
+  taken from the request. Every write is audited.
+- **Drafts go only to somebody who can edit the dashboard.** Everyone else is
+  sent published posts and nothing else; `resolveAnnouncements()` also drops
+  drafts, so the card and bell can never draw one.
+- **`kind` is the extension point** for polls, ask-me-anything and auction
+  posts. It is deliberately not a check constraint: a new kind is an entry in
+  `kinds` in the API plus a renderer, not a migration. Only `message` exists.
+  An auction post should *point at* an existing auction, not copy it - auctions
+  stay their own data (see Auctions).
+- **The organiser's door is on the card**
+  ([announcements-manager.tsx](src/features/dashboard/announcements-manager.tsx)):
+  a "Manage" button, shown only when `canManage`. With nothing published a
+  resident still sees no card at all, but an editor keeps one with a "Post an
+  announcement" button, because that is where they would write the first.
 - `day: "Day 3"` is resolved to the event's real calendar date at render time by
-  `resolveAnnouncements()` in [src/lib/announcements.ts](src/lib/announcements.ts),
-  so notices survive the event dates changing.
+  `resolveAnnouncements()` in [src/lib/announcements.ts](src/lib/announcements.ts).
+  The manager writes a real `date` instead.
 - `tone: "spotlight"` gets the animated gradient + light-sweep treatment. Use it for
-  one notice at a time; a screen where everything glows highlights nothing.
+  one notice at a time; a screen where everything glows highlights nothing. The form
+  offers Normal and Spotlight only - `alert` is accepted by the API but the card does
+  not draw it differently, and a choice that changes nothing is not offered.
 - `leadTimeLabel()` produces "in 2 days 4 hr" / "Happening now" / "Completed".
   A notice reads as live for 2 hours past its start, then drops out of the bell count.
-- More than one entry turns the dashboard card into an auto-rotating carousel
-  (8s, pauses on hover/focus, dots + arrows). One entry renders as a static card.
+  A post with **no date** stays until it is unpublished.
+- More than one post turns the dashboard card into an auto-rotating carousel
+  (8s, pauses on hover/focus, dots + arrows). One renders as a static card.
+  Pinned posts sort first, then newest published.
+- Not built yet: scheduled publishing, polls, ask-me-anything, auction posts.
+
+## Hero options
+
+`events.hero_options` ([035](supabase/migrations/035_hero_options.sql), **not run
+yet**) is one jsonb object: `focusX` / `focusY` (0-100), `hideTitle`, `subtitle`.
+Edited in Settings -> Appearance ([hero-options-form.tsx](src/features/settings/hero-options-form.tsx)),
+saved through the existing `?resource=appearance`, read with the event.
+
+- **`null` is "exactly what the hero has always done"**, so an event that never
+  touches it renders through the same classes as before. `heroPhotoStyle()` in
+  [src/lib/hero.ts](src/lib/hero.ts) returns only a background image in that case.
+- **A focal point switches the photograph to `cover` at every width**, anchored on
+  that point. Without one, the original rule stands (centred on a phone, full-height
+  and right-aligned from `md`). The same point is used as `object-position` on the
+  society page's featured card and event cards, so one photograph is cropped
+  around the same part in all three places.
+- **Focal point and `hideTitle` apply only to a photograph the organiser uploaded.**
+  The standard photograph is never re-cropped or stripped of its heading. A
+  subtitle is just text and applies either way. Removing the photograph clears the
+  focal point and `hideTitle` (chosen for that picture) and keeps the subtitle.
+- **`hideTitle` makes the `<h1>` `sr-only`, not absent** - the page needs its heading.
+- **This is deliberately not a free-form designer.** The name and subtitle sit on a
+  scrim tuned so white text clears 4.5:1 over any photograph; moving text anywhere or
+  thinning that scrim is how a hero becomes unreadable, the same reason colour is five
+  presets. What is offered cannot make it worse. A new option needs the same test.
+- `cleanHeroOptions()` ([api/_lib/hero-options.ts](api/_lib/hero-options.ts)) runs on the
+  way in *and* out: jsonb stores anything, and a hand-edited row must not put a
+  4,000-character subtitle in front of every visitor.
 
 ## Auctions
 

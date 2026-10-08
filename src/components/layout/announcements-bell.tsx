@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
 import { activeAnnouncements, leadTimeLabel, resolveAnnouncements } from "@/lib/announcements";
 import { auctionRuntimeStatus, publishedAuctions, useAuctions } from "@/lib/auctions";
+import type { Announcement } from "@/data/announcements";
 import type { AppEvent } from "@/lib/event-data";
 
 function formatAuctionWindow(value: string) {
@@ -26,9 +27,9 @@ function formatAuctionWindow(value: string) {
  * plus published auctions (mirrors the dashboard's Auctions section).
  * Opening it re-reads the clock so lead times ("in 2 days") stay honest.
  */
-export function AnnouncementsBell({ event }: { event?: AppEvent }) {
+export function AnnouncementsBell({ event, announcements }: { event?: AppEvent; announcements?: Announcement[] }) {
   const [now, setNow] = useState(() => new Date());
-  const items = useMemo(() => resolveAnnouncements(event), [event]);
+  const items = useMemo(() => resolveAnnouncements(event, announcements), [event, announcements]);
   const active = activeAnnouncements(items, now);
   const { auctions } = useAuctions(event?.id);
   const auctionItems = useMemo(() => publishedAuctions(auctions), [auctions]);

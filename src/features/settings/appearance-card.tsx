@@ -4,8 +4,10 @@ import { ChangeEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
+import { HeroOptionsForm } from "@/features/settings/hero-options-form";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
+import type { HeroOptions } from "@/lib/hero";
 import { prepareGalleryPhoto } from "@/lib/images";
 import { usePageAccess } from "@/lib/page-access";
 import { themePresets } from "@/lib/themes";
@@ -35,7 +37,7 @@ export function AppearanceCard() {
   const [failed, setFailed] = useState(false);
 
   const save = useMutation({
-    mutationFn: (input: { theme?: string | null; heroImageUrl?: string | null }) =>
+    mutationFn: (input: { theme?: string | null; heroImageUrl?: string | null; heroOptions?: HeroOptions | null }) =>
       apiFetch<{ theme: string | null; heroImageUrl: string | null }>("/api/events?resource=appearance", {
         method: "PATCH",
         body: { eventId: selectedEventId, ...input },
@@ -95,10 +97,24 @@ export function AppearanceCard() {
     }
   }
 
+  async function saveHeroOptions(next: HeroOptions | null) {
+    succeed(null);
+    try {
+      await save.mutateAsync({ heroOptions: next });
+      succeed(next ? "Hero details saved." : "Hero details reset.");
+    } catch (error) {
+      fail(error, "Could not save the hero details");
+    }
+  }
+
   async function clearHero() {
     succeed(null);
     try {
-      await save.mutateAsync({ heroImageUrl: null });
+      // The focal point and the hidden title were chosen for that photograph;
+      // left behind they would be applied to whatever comes next. The subtitle
+      // is just words, so it stays.
+      const { subtitle } = data.event.heroOptions ?? {};
+      await save.mutateAsync({ heroImageUrl: null, ...(data.event.heroOptions ? { heroOptions: subtitle ? { subtitle } : null } : {}) });
       succeed("Back to the standard photograph.");
     } catch (error) {
       fail(error, "Could not clear the photograph");
@@ -187,6 +203,14 @@ export function AppearanceCard() {
             ) : null}
           </div>
         </div>
+
+        <HeroOptionsForm
+          key={`${heroImageUrl ?? "standard"}|${JSON.stringify(data.event.heroOptions ?? null)}`}
+          photoUrl={heroImageUrl}
+          options={data.event.heroOptions ?? null}
+          busy={busy}
+          onSave={saveHeroOptions}
+        />
 
         {message ? (
           <p

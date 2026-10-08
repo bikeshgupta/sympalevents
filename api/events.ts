@@ -7,6 +7,7 @@ import { handleShareLink } from "./_lib/share.js";
 import { handleLedger } from "./_lib/ledger.js";
 import { handleResolveEventSlug, handleSocietyHome } from "./_lib/society-home.js";
 import { handleDashboardLayout } from "./_lib/layout.js";
+import { handleAnnouncements } from "./_lib/announcements.js";
 import { handleSocieties } from "./_lib/societies.js";
 import {
   cleanModuleLabel,
@@ -59,6 +60,16 @@ export default async function handler(req: any, res: any) {
   if (resource === "appearance") {
     try {
       return await handleAppearance(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // Notices an organiser writes and publishes. Reads ride with the event in
+  // `?resource=data`; only the writes need a route - see api/_lib/announcements.ts.
+  if (resource === "announcements") {
+    try {
+      return await handleAnnouncements(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }
