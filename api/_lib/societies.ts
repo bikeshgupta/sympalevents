@@ -1,4 +1,5 @@
 import { assertServiceSupabase, optionalAppUser, requireAppUser, sendJson } from "./server.js";
+import { SOCIETY_REGISTRATION_OPEN, societyRegistrationClosedMessage } from "../../shared/society-registration.js";
 import { audit } from "./audit.js";
 
 /**
@@ -172,6 +173,7 @@ async function listSocieties(req: ApiRequest, res: ApiResponse) {
 }
 
 async function createSociety(req: ApiRequest, res: ApiResponse) {
+  if (!SOCIETY_REGISTRATION_OPEN) throw fail(societyRegistrationClosedMessage, 403);
   const supabase = assertServiceSupabase();
   const { appUser } = await requireAppUser(req);
   const body = await getRequestBody(req);

@@ -875,6 +875,19 @@ is unchanged.
   viewer could open its closing page. There is deliberately no guessing from names or
   templates for events that were not created by copying.
 
+## Society registration is closed (for now)
+
+`SOCIETY_REGISTRATION_OPEN` in [shared/society-registration.ts](shared/society-registration.ts)
+is `false`. There is no verification step yet, so letting anyone create a society would let
+a lookalike ("TRU Wind Chimes") appear beside the real one with its own admin. While closed:
+`POST ?resource=societies` answers 403, event creation without a `societyId` answers 403, and
+the Create-event form shows the person's one society **fixed** (no "new society" option; with
+none, an explanation). An event can only join a society the person is **already admin or
+committee of** - `create_event_draft` has always enforced that, so today this means the
+TRU WindChimes committee. Adding a society admin is therefore a row in `organization_members`
+(role `admin`), done by hand. The server and form share the one constant; flipping it is the
+society-registration release, which also needs a verified flag and a lookalike check.
+
 ## Hero options
 
 `events.hero_options` ([035](supabase/migrations/035_hero_options.sql), **not run

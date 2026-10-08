@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { SOCIETY_REGISTRATION_OPEN, societyRegistrationClosedMessage } from "../../../shared/society-registration";
 import { ArrowLeft, Check, ChevronDown, Flame, Music, PartyPopper, Plus, Trophy } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
@@ -103,7 +104,10 @@ export function CreateEventWizard() {
     if (societyId === "" && ownSocieties.length) setSocietyId(ownSocieties[0].id);
   }, [ownSocieties, societyId]);
 
-  const creatingSociety = societyId === NEW_SOCIETY || (!ownSocieties.length && societyId === "");
+  // While registration is closed nobody starts a society here: the form only ever offers one
+  // the person already belongs to, and with none they are told why instead of given a blank box.
+  const creatingSociety = SOCIETY_REGISTRATION_OPEN && (societyId === NEW_SOCIETY || (!ownSocieties.length && societyId === ""));
+  const blockedNoSociety = !SOCIETY_REGISTRATION_OPEN && !ownSocieties.length;
 
   if (!isSessionLoading && !session) {
     return <Navigate to="/login" replace />;
@@ -116,7 +120,7 @@ export function CreateEventWizard() {
   }
 
   const detailsComplete =
-    eventName.trim() && startDate && endDate && (creatingSociety ? societyName.trim() : Boolean(societyId));
+    eventName.trim() && startDate && endDate && !blockedNoSociety && (creatingSociety ? societyName.trim() : Boolean(societyId));
   const datesBackwards = Boolean(startDate && endDate && endDate < startDate);
   // Only a one-day event can contradict itself on times alone. A blank start is
   // the start of its day and a blank end is the end of it.
@@ -317,7 +321,7 @@ export function CreateEventWizard() {
 
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="society">Society</Label>
-                {ownSocieties.length ? (
+                {ownSocieties.length > 1 || (ownSocieties.length === 1 && SOCIETY_REGISTRATION_OPEN) ? (
                   <select
                     id="society"
                     className="h-10 w-full rounded-md border bg-background px-3 text-sm"
@@ -329,8 +333,18 @@ export function CreateEventWizard() {
                         {society.name}
                       </option>
                     ))}
-                    <option value={NEW_SOCIETY}>Create a new society</option>
+                    {SOCIETY_REGISTRATION_OPEN ? <option value={NEW_SOCIETY}>Create a new society</option> : null}
                   </select>
+                ) : ownSocieties.length === 1 ? (
+                  // One society and no way to start another: show it, fixed, rather than a one-item dropdown.
+                  <p id="society" className="flex h-10 w-full items-center rounded-md border bg-muted px-3 text-sm font-medium">
+                    {ownSocieties[0].name}
+                  </p>
+                ) : null}
+                {blockedNoSociety ? (
+                  <p role="alert" className="rounded-md bg-amber-100 p-3 text-sm text-amber-900">
+                    {societyRegistrationClosedMessage} Ask your society&rsquo;s committee to add you, then come back.
+                  </p>
                 ) : null}
                 {creatingSociety ? (
                   <Input
@@ -341,11 +355,13 @@ export function CreateEventWizard() {
                     className={ownSocieties.length ? "mt-2" : undefined}
                   />
                 ) : null}
-                <p className="text-xs text-muted-foreground">
-                  {creatingSociety
-                    ? "A new society is created and you become its admin. You can rename it later."
-                    : "This event joins that society."}
-                </p>
+                {blockedNoSociety ? null : (
+                  <p className="text-xs text-muted-foreground">
+                    {creatingSociety
+                      ? "A new society is created and you become its admin. You can rename it later."
+                      : "This event joins that society."}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">

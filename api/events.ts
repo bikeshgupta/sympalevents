@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SOCIETY_REGISTRATION_OPEN, societyRegistrationClosedMessage } from "../shared/society-registration.js";
 import { handleRegistration, handlePublication } from "./_lib/registration.js";
 import { handleEventClosing } from "./_lib/closing.js";
 import { handleEventData } from "./_lib/event-data.js";
@@ -192,6 +193,9 @@ export default async function handler(req: any, res: any) {
     }).safeParse(body);
     if (!parsed.success) throw Object.assign(new Error(parsed.error.issues[0].message), {statusCode:400});
     const input = parsed.data;
+    // Until society registration ships an event can only join a society the person already
+    // belongs to as admin or committee (create_event_draft checks that); a new one is refused.
+    if (!SOCIETY_REGISTRATION_OPEN && !input.societyId) throw Object.assign(new Error(societyRegistrationClosedMessage),{statusCode:403});
     if (!input.societyId && !input.societyName) throw Object.assign(new Error("Choose a society"),{statusCode:400});
     if (input.endDate < input.startDate || (input.endDate === input.startDate && input.startTime && input.endTime && input.endTime <= input.startTime)) throw Object.assign(new Error("End must be after start"),{statusCode:400});
     const modules = eventPageKeys.map(pageKey => {
