@@ -7,6 +7,7 @@ import {
   sendJson,
 } from "./_lib/server.js";
 import { audit } from "./_lib/audit.js";
+import { isSocietyAdminForEvent } from "./_lib/authority.js";
 
 /**
  * Tasks, their assignees, and their comment threads - one function, dispatched
@@ -79,7 +80,7 @@ type TaskAccess = {
  */
 async function resolveTaskAccess(eventId: string, userId: string): Promise<TaskAccess> {
   const supabase = assertServiceSupabase();
-  const [{ data: member, error: memberError }, { data: permission, error: permissionError }, visibility] =
+  const [{ data: member, error: memberError }, { data: permission, error: permissionError }, visibility, societyAdmin] =
     await Promise.all([
       supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
       supabase
@@ -90,12 +91,13 @@ async function resolveTaskAccess(eventId: string, userId: string): Promise<TaskA
         .eq("page_key", "tasks")
         .maybeSingle(),
       fetchPageVisibility(eventId),
+      isSocietyAdminForEvent(supabase, eventId, userId),
     ]);
 
   if (memberError) throw memberError;
   if (permissionError) throw permissionError;
 
-  const role = (member?.role ?? null) as TaskAccess["role"];
+  const role = (societyAdmin ? "admin" : member?.role ?? null) as TaskAccess["role"];
   const accessLevel = permission?.access_level ?? "none";
   const isAdmin = role === "admin";
   const openToSignedIn = visibility.tasks === "public" || visibility.tasks === "authenticated";

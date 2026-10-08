@@ -29,6 +29,10 @@ export function AppearanceCard() {
   const queryClient = useQueryClient();
 
   const [message, setMessage] = useState<string | null>(null);
+  // A failed upload used to read as quiet grey text under the card, which is
+  // easy to scroll past - and "uploaded but nothing changed" is exactly what
+  // that looks like. A failure now wears the standard error treatment.
+  const [failed, setFailed] = useState(false);
 
   const save = useMutation({
     mutationFn: (input: { theme?: string | null; heroImageUrl?: string | null }) =>
@@ -44,12 +48,22 @@ export function AppearanceCard() {
   const currentTheme = data.event.theme ?? "teal";
   const heroImageUrl = data.event.heroImageUrl ?? null;
 
+  function succeed(text: string | null) {
+    setFailed(false);
+    setMessage(text);
+  }
+
+  function fail(error: unknown, fallback: string) {
+    setFailed(true);
+    setMessage(error instanceof Error ? error.message : fallback);
+  }
+
   async function chooseTheme(key: string) {
-    setMessage(null);
+    succeed(null);
     try {
       await save.mutateAsync({ theme: key });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not change the colour");
+      fail(error, "Could not change the colour");
     }
   }
 
@@ -58,36 +72,36 @@ export function AppearanceCard() {
     event.target.value = "";
     if (!file || !selectedEventId) return;
 
-    setMessage("Preparing the photograph...");
+    succeed("Preparing the photograph...");
     try {
       // Re-encoded on the device, as gallery photographs are: a hero read on
       // a phone never needs more than ~1600px, and a 12MP original would
       // otherwise be sent, stored and downloaded at full size by everyone who
       // opens the dashboard.
       const prepared = await prepareGalleryPhoto(file);
-      setMessage("Uploading...");
+      succeed("Uploading...");
       const url = await upload.mutateAsync({ file: prepared.file, eventId: selectedEventId, folder: "events" });
       await save.mutateAsync({ heroImageUrl: url });
       // `prepareGalleryPhoto` always re-encodes, so say so when it actually
       // saved something worth mentioning - a silently altered file is a
       // surprise, which is the same reason the gallery dialog says it too.
-      setMessage(
+      succeed(
         prepared.shrunk
           ? `Hero photograph updated, resized from ${Math.round(prepared.originalBytes / 1024)}KB to ${Math.round(prepared.bytes / 1024)}KB.`
           : "Hero photograph updated.",
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not set the photograph");
+      fail(error, "Could not set the photograph");
     }
   }
 
   async function clearHero() {
-    setMessage(null);
+    succeed(null);
     try {
       await save.mutateAsync({ heroImageUrl: null });
-      setMessage("Back to the standard photograph.");
+      succeed("Back to the standard photograph.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not clear the photograph");
+      fail(error, "Could not clear the photograph");
     }
   }
 
@@ -174,7 +188,17 @@ export function AppearanceCard() {
           </div>
         </div>
 
-        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+        {message ? (
+          <p
+            role={failed ? "alert" : "status"}
+            className={cn(
+              "text-sm",
+              failed ? "rounded-md bg-destructive/10 p-3 text-destructive" : "text-muted-foreground",
+            )}
+          >
+            {message}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

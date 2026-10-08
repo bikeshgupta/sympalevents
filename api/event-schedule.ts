@@ -9,6 +9,7 @@ import {
   sendJson,
 } from "./_lib/server.js";
 import { audit } from "./_lib/audit.js";
+import { isSocietyAdminForEvent } from "./_lib/authority.js";
 
 /**
  * The event schedule, plus prasad slots on `?resource=prasad` (handled in
@@ -34,26 +35,28 @@ type ApiResponse = {
 };
 
 async function requireScheduleEditAccess(supabase: ReturnType<typeof assertServiceSupabase>, eventId: string, userId: string) {
-  const [{ data: member, error: memberError }, { data: permission, error: permissionError }] = await Promise.all([
-    supabase
-      .from("event_members")
-      .select("role")
-      .eq("event_id", eventId)
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("event_page_permissions")
-      .select("access_level")
-      .eq("event_id", eventId)
-      .eq("user_id", userId)
-      .eq("page_key", "event-plan")
-      .maybeSingle(),
-  ]);
+  const [{ data: member, error: memberError }, { data: permission, error: permissionError }, societyAdmin] =
+    await Promise.all([
+      supabase
+        .from("event_members")
+        .select("role")
+        .eq("event_id", eventId)
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("event_page_permissions")
+        .select("access_level")
+        .eq("event_id", eventId)
+        .eq("user_id", userId)
+        .eq("page_key", "event-plan")
+        .maybeSingle(),
+      isSocietyAdminForEvent(supabase, eventId, userId),
+    ]);
 
   if (memberError) throw memberError;
   if (permissionError) throw permissionError;
 
-  const canEdit = member?.role === "admin" || permission?.access_level === "edit";
+  const canEdit = member?.role === "admin" || societyAdmin || permission?.access_level === "edit";
   if (!canEdit) {
     const error = new Error("You do not have edit access for events");
     Object.assign(error, { statusCode: 403 });

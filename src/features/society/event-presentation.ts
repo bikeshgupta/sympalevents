@@ -1,6 +1,6 @@
 import { formatEventDate } from "@/features/dashboard/dashboard-utils";
 import { eventTypeLabel } from "@/features/society/event-type-style";
-import { getEventStatus, toEventZoneTimestamp, type EventStatus } from "@/lib/event-status";
+import { eventEndInstant, eventStartInstant, getEventStatus, type EventStatus } from "@/lib/event-status";
 import { hasModule, type SocietyEvent } from "@/lib/society";
 
 /**
@@ -79,20 +79,20 @@ export function pickFeaturedEvent(events: SocietyEvent[], now = new Date()): Soc
   // Several at once: the one that ends soonest, because it stops being
   // relevant first.
   if (live.length) {
-    return live.sort((a, b) => toEventZoneTimestamp(a.event.endDate) - toEventZoneTimestamp(b.event.endDate))[0].event;
+    return live.sort((a, b) => eventEndInstant(a.event.endDate, a.event.endTime) - eventEndInstant(b.event.endDate, b.event.endTime))[0].event;
   }
 
   const upcoming = byStatus("upcoming");
   if (upcoming.length) {
     return upcoming.sort(
-      (a, b) => toEventZoneTimestamp(a.event.startDate) - toEventZoneTimestamp(b.event.startDate),
+      (a, b) => eventStartInstant(a.event.startDate, a.event.startTime) - eventStartInstant(b.event.startDate, b.event.startTime),
     )[0].event;
   }
 
   const completed = byStatus("completed");
   if (completed.length) {
     return completed.sort(
-      (a, b) => toEventZoneTimestamp(b.event.endDate) - toEventZoneTimestamp(a.event.endDate),
+      (a, b) => eventEndInstant(b.event.endDate, b.event.endTime) - eventEndInstant(a.event.endDate, a.event.endTime),
     )[0].event;
   }
 
@@ -117,7 +117,7 @@ export function residentVisibleEvents(events: SocietyEvent[], now = new Date()) 
   return events.filter((event) => {
     const status = getEventStatus(event, now);
     if (status === "draft") return false;
-    if (status === "cancelled") return toEventZoneTimestamp(event.endDate, "23:59:59") >= now.getTime();
+    if (status === "cancelled") return eventEndInstant(event.endDate, event.endTime) >= now.getTime();
     return true;
   });
 }

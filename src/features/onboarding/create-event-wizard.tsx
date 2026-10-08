@@ -68,6 +68,9 @@ export function CreateEventWizard() {
   const [eventName, setEventName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  // Optional hours of the first and last day. Blank means the whole day.
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [societyId, setSocietyId] = useState("");
   const [societyName, setSocietyName] = useState("");
@@ -106,6 +109,11 @@ export function CreateEventWizard() {
   const detailsComplete =
     eventName.trim() && startDate && endDate && (creatingSociety ? societyName.trim() : Boolean(societyId));
   const datesBackwards = Boolean(startDate && endDate && endDate < startDate);
+  // Only a one-day event can contradict itself on times alone. A blank start is
+  // the start of its day and a blank end is the end of it.
+  const timesBackwards = Boolean(
+    startDate && endDate && startDate === endDate && (startTime || endTime) && (endTime || "23:59") <= (startTime || "00:00"),
+  );
 
   async function handleCreate(submitEvent: FormEvent) {
     submitEvent.preventDefault();
@@ -119,6 +127,8 @@ export function CreateEventWizard() {
           eventName: eventName.trim(),
           startDate,
           endDate,
+          startTime: startTime || undefined,
+          endTime: endTime || undefined,
           location: location.trim(),
           societyId: creatingSociety ? undefined : societyId,
           societyName: creatingSociety ? societyName.trim() : undefined,
@@ -310,6 +320,20 @@ export function CreateEventWizard() {
                 />
               </div>
 
+              <div className="space-y-1.5">
+                <Label htmlFor="start-time">
+                  Start time <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input id="start-time" type="time" value={startTime} onChange={(field) => setStartTime(field.target.value)} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="end-time">
+                  End time <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input id="end-time" type="time" value={endTime} onChange={(field) => setEndTime(field.target.value)} />
+              </div>
+
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="location">Where</Label>
                 <Input
@@ -327,11 +351,17 @@ export function CreateEventWizard() {
               </p>
             ) : null}
 
+            {timesBackwards ? (
+              <p className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                On a one-day event the end time has to be after the start time.
+              </p>
+            ) : null}
+
             <div className="mt-6 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button type="button" onClick={() => setStep(3)} disabled={!detailsComplete || datesBackwards}>
+              <Button type="button" onClick={() => setStep(3)} disabled={!detailsComplete || datesBackwards || timesBackwards}>
                 Next
               </Button>
             </div>

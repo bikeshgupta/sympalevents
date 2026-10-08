@@ -1,4 +1,5 @@
 import { fetchEventModules, isCommitteeOpenPage, sortModules } from "./_lib/page-visibility.js";
+import { isSocietyAdminForEvent } from "./_lib/authority.js";
 import { handleEventTraffic } from "./_lib/traffic.js";
 import { assertServiceSupabase, handleApiError, requireAppUser, sendJson } from "./_lib/server.js";
 
@@ -67,24 +68,28 @@ export default async function handler(req: any, res: any) {
     const supabase = assertServiceSupabase();
     const { appUser } = await requireAppUser(req);
 
-    const [{ data: member, error: memberError }, { data: permissions, error: permissionsError }] = await Promise.all([
-      supabase
-        .from("event_members")
-        .select("role")
-        .eq("event_id", eventId)
-        .eq("user_id", appUser.id)
-        .maybeSingle(),
-      supabase
-        .from("event_page_permissions")
-        .select("page_key,access_level")
-        .eq("event_id", eventId)
-        .eq("user_id", appUser.id),
-    ]);
+    const [{ data: member, error: memberError }, { data: permissions, error: permissionsError }, societyAdmin] =
+      await Promise.all([
+        supabase
+          .from("event_members")
+          .select("role")
+          .eq("event_id", eventId)
+          .eq("user_id", appUser.id)
+          .maybeSingle(),
+        supabase
+          .from("event_page_permissions")
+          .select("page_key,access_level")
+          .eq("event_id", eventId)
+          .eq("user_id", appUser.id),
+        isSocietyAdminForEvent(supabase, eventId, appUser.id),
+      ]);
 
     if (memberError) throw memberError;
     if (permissionsError) throw permissionsError;
 
-    const role = member?.role ?? null;
+    // The society's admin sees every page and Settings, whether or not they
+    // were ever added to this event - see api/_lib/authority.ts.
+    const role = societyAdmin ? "admin" : member?.role ?? null;
 
     if (role === "admin") {
       sendJson(res, 200, {

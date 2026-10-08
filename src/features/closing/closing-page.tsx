@@ -98,10 +98,11 @@ export function ClosingPage() {
     location: data.event.location,
     dayCount: eventDays.length,
     eventCount: data.eventPlan.length,
-    contributorCount: contributors.length,
+    contributorCount: data.collections.hidden ? data.collections.contributors : contributors.length,
     contributionReceived: data.financials.contributionReceived,
-    sponsorCount: sponsors.length,
+    sponsorCount: data.collections.hidden ? data.collections.sponsors : sponsors.length,
     sponsorshipReceived: data.financials.sponsorshipReceived,
+    collectionsHidden: data.collections.hidden,
     coreCount: credits.core.length,
     volunteerCount: credits.volunteers.length,
   };

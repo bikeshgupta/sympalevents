@@ -5,7 +5,13 @@ import { EventCard } from "@/features/society/event-card";
 import { groupByMonth, pickFeaturedEvent, residentVisibleEvents } from "@/features/society/event-presentation";
 import { FeaturedEvent } from "@/features/society/featured-event";
 import { SocietyHeader } from "@/features/society/society-header";
-import { getEventStatus, groupForStatus, toEventZoneTimestamp, type EventGroup } from "@/lib/event-status";
+import {
+  eventEndInstant,
+  eventStartInstant,
+  getEventStatus,
+  groupForStatus,
+  type EventGroup,
+} from "@/lib/event-status";
 import { useSocietyHome, type SocietyEvent } from "@/lib/society";
 import { cn } from "@/lib/utils";
 
@@ -48,9 +54,9 @@ export function SocietyHomePage() {
       if (event.id === featured?.id) continue;
       groups[groupForStatus(getEventStatus(event, now), event, now)].push(event);
     }
-    groups.upcoming.sort((a, b) => toEventZoneTimestamp(a.startDate) - toEventZoneTimestamp(b.startDate));
-    groups.ongoing.sort((a, b) => toEventZoneTimestamp(a.endDate) - toEventZoneTimestamp(b.endDate));
-    groups.past.sort((a, b) => toEventZoneTimestamp(b.endDate) - toEventZoneTimestamp(a.endDate));
+    groups.upcoming.sort((a, b) => eventStartInstant(a.startDate, a.startTime) - eventStartInstant(b.startDate, b.startTime));
+    groups.ongoing.sort((a, b) => eventEndInstant(a.endDate, a.endTime) - eventEndInstant(b.endDate, b.endTime));
+    groups.past.sort((a, b) => eventEndInstant(b.endDate, b.endTime) - eventEndInstant(a.endDate, a.endTime));
     return groups;
   }, [events, featured?.id, now]);
 
@@ -82,7 +88,7 @@ export function SocietyHomePage() {
         <p className="mt-4 flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            Run <code className="font-mono">{data.migration}</code> in Supabase to finish setting up societies.
+            Run <code className="break-all font-mono">{data.migration}</code> in Supabase to finish setting up societies.
           </span>
         </p>
       ) : null}

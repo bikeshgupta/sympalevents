@@ -98,7 +98,7 @@ export function AddressCard() {
       <CardContent className="space-y-4">
         {!ready ? (
           <p className="rounded-md bg-amber-100 p-3 text-sm text-amber-900">
-            Readable addresses need <code className="font-mono">supabase/migrations/029_society_home.sql</code>.
+            Readable addresses need <code className="break-all font-mono">supabase/migrations/029_society_home.sql</code>.
             Until it is run, this event uses its id in the address.
           </p>
         ) : (

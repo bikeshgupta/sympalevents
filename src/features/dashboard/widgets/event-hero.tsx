@@ -2,12 +2,14 @@ import staticHeroImageUrl from "../bg-image.jpeg";
 import type { AppEvent, EventPlanRow } from "@/lib/event-data";
 import type { ClosingPayload } from "@/lib/closing";
 import type { EventPhase } from "@/features/dashboard/dashboard-utils";
-import { CalendarDays, Check, MapPin, Sparkles } from "lucide-react";
+import { CalendarDays, Check, Clock, MapPin, Sparkles } from "lucide-react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { StarRating } from "@/features/closing/star-rating";
 import { formatEventTime, getNextEvent, sortTimelineItems, toEventZoneTimestamp } from "@/features/dashboard/dashboard-utils";
 import { formatRating } from "@/lib/closing";
 import { parseAgenda } from "@/lib/agenda";
+import { describeEventHours } from "@/lib/event-hours";
+import { eventStartInstant } from "@/lib/event-status";
 
 const fallbackHeroStyle = {
   background:
@@ -36,6 +38,9 @@ export function EventHero({
   fallbackReason?: string;
 }) {
   const heroImageUrl = event.heroImageUrl || staticHeroImageUrl;
+  // Only drawn when the committee set an hour; an event with none (every one
+  // made before times existed) renders exactly as it always did.
+  const hours = describeEventHours(event);
   // Marking the celebration closed wraps the hero too, whatever the calendar
   // says - a countdown to an event the committee has already thanked
   // everyone for would read as a bug.
@@ -124,6 +129,12 @@ export function EventHero({
                 <CalendarDays className="h-3.5 w-3.5 shrink-0 text-white/75" aria-hidden="true" />
                 {event.dates}
               </span>
+              {hours ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 shrink-0 text-white/75" aria-hidden="true" />
+                  {hours}
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -188,9 +199,14 @@ function HeroCountdown({
   phase: EventPhase;
 }) {
   const firstScheduleItem = sortTimelineItems(timeline).find((item) => item.startTime);
-  const startMs = firstScheduleItem
-    ? toEventZoneTimestamp(firstScheduleItem.date, firstScheduleItem.startTime)
-    : toEventZoneTimestamp(event.startDate);
+  // An hour the committee set on the event itself is what the countdown runs
+  // to. Without one, it falls back to what it has always done: the first
+  // scheduled item with a time, else the start of the first day.
+  const startMs = event.startTime
+    ? eventStartInstant(event.startDate, event.startTime)
+    : firstScheduleItem
+      ? toEventZoneTimestamp(firstScheduleItem.date, firstScheduleItem.startTime)
+      : toEventZoneTimestamp(event.startDate);
   const remainingMs = Math.max(startMs - now.getTime(), 0);
   const totalSeconds = Math.floor(remainingMs / 1000);
   const units = [

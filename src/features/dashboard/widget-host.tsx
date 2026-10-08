@@ -12,7 +12,7 @@ import { FundingProgress } from "@/features/dashboard/widgets/funding-progress";
 import { GalleryPreview } from "@/features/dashboard/widgets/gallery-preview";
 import { MyResponsibilities } from "@/features/dashboard/widgets/my-responsibilities";
 import type { ClosingPayload } from "@/lib/closing";
-import type { AppEvent, ContributionRow, DataSource, EventPlanRow, SponsorRow } from "@/lib/event-data";
+import type { AppEvent, CollectionsView, ContributionRow, DataSource, EventPlanRow, SponsorRow } from "@/lib/event-data";
 import type { LayoutEntry } from "@/lib/widgets";
 
 /**
@@ -47,6 +47,8 @@ export type DashboardContext = {
   sponsorshipReceived: number;
   contributions: ContributionRow[];
   sponsors: SponsorRow[];
+  /** Whether this viewer is shown amounts or only counts - see CollectionsView. */
+  collections: CollectionsView;
 
   eventDays: { key: string; label: string; date: string }[];
   selectedDay: string;
@@ -113,13 +115,17 @@ export function renderWidget(entry: LayoutEntry, ctx: DashboardContext): ReactNo
           actualExpenses={ctx.actualExpenses}
           fundsReceived={ctx.fundsReceived}
           fundingGap={ctx.fundingGap}
-          sponsors={ctx.sponsors.length}
-          contributors={ctx.contributions.length}
+          sponsors={ctx.collections.hidden ? ctx.collections.sponsors : ctx.sponsors.length}
+          contributors={ctx.collections.hidden ? ctx.collections.contributors : ctx.contributions.length}
+          collectionsHidden={ctx.collections.hidden}
           variant={entry.variant}
         />
       );
 
     case "funding-progress":
+      // Progress towards the budget is made of collection money, and so are the
+      // tiles of who gave. A counts-only viewer has neither to show.
+      if (ctx.collections.hidden) return null;
       return (
         <FundingProgress
           totalBudget={ctx.totalBudget}

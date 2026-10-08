@@ -16,9 +16,19 @@
  * 1. `statusOverride === "draft"`     -> **draft**      (not announced yet)
  * 2. `statusOverride === "cancelled"` -> **cancelled**  (called off)
  * 3. `isClosed === true`              -> **completed**  (see below)
- * 4. `now > endDate`                  -> **completed**
- * 5. `now < startDate`                -> **upcoming**
+ * 4. `now > end`                      -> **completed**
+ * 5. `now < start`                    -> **upcoming**
  * 6. otherwise                        -> **live**
+ *
+ * ## Start and end are an instant, not just a day
+ *
+ * `start` is the start date at the start time, and `end` is the end date at
+ * the end time - both read on the event's own clock (Asia/Kolkata). An event
+ * with no times set means the whole of its days: it starts at 00:00 on the
+ * first and ends at 23:59:59 on the last, which is exactly what this file did
+ * before times existed, so no event made without them changes state. A 6 pm
+ * event is therefore upcoming until 6 pm on the day, live until it ends, and
+ * completed after - not "live" from midnight.
  *
  * ## Why `isClosed` outranks the dates
  *
@@ -63,11 +73,33 @@ export function getDateInEventZone(now = new Date()) {
 /** The dashboard's three-way view of the same question. */
 export type EventPhase = "before" | "during" | "after";
 
-/** Dates against the clock, and nothing else. The one comparison in the app. */
-export function datePhase(startDate: string, endDate: string, now = new Date()): EventPhase {
+/** The optional hours of an event, `HH:MM` (or `HH:MM:SS`) in the event's zone.
+ *  Null or blank means "the whole day". */
+export type EventTimes = {
+  startTime?: string | null;
+  endTime?: string | null;
+};
+
+/** The instant an event opens: its first day at its start time, else midnight. */
+export function eventStartInstant(startDate: string, startTime?: string | null) {
+  return toEventZoneTimestamp(startDate, startTime?.trim() || "00:00");
+}
+
+/** The instant an event ends: its last day at its end time, else the last
+ *  second of that day. */
+export function eventEndInstant(endDate: string, endTime?: string | null) {
+  const clock = endTime?.trim();
+  if (!clock) return toEventZoneTimestamp(endDate, "23:59:59");
+  // "21:00" ends at 21:00:00 sharp, not at the end of that minute.
+  return toEventZoneTimestamp(endDate, clock.split(":").length < 3 ? `${clock}:00` : clock);
+}
+
+/** Dates and hours against the clock, and nothing else. The one comparison in
+ *  the app. */
+export function datePhase(startDate: string, endDate: string, now = new Date(), times: EventTimes = {}): EventPhase {
   const currentMs = now.getTime();
-  if (currentMs < toEventZoneTimestamp(startDate)) return "before";
-  if (currentMs > toEventZoneTimestamp(endDate, "23:59:59")) return "after";
+  if (currentMs < eventStartInstant(startDate, times.startTime)) return "before";
+  if (currentMs > eventEndInstant(endDate, times.endTime)) return "after";
   return "during";
 }
 
@@ -85,6 +117,9 @@ export type EventStatusOverride = "draft" | "cancelled" | null;
 export type EventStatusInput = {
   startDate: string;
   endDate: string;
+  /** Hours of the first and last day; absent or null means the whole day. */
+  startTime?: string | null;
+  endTime?: string | null;
   statusOverride?: EventStatusOverride;
   /** `event_closing.is_closed` - the committee's wrapped-up switch. */
   isClosed?: boolean | null;
@@ -95,7 +130,7 @@ export function getEventStatus(event: EventStatusInput, now = new Date()): Event
   if (event.statusOverride === "cancelled") return "cancelled";
   if (event.isClosed) return "completed";
 
-  const phase = datePhase(event.startDate, event.endDate, now);
+  const phase = datePhase(event.startDate, event.endDate, now, event);
   if (phase === "after") return "completed";
   if (phase === "before") return "upcoming";
   return "live";
@@ -130,6 +165,6 @@ export function groupForStatus(status: EventStatus, event: EventStatusInput, now
   if (status === "completed") return "past";
   if (status === "upcoming") return "upcoming";
   // draft and cancelled follow their dates.
-  const phase = datePhase(event.startDate, event.endDate, now);
+  const phase = datePhase(event.startDate, event.endDate, now, event);
   return phase === "after" ? "past" : phase === "before" ? "upcoming" : "ongoing";
 }

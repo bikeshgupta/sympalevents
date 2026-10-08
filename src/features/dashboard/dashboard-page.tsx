@@ -1,12 +1,16 @@
 import type { ClosingFacts } from "@/features/closing/closing-copy";
 import { getDefaultEventDay, getEventDays, getEventPhase, getNextEvent, sortTimelineItems } from "@/features/dashboard/dashboard-utils";
+import { Settings2 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useEventClosing } from "@/lib/closing";
 import { useEventData } from "@/lib/event-data";
 import { useHashTarget } from "@/lib/scroll";
 import { renderWidget, type DashboardContext } from "@/features/dashboard/widget-host";
 import { useSession } from "@/lib/auth";
 import { useEventAccess } from "@/lib/event-access";
+import { useEventPath } from "@/lib/event-path";
+import { usePageAccess } from "@/lib/page-access";
 import { cn } from "@/lib/utils";
 import { layoutRows, normaliseLayout, visibleLayout } from "@/lib/widgets";
 
@@ -14,6 +18,8 @@ export function DashboardPage() {
   const { data, isFetching } = useEventData({ includeTasks: false });
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
+  const dashboardAccess = usePageAccess("dashboard");
+  const eventPath = useEventPath();
   const [now, setNow] = useState(() => new Date());
   const event = data.event;
   const eventDays = useMemo(() => getEventDays(event), [event]);
@@ -44,10 +50,11 @@ export function DashboardPage() {
     location: event.location,
     dayCount: eventDays.length,
     eventCount: timeline.length,
-    contributorCount: data.contributions.length,
+    contributorCount: data.collections.hidden ? data.collections.contributors : data.contributions.length,
     contributionReceived: financials.contributionReceived,
-    sponsorCount: data.sponsors.length,
+    sponsorCount: data.collections.hidden ? data.collections.sponsors : data.sponsors.length,
     sponsorshipReceived: financials.sponsorshipReceived,
+    collectionsHidden: data.collections.hidden,
     coreCount: closing.data?.credits.core.length ?? 0,
     volunteerCount: closing.data?.credits.volunteers.length ?? 0,
   };
@@ -106,6 +113,7 @@ export function DashboardPage() {
     sponsorshipReceived: financials.sponsorshipReceived,
     contributions: data.contributions,
     sponsors: data.sponsors,
+    collections: data.collections,
     eventDays,
     selectedDay,
     onSelectDay: setSelectedDay,
@@ -121,6 +129,21 @@ export function DashboardPage() {
 
   return (
     <div className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
+      {/* An organiser's door, not part of the page: shown only to somebody who
+          can edit the dashboard, so a resident's view is exactly what it was.
+          It is where an admin hides or reorders widgets and decides whether
+          amounts are shown or only counts. */}
+      {dashboardAccess.canEdit && data.source !== "demo" ? (
+        <div className="flex justify-end">
+          <Link
+            to={eventPath("/customise-dashboard")}
+            className="-my-1 inline-flex h-10 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Settings2 className="h-4 w-4" aria-hidden="true" />
+            Customise dashboard
+          </Link>
+        </div>
+      ) : null}
       {rows.map((row) => {
         const rendered = row.entries.map((entry) => ({ entry, node: renderWidget(entry, context) }));
         // A widget that decides it has nothing to draw (the closing note

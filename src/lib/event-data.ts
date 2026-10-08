@@ -27,6 +27,16 @@ export type AppEvent = {
   location: string;
   startDate: string;
   endDate: string;
+  /** Hours of the first and last day, `HH:MM` on the event's clock. Null or
+   *  absent means the whole day - which is every event made before 031. */
+  startTime?: string | null;
+  endTime?: string | null;
+  /** `count_only` withholds contribution and sponsorship amounts from anyone
+   *  who is not an admin - the server does it; this is only the setting. */
+  financeVisibility?: "full" | "count_only";
+  /** Whether migration 031 has been run, so Settings can say so rather than
+   *  offer a control that cannot save. */
+  detailsReady?: boolean;
   timezone: string;
   heroImageUrl?: string | null;
   status?: string;
@@ -133,10 +143,26 @@ export type EventPlanRow = {
 };
 
 
+/**
+ * What the collections side of the event looks like to THIS viewer.
+ *
+ * `hidden` means the server withheld contribution and sponsorship amounts and
+ * who gave - the rows are empty and the four collection totals are zero. A zero
+ * with `hidden` set is "not shown to you", never a real `₹0`, and nothing may
+ * draw it as one. The two counts are always true and always sent; they are the
+ * point of a counts-only event.
+ */
+export type CollectionsView = {
+  hidden: boolean;
+  contributors: number;
+  sponsors: number;
+};
+
 type EventData = {
   source: DataSource;
   fallbackReason?: string;
   event: AppEvent;
+  collections: CollectionsView;
   financials: typeof demoFinancials;
   contributions: ContributionRow[];
   sponsors: SponsorRow[];
@@ -153,6 +179,11 @@ type UseEventDataOptions = {
 const demoData: EventData = {
   source: "demo",
   event: demoEvent,
+  collections: {
+    hidden: false,
+    contributors: contributionRows.filter((row) => row.received > 0).length,
+    sponsors: sponsorRows.length,
+  },
   financials: demoFinancials,
   contributions: contributionRows,
   sponsors: sponsorRows,
@@ -201,9 +232,15 @@ type EventDataResponse = {
   event: {
     id: string;
     name: string;
+    slug?: string | null;
+    societySlug?: string | null;
     location: string;
     startDate: string;
     endDate: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    financeVisibility?: "full" | "count_only";
+    detailsReady?: boolean;
     status: string;
     eventType?: string;
     unitLabel?: string | null;
@@ -213,6 +250,8 @@ type EventDataResponse = {
     shareToken?: string | null;
   };
   financials: EventData["financials"];
+  /** Absent from a server that predates counts-only events. */
+  collections?: CollectionsView;
   contributions: ContributionRow[];
   sponsors: SponsorRow[];
   budgets: BudgetRow[];
@@ -268,10 +307,20 @@ export function useEventData(options: UseEventDataOptions = {}) {
           event: {
             id: payload.event.id,
             name: payload.event.name,
+            // The two halves of the readable address. The server has always sent
+            // them; this read dropped both, so Settings -> Web address could
+            // never tell a migrated database from an unmigrated one and showed
+            // "run 029" to everybody.
+            slug: payload.event.slug ?? null,
+            societySlug: payload.event.societySlug ?? null,
             dates: dateRange(payload.event.startDate, payload.event.endDate),
             location: payload.event.location,
             startDate: payload.event.startDate,
             endDate: payload.event.endDate,
+            startTime: payload.event.startTime ?? null,
+            endTime: payload.event.endTime ?? null,
+            financeVisibility: payload.event.financeVisibility ?? "full",
+            detailsReady: payload.event.detailsReady ?? false,
             timezone: "Asia/Kolkata",
             // The event's own photograph when it has one; the bundled image
             // in the dashboard hero is the fallback, not the only option.
@@ -284,6 +333,14 @@ export function useEventData(options: UseEventDataOptions = {}) {
             shareToken: payload.event.shareToken ?? null,
           },
           financials: payload.financials,
+          // An older server sends none; derive what it would have said.
+          collections: payload.collections ?? {
+            hidden: false,
+            contributors: new Set(
+              payload.contributions.filter((row) => row.received > 0).map((row) => row.residentId ?? row.id),
+            ).size,
+            sponsors: payload.sponsors.length,
+          },
           contributions: payload.contributions,
           sponsors: payload.sponsors,
           budgets: payload.budgets,

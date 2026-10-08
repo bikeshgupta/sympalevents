@@ -3,6 +3,7 @@ import {
   normalizeVisibility,
   type PageVisibility,
 } from "./page-visibility.js";
+import { selectDegrading } from "./schema-compat.js";
 import { assertServiceSupabase, optionalAppUser, sendJson } from "./server.js";
 
 /**
@@ -61,25 +62,46 @@ function isMissingSchema(error: { code?: string; message?: string } | null) {
   return Boolean(error && ["42P01", "PGRST205", "42703", "PGRST204"].includes(error.code ?? ""));
 }
 
+/** A table that a later migration creates, and this database has not got yet. */
+function isMissingTable(error: { code?: string } | null) {
+  return Boolean(error && ["42P01", "PGRST205"].includes(error.code ?? ""));
+}
+
 /**
- * One batched read, tolerant of its table not existing yet. Returns [] rather
+ * One batched read, tolerant of its TABLE not existing yet. Returns [] rather
  * than throwing, so a society whose events predate a migration still lists -
  * the card simply shows one fewer number.
+ *
+ * It is deliberately NOT tolerant of a missing column in `core`. This used to
+ * swallow every schema error as "migration not run", which is exactly how the
+ * contributor count read a column that never existed (`contributor_name`) and
+ * answered 0 for every event, for ever, without a line in any log. A column
+ * that has always existed and cannot be read is a bug, so it is logged as
+ * one. Columns a later migration adds go in `columns` but not `core`, and are
+ * dropped on their own if absent - see api/_lib/schema-compat.ts.
  */
 async function tally<T extends Record<string, unknown>>(
   supabase: Supabase,
   table: string,
-  columns: string,
+  columns: string[],
   eventIds: string[],
+  core: string[] = columns,
 ): Promise<T[]> {
   if (!eventIds.length) return [];
-  const { data, error } = await supabase.from(table).select(columns).in("event_id", eventIds);
+  const { data, error } = await selectDegrading(table, columns, core, (select) =>
+    supabase.from(table).select(select).in("event_id", eventIds),
+  );
   if (error) {
-    if (isMissingSchema(error)) return [];
-    console.warn(`Society home: could not read ${table}:`, error);
+    if (!isMissingTable(error)) console.error(`Society home: could not read ${table}:`, error);
     return [];
   }
   return (data ?? []) as unknown as T[];
+}
+
+/** `18:00:00` from a Postgres `time` column -> `18:00`; null stays null. */
+function clock(value: unknown): string | null {
+  const match = String(value ?? "").trim().match(/^(\d{1,2}):(\d{2})/);
+  return match ? `${match[1].padStart(2, "0")}:${match[2]}` : null;
 }
 
 function countBy<T extends { event_id?: unknown }>(rows: T[]) {
@@ -91,18 +113,25 @@ function countBy<T extends { event_id?: unknown }>(rows: T[]) {
   return counts;
 }
 
-/** Distinct values per event - how many *people* contributed, not how many
- *  payments arrived. A family paying in three instalments is one contributor. */
-function distinctCountBy<T extends Record<string, unknown>>(rows: T[], valueKey: string) {
+/**
+ * How many *people* contributed to each event, not how many payments arrived.
+ *
+ * A contributor is a distinct resident who has actually paid something: a
+ * family paying in three instalments is one, and a row for somebody who has
+ * not paid yet (or whose payment was declined, leaving zero) is nobody. This
+ * is the same definition the dashboard's counts-only mode uses, so the two
+ * numbers a resident can see never disagree.
+ */
+function contributorCountsByEvent(rows: { event_id?: unknown; resident_id?: unknown; received_amount?: unknown }[]) {
   const seen = new Map<string, Set<string>>();
   for (const row of rows) {
     const eventId = String(row.event_id ?? "");
-    const value = String(row[valueKey] ?? "").trim().toLowerCase();
-    if (!eventId || !value) continue;
+    const residentId = String(row.resident_id ?? "");
+    if (!eventId || !residentId || !(Number(row.received_amount ?? 0) > 0)) continue;
     if (!seen.has(eventId)) seen.set(eventId, new Set());
-    seen.get(eventId)!.add(value);
+    seen.get(eventId)!.add(residentId);
   }
-  return new Map([...seen].map(([eventId, values]) => [eventId, values.size]));
+  return new Map([...seen].map(([eventId, residents]) => [eventId, residents.size]));
 }
 
 export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
@@ -175,23 +204,34 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
   }
 
   // ---- its events --------------------------------------------------------
-  const eventColumns =
-    "id,name,slug,start_date,end_date,location,event_type,status_override,hero_image_url,organization_id";
-  let eventsResult = await supabase
-    .from("events")
-    .select(eventColumns)
-    .eq("organization_id", society.id)
-    .order("start_date", { ascending: false });
-
-  // Pre-029 the new columns are absent; fall back to what has always existed
-  // so the list still renders rather than the page breaking.
-  if (eventsResult.error && isMissingSchema(eventsResult.error)) {
-    eventsResult = await supabase
-      .from("events")
-      .select("id,name,start_date,end_date,location,organization_id")
-      .eq("organization_id", society.id)
-      .order("start_date", { ascending: false });
-  }
+  //
+  // Each optional column stands on its own: a database that has 029 but not 027
+  // still gets slugs and statuses, just no hero photo - the old all-or-nothing
+  // fallback threw the whole lot away for one absent column.
+  const eventsResult = await selectDegrading(
+    "events",
+    [
+      "id",
+      "name",
+      "start_date",
+      "end_date",
+      "location",
+      "organization_id",
+      "slug",
+      "event_type",
+      "status_override",
+      "hero_image_url",
+      "start_time",
+      "end_time",
+    ],
+    ["id", "name", "start_date", "end_date", "location", "organization_id"],
+    (select) =>
+      supabase
+        .from("events")
+        .select(select)
+        .eq("organization_id", society.id)
+        .order("start_date", { ascending: false }),
+  );
   if (eventsResult.error) throw eventsResult.error;
 
   const rows = (eventsResult.data ?? []) as Record<string, unknown>[];
@@ -201,8 +241,12 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
   const visibilityRows = await tally<{ event_id: string; page_key: string; visibility: string; is_enabled?: boolean }>(
     supabase,
     "event_page_visibility",
-    "event_id,page_key,visibility,is_enabled",
+    // `is_enabled` is 024's. Without it every module reads as on, which is what
+    // every event looked like before that migration - but the visibility the
+    // admin DID set is still read, where this used to return nothing at all.
+    ["event_id", "page_key", "visibility", "is_enabled"],
     allIds,
+    ["event_id", "page_key", "visibility"],
   );
 
   const modulesByEvent = new Map<string, Map<string, { visibility: PageVisibility; enabled: boolean }>>();
@@ -252,29 +296,29 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
 
   // ---- the aggregates: one batched query each ----------------------------
   const [closingRows, feedbackRows, photoRows, contributionRows, sponsorRows, teamRows] = await Promise.all([
-    tally<{ event_id: string; is_closed: boolean | null }>(supabase, "event_closing", "event_id,is_closed", ids),
+    tally<{ event_id: string; is_closed: boolean | null }>(supabase, "event_closing", ["event_id", "is_closed"], ids),
     tally<{ event_id: string; rating: number | null; comment: string | null }>(
       supabase,
       "event_feedback",
-      "event_id,rating,comment",
+      ["event_id", "rating", "comment"],
       ids,
     ),
-    tally<{ event_id: string }>(supabase, "event_gallery_photos", "event_id", ids),
-    tally<{ event_id: string; contributor_name: string | null }>(
+    tally<{ event_id: string }>(supabase, "event_gallery_photos", ["event_id"], ids),
+    tally<{ event_id: string; resident_id: string | null; received_amount: number | null }>(
       supabase,
       "contributions",
-      "event_id,contributor_name",
+      ["event_id", "resident_id", "received_amount"],
       ids,
     ),
-    tally<{ event_id: string }>(supabase, "sponsors", "event_id", ids),
-    tally<{ event_id: string }>(supabase, "event_teams", "event_id", ids),
+    tally<{ event_id: string }>(supabase, "sponsors", ["event_id"], ids),
+    tally<{ event_id: string }>(supabase, "event_teams", ["event_id"], ids),
   ]);
 
   const closedByEvent = new Map(closingRows.map((row) => [String(row.event_id), Boolean(row.is_closed)]));
   const photoCounts = countBy(photoRows);
   const sponsorCounts = countBy(sponsorRows);
   const teamCounts = countBy(teamRows);
-  const contributorCounts = distinctCountBy(contributionRows, "contributor_name");
+  const contributorCounts = contributorCountsByEvent(contributionRows);
 
   const ratingByEvent = new Map<string, { count: number; total: number; written: number }>();
   for (const row of feedbackRows) {
@@ -295,6 +339,10 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
       slug: (row.slug as string | null) ?? null,
       startDate: String(row.start_date ?? ""),
       endDate: String(row.end_date ?? ""),
+      // Hours of the first and last day, so a card is grouped by the same
+      // instant the dashboard uses. Null (or no column yet) means the whole day.
+      startTime: clock(row.start_time),
+      endTime: clock(row.end_time),
       location: (row.location as string | null) ?? null,
       eventType: (row.event_type as string | null) ?? "festival",
       // Fed straight into getEventStatus() on the client - the one helper.

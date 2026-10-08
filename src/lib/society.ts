@@ -27,6 +27,9 @@ export type SocietyEvent = {
   slug: string | null;
   startDate: string;
   endDate: string;
+  /** Hours of the first and last day; null or absent means the whole day. */
+  startTime?: string | null;
+  endTime?: string | null;
   location: string | null;
   eventType: string;
   statusOverride: EventStatusOverride;

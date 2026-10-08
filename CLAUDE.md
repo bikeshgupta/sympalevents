@@ -1603,6 +1603,47 @@ Settings hides the Admin option unless the viewer is a society admin. The
 server is still the authority; that is only so the form does not offer a
 control that would be refused.
 
+## Event details, hours, and counts-only collections
+
+**Nothing could edit an event after it was created** until `?resource=details`
+([api/_lib/event-details.ts](api/_lib/event-details.ts), event admin only,
+audited). Settings -> Event details edits name, venue, dates and hours.
+
+- **Hours are optional and blank means the whole day** (`events.start_time` /
+  `end_time`, migration 031). `eventStartInstant` / `eventEndInstant` in
+  [src/lib/event-status.ts](src/lib/event-status.ts) are the one place a date
+  and hour become an instant; no hours reads exactly as before (the original 23
+  status cases still pass untouched). `describeEventHours()` renders them and
+  returns null when unset, so an event without hours is pixel-for-pixel as it was.
+- **Name, venue, dates save before 031. Hours and the collections setting
+  answer 501 naming 031 and write nothing** - only a *change* counts as a
+  request, so the Settings form can send everything every time.
+  `detailsReady` on the event payload tells the UI whether 031 is in.
+- **`events.finance_visibility = 'count_only'`** is enforced in
+  `handleEventData`, not in React: contributions/sponsors rows are `[]`, the four
+  collection totals are 0, and `collections: {hidden, contributors, sponsors}`
+  says so (a zero with `hidden` is never drawn as `₹0`). Admins (society admin
+  included) and members with an explicit view/edit grant on Contributions or
+  Sponsors still see amounts; "the page is public" is not a grant, which is why
+  `resolvePageAccess` now also returns `isAdmin` and `accessLevel`. Budget and
+  expenses are not collections. The generated closing note omits its total.
+  Set in Customise dashboard -> Collections.
+- **Society admins are admins everywhere now**: `resolvePageAccess`,
+  `page-access`, `event-access`, expenses, tasks, schedule and auction
+  registrations all treat them as event admins (`isSocietyAdminForEvent`, 15s
+  memo; `assertCanManageEventRole` stays unmemoised). Earlier text claiming this
+  was already true was only right for member management.
+- **Columns degrade one at a time** ([api/_lib/schema-compat.ts](api/_lib/schema-compat.ts)):
+  `selectDegrading` / `insertDegrading` drop only the column the database says
+  is missing. The old all-or-nothing fallback threw away the hero image because
+  some unrelated column was absent. `tally()` in Society Home now logs a missing
+  *core* column instead of swallowing it - that is how the contributor count sat
+  at 0 (`contributor_name` never existed).
+- **`api/` is not covered by `tsc -b`.** Typecheck it with
+  `npx tsc --noEmit --skipLibCheck --strict --module esnext --moduleResolution bundler --target es2022 --types node api/*.ts api/_lib/*.ts`
+  and look for TS2304/TS2552 (undefined names): that is how three routes that
+  answered 500 after succeeding were found.
+
 ## Motion
 
 - `useCountUp(target)` and `usePrefersReducedMotion()` live in

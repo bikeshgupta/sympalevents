@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ContributionRow, SponsorRow, getFirstEventId, useEventData } from "@/lib/event-data";
+import { CountsOnlyNotice } from "@/components/shared/counts-only-notice";
 import { usePageAccess } from "@/lib/page-access";
 import { apiFetch } from "@/lib/api";
 import {
@@ -198,6 +199,19 @@ export function ContributionsPage() {
 
   const visibleExpected = visibleRows.reduce((sum, row) => sum + row.expected, 0);
   const visibleReceived = visibleRows.reduce((sum, row) => sum + row.received, 0);
+
+  // A counts-only event: the server sent no rows and zeroed the totals, so the
+  // tiles and the table below would read "nobody has paid". Say what is true.
+  if (data.collections.hidden) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold sm:text-2xl">{vocab.labelFor("contributions")}</h2>
+        </div>
+        <CountsOnlyNotice count={data.collections.contributors} noun="contributor" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

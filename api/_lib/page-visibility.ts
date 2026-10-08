@@ -1,3 +1,4 @@
+import { isSocietyAdminForEvent } from "./authority.js";
 import { assertServiceSupabase } from "./server.js";
 
 /**
@@ -279,7 +280,21 @@ export async function fetchPageVisibilityFor(eventId: string, pageKey: string): 
  * to enforce on its own reads and writes. View follows the admin's
  * visibility; edit is always admin or an explicit "edit" grant.
  */
-export async function resolvePageAccess(eventId: string, userId: string | null, pageKey: string) {
+export type PageAccess = {
+  role: "admin" | "committee" | "read_only" | null;
+  canView: boolean;
+  canEdit: boolean;
+  /** Event admin, or a society admin acting as one. */
+  isAdmin: boolean;
+  /** The personal grant on this page, ignoring visibility. "none" when the
+   *  caller has no row - which is what separates "was given access to this"
+   *  from "the page happens to be open to everyone". */
+  accessLevel: "none" | "view" | "edit";
+};
+
+const noAccess: PageAccess = { role: null, canView: false, canEdit: false, isAdmin: false, accessLevel: "none" };
+
+export async function resolvePageAccess(eventId: string, userId: string | null, pageKey: string): Promise<PageAccess> {
   const modules = await fetchEventModules(eventId);
   const module = modules[pageKey];
   const visibility = module?.visibility ?? defaultVisibilityFor(pageKey);
@@ -287,29 +302,36 @@ export async function resolvePageAccess(eventId: string, userId: string | null, 
   // A module this event does not have is closed to everybody, the admin
   // included. Turning it back on in Settings is the way in - not a grant.
   if (module && !module.isEnabled) {
-    return { role: null, canView: false, canEdit: false };
+    return noAccess;
   }
 
   if (!userId) {
-    return { role: null, canView: visibility === "public", canEdit: false };
+    return { ...noAccess, canView: visibility === "public" };
   }
 
   const supabase = assertServiceSupabase();
-  const [{ data: member, error: memberError }, { data: permission, error: permissionError }] = await Promise.all([
-    supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
-    supabase
-      .from("event_page_permissions")
-      .select("access_level")
-      .eq("event_id", eventId)
-      .eq("user_id", userId)
-      .eq("page_key", pageKey)
-      .maybeSingle(),
-  ]);
+  const [{ data: member, error: memberError }, { data: permission, error: permissionError }, societyAdmin] =
+    await Promise.all([
+      supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
+      supabase
+        .from("event_page_permissions")
+        .select("access_level")
+        .eq("event_id", eventId)
+        .eq("user_id", userId)
+        .eq("page_key", pageKey)
+        .maybeSingle(),
+      // The society's admin outranks every event admin in it (see
+      // authority.ts). Before this, they could administer an event's members
+      // but not open its Settings or edit its pages unless somebody had also
+      // made them a member - which an event they did not create never had.
+      isSocietyAdminForEvent(supabase, eventId, userId),
+    ]);
   if (memberError) throw memberError;
   if (permissionError) throw permissionError;
 
-  const role = (member?.role ?? null) as "admin" | "committee" | "read_only" | null;
-  const accessLevel = permission?.access_level ?? "none";
+  const eventRole = (member?.role ?? null) as PageAccess["role"];
+  const role = societyAdmin ? "admin" : eventRole;
+  const accessLevel = (permission?.access_level ?? "none") as PageAccess["accessLevel"];
   const isAdmin = role === "admin";
 
   return {
@@ -322,5 +344,7 @@ export async function resolvePageAccess(eventId: string, userId: string | null, 
       accessLevel === "edit" ||
       (role === "committee" && committeeOpenPages.has(pageKey)),
     canEdit: isAdmin || accessLevel === "edit",
+    isAdmin,
+    accessLevel,
   };
 }

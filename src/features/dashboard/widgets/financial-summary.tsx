@@ -5,6 +5,16 @@ import { Check, CircleAlert, HandCoins, HeartHandshake, Landmark, ReceiptIndianR
 import { formatCurrency } from "@/lib/utils";
 import { formatCurrencyCompact } from "@/features/dashboard/dashboard-utils";
 
+type SummaryCard = {
+  label: string;
+  value: number;
+  icon: typeof Landmark;
+  chip: string;
+  edge: string;
+  /** Money is the default; a count is drawn as a plain integer. */
+  kind?: "money" | "count";
+};
+
 export function FinancialSummary({
   totalBudget,
   actualExpenses,
@@ -12,6 +22,7 @@ export function FinancialSummary({
   fundingGap,
   sponsors,
   contributors,
+  collectionsHidden = false,
   variant = "detailed",
 }: {
   totalBudget: number;
@@ -20,39 +31,75 @@ export function FinancialSummary({
   fundingGap: number;
   sponsors: number;
   contributors: number;
+  /**
+   * The server withheld contribution and sponsorship amounts from this viewer
+   * (a counts-only event). `fundsReceived` and `fundingGap` are then zeros
+   * that mean "not shown to you", so neither may be drawn as a figure: the two
+   * tiles that would carry them become the two counts instead. Budget and
+   * expenses are not collections and keep their tiles.
+   */
+  collectionsHidden?: boolean;
   variant?: WidgetVariant;
 }) {
   const isSettledGap = fundingGap === 0;
-  const cards = [
-    {
-      label: "Planned Budget",
-      value: totalBudget,
-      icon: Landmark,
-      chip: "bg-primary/10 text-primary",
-      edge: "before:bg-primary",
-    },
-    {
-      label: "Funds Received",
-      value: fundsReceived,
-      icon: HandCoins,
-      chip: "bg-emerald-100 text-emerald-700",
-      edge: "before:bg-emerald-500",
-    },
-    {
-      label: "Actual Expenses",
-      value: actualExpenses,
-      icon: ReceiptIndianRupee,
-      chip: "bg-amber-100 text-amber-700",
-      edge: "before:bg-amber-500",
-    },
-    {
-      label: "Funding Gap",
-      value: fundingGap,
-      icon: isSettledGap ? Check : CircleAlert,
-      chip: isSettledGap ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700",
-      edge: isSettledGap ? "before:bg-emerald-500" : "before:bg-rose-500",
-    },
-  ];
+
+  const budgetCard: SummaryCard = {
+    label: "Planned Budget",
+    value: totalBudget,
+    icon: Landmark,
+    chip: "bg-primary/10 text-primary",
+    edge: "before:bg-primary",
+  };
+  const expensesCard: SummaryCard = {
+    label: "Actual Expenses",
+    value: actualExpenses,
+    icon: ReceiptIndianRupee,
+    chip: "bg-amber-100 text-amber-700",
+    edge: "before:bg-amber-500",
+  };
+
+  // A counts-only viewer gets the same four tiles in the same two-by-two grid,
+  // with the two that would have carried collection money carrying the two
+  // counts instead - so the card does not change shape, only what it claims.
+  const cards: SummaryCard[] = collectionsHidden
+    ? [
+        budgetCard,
+        expensesCard,
+        {
+          label: "Contributors",
+          value: contributors,
+          icon: Users,
+          chip: "bg-emerald-100 text-emerald-700",
+          edge: "before:bg-emerald-500",
+          kind: "count",
+        },
+        {
+          label: "Sponsors",
+          value: sponsors,
+          icon: HeartHandshake,
+          chip: "bg-sky-100 text-sky-700",
+          edge: "before:bg-sky-500",
+          kind: "count",
+        },
+      ]
+    : [
+        budgetCard,
+        {
+          label: "Funds Received",
+          value: fundsReceived,
+          icon: HandCoins,
+          chip: "bg-emerald-100 text-emerald-700",
+          edge: "before:bg-emerald-500",
+        },
+        expensesCard,
+        {
+          label: "Funding Gap",
+          value: fundingGap,
+          icon: isSettledGap ? Check : CircleAlert,
+          chip: isSettledGap ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700",
+          edge: isSettledGap ? "before:bg-emerald-500" : "before:bg-rose-500",
+        },
+      ];
 
   return (
     <Card>
@@ -81,10 +128,10 @@ export function FinancialSummary({
                 </div>
                 <AnimatedNumber
                   value={card.value}
-                  format={formatCurrencyCompact}
+                  format={card.kind === "count" ? (count) => String(count) : formatCurrencyCompact}
                   duration={900 + index * 120}
                   className="mt-2 block text-xl font-semibold tracking-tight tabular-nums"
-                  title={formatCurrency(card.value)}
+                  title={card.kind === "count" ? undefined : formatCurrency(card.value)}
                 />
                 {card.label === "Funding Gap" && isSettledGap ? (
                   <p className="mt-0.5 animate-fade-in text-xs font-medium text-emerald-700">Fully funded</p>
@@ -95,7 +142,7 @@ export function FinancialSummary({
         </div>
         {/* The two counts are the "detailed" half of this widget. A
             dashboard that only wants the four money tiles drops them. */}
-        {variant === "detailed" ? (
+        {variant === "detailed" && !collectionsHidden ? (
           <div className="grid grid-cols-2 divide-x rounded-lg border bg-muted/50 text-sm">
             <div className="flex items-center gap-2.5 p-3">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-primary">

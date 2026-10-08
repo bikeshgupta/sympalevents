@@ -1,8 +1,10 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Lock, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { apiFetch } from "@/lib/api";
 import { useSaveDashboardLayout } from "@/lib/dashboard-layout";
 import { useEventContext } from "@/lib/event-context";
 import { useEventClosing } from "@/lib/closing";
@@ -39,6 +41,24 @@ export function CustomiseDashboardPage() {
   const [draft, setDraft] = useState<LayoutEntry[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const layout = draft ?? stored;
+
+  // Whether contribution and sponsorship amounts are sent at all. Its own
+  // save, separate from the layout's: this is a setting about the event's data,
+  // and it takes effect at once rather than waiting on "Save dashboard".
+  const queryClient = useQueryClient();
+  const [financeDraft, setFinanceDraft] = useState<"full" | "count_only" | null>(null);
+  const [financeMessage, setFinanceMessage] = useState<{ failed: boolean; text: string } | null>(null);
+  const saveFinance = useMutation({
+    mutationFn: (financeVisibility: "full" | "count_only") =>
+      apiFetch("/api/events?resource=details", {
+        method: "PATCH",
+        body: { eventId: selectedEventId, financeVisibility },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["event-data"] }),
+  });
+  const storedFinance = data.event.financeVisibility ?? "full";
+  const financeValue = financeDraft ?? storedFinance;
+  const detailsReady = Boolean(data.event.detailsReady);
 
   const placed = layout.filter((entry) => entry.isVisible);
   const available = layout.filter((entry) => !entry.isVisible);
@@ -89,6 +109,26 @@ export function CustomiseDashboardPage() {
       setMessage("Back to the default arrangement.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not reset the dashboard");
+    }
+  }
+
+  async function handleSaveFinance() {
+    setFinanceMessage(null);
+    try {
+      await saveFinance.mutateAsync(financeValue);
+      setFinanceDraft(null);
+      setFinanceMessage({
+        failed: false,
+        text:
+          financeValue === "count_only"
+            ? "Saved. Amounts are now withheld from everyone except admins and members with access to Contributions or Sponsors."
+            : "Saved. Amounts are shown again wherever the page is open.",
+      });
+    } catch (error) {
+      setFinanceMessage({
+        failed: true,
+        text: error instanceof Error ? error.message : "Could not save this setting",
+      });
     }
   }
 
@@ -228,6 +268,99 @@ export function CustomiseDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Only an event admin: the setting is theirs, and the server refuses
+          anyone else. A member who can merely edit the dashboard sees the layout
+          and not this. */}
+      {access.role === "admin" ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>Collections</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              For a private event, or one that charges an entry fee, you may want to say how many people took part
+              without saying what they gave.
+            </p>
+
+            {!detailsReady ? (
+              <p className="rounded-md bg-amber-100 p-3 text-sm text-amber-900">
+                This setting needs <code className="break-all font-mono">supabase/migrations/031_event_details.sql</code>. Until
+                it is run, amounts are shown as they always have been.
+              </p>
+            ) : null}
+
+            <fieldset className="space-y-2" disabled={!detailsReady || saveFinance.isPending}>
+              <legend className="sr-only">What the dashboard shows about collections</legend>
+              {(
+                [
+                  {
+                    value: "full",
+                    title: "Show amounts",
+                    body: "Funds received, who gave, and progress towards the budget - wherever the page is open.",
+                  },
+                  {
+                    value: "count_only",
+                    title: "Show counts only",
+                    body: "Just how many contributors and sponsors there are. Amounts and names are not sent to anyone except admins and members you give access to Contributions or Sponsors.",
+                  },
+                ] as const
+              ).map((option) => (
+                <label
+                  key={option.value}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+                    financeValue === option.value ? "border-primary bg-primary/5" : "bg-card",
+                    (!detailsReady || saveFinance.isPending) && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="finance-visibility"
+                    value={option.value}
+                    checked={financeValue === option.value}
+                    onChange={() => {
+                      setFinanceMessage(null);
+                      setFinanceDraft(option.value === storedFinance ? null : option.value);
+                    }}
+                    className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{option.title}</span>
+                    <span className="block text-xs text-muted-foreground">{option.body}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+
+            <p className="text-xs text-muted-foreground">
+              Taking the Financial Summary off the dashboard above only removes it from the page. This setting is what
+              stops the amounts being sent at all. The budget and expenses follow their own page settings.
+            </p>
+
+            {financeMessage ? (
+              <p
+                role={financeMessage.failed ? "alert" : "status"}
+                className={cn(
+                  "text-sm",
+                  financeMessage.failed ? "rounded-md bg-destructive/10 p-3 text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {financeMessage.text}
+              </p>
+            ) : null}
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void handleSaveFinance()}
+              disabled={!detailsReady || !financeDraft || saveFinance.isPending}
+            >
+              {saveFinance.isPending ? "Saving..." : "Save this setting"}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
         <p>

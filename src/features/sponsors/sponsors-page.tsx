@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFirstEventId, SponsorRow, useEventData } from "@/lib/event-data";
+import { CountsOnlyNotice } from "@/components/shared/counts-only-notice";
 import { usePageAccess } from "@/lib/page-access";
 import { apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
@@ -47,6 +48,18 @@ export function SponsorsPage() {
   const sponsorTable = useFilteredSortedRows(sponsorRows, columns, "name");
   const committed = sponsorRows.reduce((sum, row) => sum + row.committed, 0);
   const received = sponsorRows.reduce((sum, row) => sum + row.received, 0);
+
+  // A counts-only event: see the note on the Contributions page.
+  if (data.collections.hidden) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h2 className="text-2xl font-semibold">{vocab.labelFor("sponsors")}</h2>
+        </div>
+        <CountsOnlyNotice count={data.collections.sponsors} noun="sponsor" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

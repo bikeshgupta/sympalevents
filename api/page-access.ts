@@ -18,6 +18,7 @@ import {
   sendJson,
 } from "./_lib/server.js";
 import { audit } from "./_lib/audit.js";
+import { isSocietyAdminForEvent } from "./_lib/authority.js";
 
 /**
  * Two resources on one function, dispatched on `?resource=` - the same
@@ -74,7 +75,8 @@ async function readVisibility(eventId: string, req: any, res: any) {
       .eq("user_id", appUser.id)
       .maybeSingle();
     if (error) throw error;
-    canEdit = data?.role === "admin";
+    // The society's admin runs every event in it, member or not.
+    canEdit = data?.role === "admin" || (await isSocietyAdminForEvent(supabase, eventId, appUser.id));
   }
 
   // `visibility` stays for callers that only ever wanted the map. `modules`
@@ -221,26 +223,31 @@ export default async function handler(req: any, res: any) {
     const supabase = assertServiceSupabase();
     const { appUser } = await requireAppUser(req);
 
-    const [{ data: member, error: memberError }, { data: permission, error: permissionError }] = await Promise.all([
-      supabase
-        .from("event_members")
-        .select("role")
-        .eq("event_id", eventId)
-        .eq("user_id", appUser.id)
-        .maybeSingle(),
-      supabase
-        .from("event_page_permissions")
-        .select("access_level")
-        .eq("event_id", eventId)
-        .eq("user_id", appUser.id)
-        .eq("page_key", pageKey)
-        .maybeSingle(),
-    ]);
+    const [{ data: member, error: memberError }, { data: permission, error: permissionError }, societyAdmin] =
+      await Promise.all([
+        supabase
+          .from("event_members")
+          .select("role")
+          .eq("event_id", eventId)
+          .eq("user_id", appUser.id)
+          .maybeSingle(),
+        supabase
+          .from("event_page_permissions")
+          .select("access_level")
+          .eq("event_id", eventId)
+          .eq("user_id", appUser.id)
+          .eq("page_key", pageKey)
+          .maybeSingle(),
+        isSocietyAdminForEvent(supabase, eventId, appUser.id),
+      ]);
 
     if (memberError) throw memberError;
     if (permissionError) throw permissionError;
 
-    const role = member?.role ?? null;
+    // A society admin is an admin of every event in their society - including
+    // its Settings, which is the screen that would otherwise lock them out of
+    // an event they did not create. See api/_lib/authority.ts.
+    const role = societyAdmin ? "admin" : member?.role ?? null;
     const accessLevel = permission?.access_level ?? "none";
     const isAdmin = role === "admin";
     const grantedView = accessLevel === "view" || accessLevel === "edit";

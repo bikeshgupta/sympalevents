@@ -1,3 +1,4 @@
+import { isSocietyAdminForEvent } from "./authority.js";
 import { assertServiceSupabase, getRequestBody, handleApiError, requireAppUser, sendJson } from "./server.js";
 
 type ApiRequest = {
@@ -33,7 +34,7 @@ export async function handleAuctionRegistrations(req: ApiRequest, res: ApiRespon
         return;
       }
 
-      const [mineResult, countResult, memberResult] = await Promise.all([
+      const [mineResult, countResult, memberResult, societyAdmin] = await Promise.all([
         supabase
           .from("auction_registrations")
           .select("id,display_name,flat_no,phone,status,created_at")
@@ -48,6 +49,7 @@ export async function handleAuctionRegistrations(req: ApiRequest, res: ApiRespon
           .eq("auction_id", auctionId)
           .eq("status", "registered"),
         supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", appUser.id).maybeSingle(),
+        isSocietyAdminForEvent(supabase, eventId, appUser.id),
       ]);
 
       if (mineResult.error) throw mineResult.error;
@@ -55,7 +57,7 @@ export async function handleAuctionRegistrations(req: ApiRequest, res: ApiRespon
       if (memberResult.error) throw memberResult.error;
 
       const mine = mineResult.data;
-      const role = memberResult.data?.role ?? null;
+      const role = societyAdmin ? "admin" : memberResult.data?.role ?? null;
       const isCommittee = role === "admin" || role === "committee";
 
       // Full registrant details (including phone, for coordinating with

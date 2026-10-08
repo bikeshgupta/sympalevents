@@ -1,7 +1,9 @@
-# Migration execution checklist — 014 to 028
+# Migration execution checklist — 014 to 031
 
-None of these are applied to the live Supabase project. Every feature they
-back is shipped code currently running on its fallback path.
+**Which of these are applied is the owner's to know, not this file's.** 029 is
+known to be in (the society and event slugs exist). Run the one-query status
+check below to see the rest. Every feature a missing migration backs is shipped
+code running on its fallback path.
 
 **Run them in numeric order.** Order is not cosmetic here — see "Ordering traps"
 below. Apply one at a time, run its verification query, and confirm the expected
@@ -88,6 +90,9 @@ Legend: **A** additive · **D** destructive or data-modifying
 | 026 | Dashboard layout + nav order | +`events.dashboard_layout`, +`event_page_visibility.sort_order` | A | 015 |
 | 027 | Appearance + share link | +`hero_image_url`, `theme`, `share_token` on `events` | A | — |
 | 028 | Traffic | +`event_visits` | A | — |
+| 029 | Society Home | +`slug` on `organizations` and `events`, +`events.status_override`, +`event_announcements` | A | 023 |
+| 030 | Audit + page views | +`audit_log`, +`event_page_views` | A | — |
+| 031 | Event details | +`events.start_time`, `end_time`, `finance_visibility` (+1 check) | A, safe to run twice | — |
 
 ### Why 023 is the only D
 
@@ -201,6 +206,28 @@ where table_schema='public' and table_name='events'
 
 -- 028
 select to_regclass('public.event_visits') is not null as ok;
+
+-- 029
+select (select count(*) from information_schema.columns
+        where table_schema='public' and table_name='events'
+          and column_name in ('slug','status_override')) = 2 as events_ok,
+       (select count(*) from information_schema.columns
+        where table_schema='public' and table_name='organizations'
+          and column_name = 'slug') = 1 as society_ok,
+       to_regclass('public.event_announcements') is not null as announcements_ok;
+
+-- 030
+select count(*) = 2 as ok from information_schema.tables
+where table_schema='public' and table_name in ('audit_log','event_page_views');
+
+-- 031  expect three rows, and the constraint present
+select column_name from information_schema.columns
+where table_schema='public' and table_name='events'
+  and column_name in ('start_time','end_time','finance_visibility')
+order by 1;
+select exists(select 1 from pg_constraint
+  where conname='events_finance_visibility_check'
+    and conrelid='public.events'::regclass) as constraint_ok;
 ```
 
 ### One query to see where you are
@@ -232,7 +259,12 @@ select
      where table_name='events' and column_name='dashboard_layout')) as m026,
   (exists(select 1 from information_schema.columns
      where table_name='events' and column_name='share_token')) as m027,
-  (to_regclass('public.event_visits')            is not null) as m028;
+  (to_regclass('public.event_visits')            is not null) as m028,
+  (exists(select 1 from information_schema.columns
+     where table_name='events' and column_name='status_override')) as m029,
+  (to_regclass('public.audit_log')               is not null) as m030,
+  (exists(select 1 from information_schema.columns
+     where table_name='events' and column_name='finance_visibility')) as m031;
 ```
 
 ---
@@ -264,3 +296,9 @@ time as their migration lands:
 - after **026**: the dashboard builder and nav reordering start saving
 - after **027**: per-event colour, hero photo and share links start working
 - after **028**: the Traffic panel starts recording
+- after **029**: events get readable addresses and Society Home can group them
+- after **030**: every write and every page view starts being logged
+- after **031**: Settings → Event details can save a start and end *time*, and
+  Customise dashboard → Collections can switch an event to counts only. Until
+  then the name, venue and dates still save, and the time and collections
+  controls say which migration they are waiting for

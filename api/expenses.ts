@@ -8,6 +8,7 @@ import {
   sendJson,
 } from "./_lib/server.js";
 import { audit } from "./_lib/audit.js";
+import { isSocietyAdminForEvent } from "./_lib/authority.js";
 
 /**
  * The expense ledger and out-of-pocket claims - one function, because this
@@ -132,7 +133,7 @@ async function resolveExpenseAccess(eventId: string, userId: string | null): Pro
     };
   }
 
-  const [{ data: member, error: memberError }, { data: permission, error: permissionError }, visibilityMap] =
+  const [{ data: member, error: memberError }, { data: permission, error: permissionError }, visibilityMap, societyAdmin] =
     await Promise.all([
       supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
       supabase
@@ -143,12 +144,13 @@ async function resolveExpenseAccess(eventId: string, userId: string | null): Pro
         .eq("page_key", "expenses")
         .maybeSingle(),
       fetchPageVisibility(eventId),
+      isSocietyAdminForEvent(supabase, eventId, userId),
     ]);
 
   if (memberError) throw memberError;
   if (permissionError) throw permissionError;
 
-  const role = member?.role ?? null;
+  const role = societyAdmin ? "admin" : member?.role ?? null;
   const accessLevel = permission?.access_level ?? "none";
   const visibility = visibilityMap.expenses;
   const isAdmin = role === "admin";

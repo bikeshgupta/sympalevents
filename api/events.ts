@@ -1,6 +1,8 @@
 import { handleEventClosing } from "./_lib/closing.js";
 import { handleEventData } from "./_lib/event-data.js";
 import { handleAppearance } from "./_lib/appearance.js";
+import { assertEventWindow, cleanTime, handleEventDetails } from "./_lib/event-details.js";
+import { insertDegrading } from "./_lib/schema-compat.js";
 import { handleShareLink } from "./_lib/share.js";
 import { handleLedger } from "./_lib/ledger.js";
 import { handleResolveEventSlug, handleSocietyHome } from "./_lib/society-home.js";
@@ -53,6 +55,15 @@ export default async function handler(req: any, res: any) {
   if (resource === "appearance") {
     try {
       return await handleAppearance(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // Name, venue, dates, hours, and whether amounts are shown. Event admin only.
+  if (resource === "details") {
+    try {
+      return await handleEventDetails(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }
@@ -114,6 +125,10 @@ export default async function handler(req: any, res: any) {
     const { appUser } = await requireAppUser(req);
     const body = await getRequestBody(req);
 
+    // Checked before anything is created: a request refused for an end time
+    // before its start must not leave a society behind.
+    const times = readEventTimes(body);
+
     await assertUnderCreationCap(supabase, appUser.id);
 
     // An event belongs to a society. When the caller names one, they have to
@@ -125,7 +140,7 @@ export default async function handler(req: any, res: any) {
     // "<Event> Organization", that nothing ever read again. See 023.
     const societyId = await resolveSociety(supabase, appUser.id, body);
 
-    const event = await insertEvent(supabase, societyId, body);
+    const event = await insertEvent(supabase, societyId, body, times);
 
     const { error: memberError } = await supabase.from("event_members").insert({
       event_id: event.id,
@@ -215,6 +230,19 @@ async function resolveSociety(
   return society.id as string;
 }
 
+/** The optional times on a new event, validated. Dates are left to the
+ *  database as they always were; only the ordering the times introduce is
+ *  checked here. */
+function readEventTimes(body: Record<string, unknown>) {
+  const startTime = cleanTime(body.startTime, "The start time");
+  const endTime = cleanTime(body.endTime, "The end time");
+  const isDate = (value: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ""));
+  if (isDate(body.startDate) && isDate(body.endDate)) {
+    assertEventWindow(String(body.startDate), String(body.endDate), startTime, endTime);
+  }
+  return { startTime, endTime };
+}
+
 /**
  * The event row. `event_type`, `template_key` and `unit_label` arrived with
  * 024, so a project that has not run it still gets an event - it just gets the
@@ -224,7 +252,9 @@ async function insertEvent(
   supabase: ReturnType<typeof assertServiceSupabase>,
   societyId: string,
   body: Record<string, unknown>,
+  times: { startTime: string | null; endTime: string | null },
 ) {
+  const { startTime, endTime } = times;
   const base = {
     organization_id: societyId,
     name: body.eventName,
@@ -234,32 +264,25 @@ async function insertEvent(
     description: body.description ?? "",
   };
 
-  const withType = {
+  // Times of day arrive with 031 and the template columns with 024. Each is
+  // dropped on its own if its migration has not run, so a missing one costs
+  // only itself - not the event's type and template as well.
+  const full: Record<string, unknown> = {
     ...base,
     event_type: typeof body.eventType === "string" ? body.eventType : "festival",
     template_key: typeof body.templateKey === "string" ? body.templateKey : null,
     unit_label: typeof body.unitLabel === "string" && body.unitLabel.trim() ? body.unitLabel.trim().slice(0, 24) : null,
+    ...(startTime ? { start_time: startTime } : {}),
+    ...(endTime ? { end_time: endTime } : {}),
   };
 
-  const first = await supabase.from("events").insert(withType).select("id").single();
-  if (!first.error) return first.data;
-
-  if (!isMissingEventTypeColumns(first.error)) throw first.error;
-
-  console.warn("events has no template columns. Run supabase/migrations/024_event_modules.sql.");
-  const retry = await supabase.from("events").insert(base).select("id").single();
-  if (retry.error) throw retry.error;
-  return retry.data;
-}
-
-function isMissingEventTypeColumns(error: { code?: string; message?: string } | null) {
-  return Boolean(
-    error &&
-      (["42703", "PGRST204"].includes(error.code ?? "") ||
-        error.message?.includes("event_type") ||
-        error.message?.includes("template_key") ||
-        error.message?.includes("unit_label")),
+  const inserted = await insertDegrading(
+    full,
+    ["event_type", "template_key", "unit_label", "start_time", "end_time"],
+    (row) => supabase.from("events").insert(row).select("id").single(),
   );
+  if (inserted.error) throw inserted.error;
+  return inserted.data as { id: string };
 }
 
 /**

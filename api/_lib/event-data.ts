@@ -1,4 +1,5 @@
 import { resolvePageAccess } from "./page-visibility.js";
+import { selectDegrading } from "./schema-compat.js";
 import { fetchMySocieties } from "./societies.js";
 import { fetchSchedule } from "./schedule.js";
 import { assertServiceSupabase, optionalAppUser, sendJson } from "./server.js";
@@ -158,36 +159,51 @@ async function handleMine(req: ApiRequest, res: ApiResponse) {
  * dashboard is not open to them, so a bare id cannot be used to confirm that
  * an event exists.
  */
+/**
+ * Every column of `events` this payload can use, in the order they arrived.
+ * The first six are the schema as it was created; each later one belongs to a
+ * migration the committee may not have run yet (024 type and unit label, 026
+ * layout, 027 hero image, theme and share token, 029 slug, 031 times and the
+ * collections setting). See api/_lib/schema-compat.ts for why a missing one
+ * costs only itself.
+ */
+const eventColumns = [
+  "id",
+  "name",
+  "start_date",
+  "end_date",
+  "location",
+  "status",
+  "slug",
+  "organization_id",
+  "event_type",
+  "unit_label",
+  "dashboard_layout",
+  "hero_image_url",
+  "theme",
+  "share_token",
+  "start_time",
+  "end_time",
+  "finance_visibility",
+];
+const coreEventColumns = ["id", "name", "start_date", "end_date", "location", "status"];
+
 async function loadEvent(supabase: SupabaseClient, eventId: string) {
-  const withTemplate = await supabase
-    .from("events")
-    .select("id,name,slug,organization_id,start_date,end_date,location,status,event_type,unit_label,dashboard_layout,hero_image_url,theme,share_token")
-    .eq("id", eventId)
-    .maybeSingle();
+  // The hero image used to be lost here: one missing column anywhere sent the
+  // whole read to a six-column fallback, so a photo that had saved fine was
+  // never shown. Each column now stands or falls on its own.
+  const result = await selectDegrading("events", eventColumns, coreEventColumns, (select) =>
+    supabase.from("events").select(select).eq("id", eventId).maybeSingle(),
+  );
+  if (result.error) throw result.error;
+  return (result.data as Record<string, unknown> | null) ?? null;
+}
 
-  if (!withTemplate.error) return withTemplate.data;
-
-  // `event_type` and `unit_label` arrived with 024. Until it is run the event
-  // still loads, as the festival every event was.
-  const missingColumns =
-    ["42703", "PGRST204"].includes(withTemplate.error.code ?? "") ||
-    withTemplate.error.message?.includes("event_type") ||
-    withTemplate.error.message?.includes("unit_label") ||
-    withTemplate.error.message?.includes("dashboard_layout") ||
-    withTemplate.error.message?.includes("hero_image_url") ||
-    withTemplate.error.message?.includes("theme") ||
-    withTemplate.error.message?.includes("share_token");
-
-  if (!missingColumns) throw withTemplate.error;
-
-  const legacy = await supabase
-    .from("events")
-    .select("id,name,start_date,end_date,location,status")
-    .eq("id", eventId)
-    .maybeSingle();
-
-  if (legacy.error) throw legacy.error;
-  return legacy.data;
+/** `18:00:00` from a Postgres `time` column -> `18:00`, which is what every
+ *  client helper takes. Null stays null: no time means the whole day. */
+function clockOrNull(value: unknown) {
+  const match = String(value ?? "").trim().match(/^(\d{1,2}):(\d{2})/);
+  return match ? `${match[1].padStart(2, "0")}:${match[2]}` : null;
 }
 
 function denied(message: string, statusCode: number) {
@@ -409,6 +425,35 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
   const sponsorshipCommitted = sponsors.reduce((sum, row) => sum + row.committed, 0);
   const sponsorshipReceived = sponsors.reduce((sum, row) => sum + row.received, 0);
 
+  // ---- counts-only events ------------------------------------------------
+  //
+  // A private event, or one with an entry fee, may want to say how many
+  // residents took part without saying what they paid or who they are. This is
+  // the server withholding the money, not React declining to draw it: hiding
+  // a widget leaves every amount in the JSON for anyone who opens the network
+  // tab, signed out included.
+  //
+  // The counts are always sent - they are the point of the mode - and are
+  // taken from the full rows BEFORE anything is removed. A contributor is a
+  // distinct resident who has actually paid something, so a family paying in
+  // three instalments is one and a declined, zero-rupee row is nobody. This is
+  // the same definition Society Home uses, so the two never disagree.
+  //
+  // Who still sees amounts: an event admin (a society admin counts as one),
+  // and anyone given an explicit view/edit grant on Contributions or Sponsors
+  // in Member Access. "The page happens to be public" is not a grant, which is
+  // exactly why resolvePageAccess reports the grant separately. Budget and
+  // expenses are NOT collections and keep following their own visibility.
+  const countOnly = "finance_visibility" in event && event.finance_visibility === "count_only";
+  const hasGrant = (access: { accessLevel: string }) => access.accessLevel === "view" || access.accessLevel === "edit";
+  const collectionsHidden =
+    countOnly && !dashboard.isAdmin && !hasGrant(contributionsAccess) && !hasGrant(sponsorsAccess);
+
+  const contributorCount = new Set(
+    contributions.filter((row) => row.received > 0).map((row) => row.residentId ?? row.id),
+  ).size;
+  const sponsorCount = sponsors.length;
+
   // The society's own slug, for the first half of the readable address. A
   // separate small read rather than a join: it is one row, it is cached by the
   // time anybody navigates, and `loadEvent` already has a legacy fallback that
@@ -435,6 +480,17 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
       location: event.location ?? "",
       startDate: event.start_date,
       endDate: event.end_date,
+      // Wall-clock times in the event's own zone, or null for "the whole day"
+      // - which is what every event made before 031 means, so none of them
+      // changes. See src/lib/event-status.ts for how they are read.
+      startTime: "start_time" in event ? clockOrNull(event.start_time) : null,
+      endTime: "end_time" in event ? clockOrNull(event.end_time) : null,
+      financeVisibility: countOnly ? "count_only" : "full",
+      // Whether 031 has been run. Lets Settings say "needs 031" for the time
+      // and collections controls instead of offering something that cannot
+      // save - a null time reads the same whether the column is absent or
+      // simply blank.
+      detailsReady: "start_time" in event && "end_time" in event && "finance_visibility" in event,
       status: event.status ?? "planning",
       eventType: ("event_type" in event ? (event.event_type as string) : null) ?? "festival",
       // The word this event uses for the unit a person belongs to - "Flat" in
@@ -457,13 +513,21 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
     financials: {
       totalBudget,
       actualExpenses,
-      contributionExpected,
-      contributionReceived,
-      sponsorshipCommitted,
-      sponsorshipReceived,
+      // Zero, not omitted, so nothing downstream has to guess at a missing
+      // key - and `collections.hidden` below tells a widget that the zero is
+      // "not shown to you", which it must never draw as a real `₹0`.
+      contributionExpected: collectionsHidden ? 0 : contributionExpected,
+      contributionReceived: collectionsHidden ? 0 : contributionReceived,
+      sponsorshipCommitted: collectionsHidden ? 0 : sponsorshipCommitted,
+      sponsorshipReceived: collectionsHidden ? 0 : sponsorshipReceived,
     },
-    contributions,
-    sponsors,
+    collections: {
+      hidden: collectionsHidden,
+      contributors: contributorCount,
+      sponsors: sponsorCount,
+    },
+    contributions: collectionsHidden ? [] : contributions,
+    sponsors: collectionsHidden ? [] : sponsors,
     budgets,
     tasks,
     expenses,

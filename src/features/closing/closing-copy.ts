@@ -12,6 +12,12 @@ export type ClosingFacts = {
   sponsorshipReceived: number;
   coreCount: number;
   volunteerCount: number;
+  /**
+   * A counts-only event: the amounts were withheld from this viewer, so the
+   * note may say how many families contributed but never how much. This page
+   * is public, and a total in a sentence leaks exactly what the setting hides.
+   */
+  collectionsHidden?: boolean;
 };
 
 function list(parts: string[]) {
@@ -43,7 +49,9 @@ export function defaultClosingMessage(facts: ClosingFacts) {
   const paragraphs = [
     `${facts.eventName} is over, and it was never one person's doing.`,
     who
-      ? `Across ${days}${facts.eventCount ? ` and ${facts.eventCount} events` : ""}, ${who}. Together that is ${formatCurrency(total)} raised and spent on all of us.`
+      ? `Across ${days}${facts.eventCount ? ` and ${facts.eventCount} events` : ""}, ${who}.${
+          facts.collectionsHidden ? "" : ` Together that is ${formatCurrency(total)} raised and spent on all of us.`
+        }`
       : `Across ${days}, this was put together entirely by the people who live here.`,
     facts.coreCount
       ? `The ${facts.coreCount}-member committee planned it, but the decorations did not hang themselves, the food did not count itself, and the sound system did not carry itself up the stairs.`

@@ -76,7 +76,7 @@ export function TrafficCard() {
             <p className="flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               <span>
-                Run <code className="font-mono">{data?.migration}</code> in Supabase to start recording
+                Run <code className="break-all font-mono">{data?.migration}</code> in Supabase to start recording
                 visits. Nothing is being counted until then.
               </span>
             </p>

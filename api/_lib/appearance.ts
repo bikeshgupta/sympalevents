@@ -1,4 +1,5 @@
 import { resolvePageAccess } from "./page-visibility.js";
+import { missingColumnName } from "./schema-compat.js";
 import { assertServiceSupabase, requireAppUser, sendJson } from "./server.js";
 import { audit } from "./audit.js";
 
@@ -106,11 +107,14 @@ export async function handleAppearance(req: ApiRequest, res: ApiResponse) {
 
   if (!Object.keys(updates).length) throw fail("Nothing to change", 400);
 
+  // Select back only what was written. Asking for a column this write did not
+  // touch means a database missing THAT column fails a save that had nothing
+  // to do with it.
   const { data, error } = await supabase
     .from("events")
     .update(updates)
     .eq("id", eventId)
-    .select("theme,hero_image_url,slug")
+    .select(Object.keys(updates).join(","))
     .single();
 
   if (error) {
@@ -120,17 +124,19 @@ export async function handleAppearance(req: ApiRequest, res: ApiResponse) {
     if (error.code === "23505") {
       throw fail("Another event in this society already uses that address. Try a different one.", 409);
     }
-    if (["42703", "PGRST204"].includes(error.code ?? "") || error.message?.includes("slug")) {
+
+    // Name the migration that column actually belongs to. This used to answer
+    // "readable addresses need 029" for ANY missing column, so a database
+    // without 027 told an admin who was uploading a hero image to run a
+    // migration that had nothing to do with it.
+    const column = missingColumnName(error);
+    if (column === "slug") {
       throw fail(
         "Readable addresses need supabase/migrations/029_society_home.sql. Run it, then try again.",
         501,
       );
     }
-    const missingColumn =
-      ["42703", "PGRST204"].includes(error.code ?? "") ||
-      error.message?.includes("hero_image_url") ||
-      error.message?.includes("theme");
-    if (missingColumn) {
+    if (column && ["hero_image_url", "theme", "share_token"].includes(column)) {
       throw fail(
         "Changing how an event looks needs supabase/migrations/027_event_appearance.sql. Run it, then try again.",
         501,
@@ -138,6 +144,8 @@ export async function handleAppearance(req: ApiRequest, res: ApiResponse) {
     }
     throw error;
   }
+
+  const saved = data as unknown as Record<string, unknown>;
 
   audit(req, {
     action: "update",
@@ -149,5 +157,9 @@ export async function handleAppearance(req: ApiRequest, res: ApiResponse) {
     summary: "Changed this event's colour or hero photograph",
   });
 
-  sendJson(res, 200, { theme: data.theme ?? null, heroImageUrl: data.hero_image_url ?? null });
+  sendJson(res, 200, {
+    theme: (saved.theme as string | null | undefined) ?? null,
+    heroImageUrl: (saved.hero_image_url as string | null | undefined) ?? null,
+    slug: (saved.slug as string | null | undefined) ?? null,
+  });
 }

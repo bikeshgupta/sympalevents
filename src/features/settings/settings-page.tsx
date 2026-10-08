@@ -7,9 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
+import { useEventPath } from "@/lib/event-path";
 import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
 import { AddressCard } from "@/features/settings/address-card";
 import { AppearanceCard } from "@/features/settings/appearance-card";
+import { EventDetailsCard } from "@/features/settings/event-details-card";
 import { ShareCard } from "@/features/settings/share-card";
 import { TrafficCard } from "@/features/settings/traffic-card";
 import { SocietyCard } from "@/features/settings/society-card";
@@ -368,8 +370,12 @@ export function SettingsPage() {
         </Card>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      {/* grid-cols-1, not the implicit auto column: an auto track grows to its
+          widest card's min-content, so one card with a long unbreakable string
+          pushed every card past the screen edge on a phone. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <SocietyCard />
+        <EventDetailsCard />
         <AppearanceCard />
         <ShareCard />
         <AddressCard />
@@ -658,6 +664,7 @@ export function SettingsPage() {
  */
 function ModulesCard() {
   const { selectedEventId } = useEventContext();
+  const eventPath = useEventPath();
   const { query, saveModules } = usePageVisibility();
   const [draft, setDraft] = useState<ModuleDraft[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -735,7 +742,7 @@ function ModulesCard() {
                 {saveModules.isPending ? "Saving..." : "Save Modules"}
               </Button>
               <Button type="button" variant="outline" asChild>
-                <Link to="/customise-dashboard">Arrange the dashboard</Link>
+                <Link to={eventPath("/customise-dashboard")}>Arrange the dashboard</Link>
               </Button>
               <Button type="button" variant="outline" onClick={() => setDraft(null)} disabled={!draft}>
                 Reset

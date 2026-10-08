@@ -32,7 +32,7 @@ export function calculateFundingProgress(fundsReceived: number, totalBudget: num
 /** The dashboard's view of the event's state. A thin adapter over
  *  `datePhase` - see @/lib/event-status for why there is only one of these. */
 export function getEventPhase(event: AppEvent, now = new Date()) {
-  return datePhase(event.startDate, event.endDate, now);
+  return datePhase(event.startDate, event.endDate, now, event);
 }
 
 export function getEventDays(event: AppEvent) {

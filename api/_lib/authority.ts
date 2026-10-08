@@ -75,11 +75,49 @@ export async function isSocietyAdmin(supabase: Supabase, organizationId: string 
   return data?.role === "admin";
 }
 
+/**
+ * A short memo for the question below.
+ *
+ * `GET /api/events?resource=data` resolves page access up to eight times in
+ * one request, and every resolve asks this. Unmemoised that is sixteen extra
+ * reads per dashboard load to learn one fact. Fifteen seconds is long enough
+ * to collapse a request (and the burst of calls a page makes right after it)
+ * into a single answer, and short enough that a society admin who is demoted
+ * loses access in the time it takes to notice. It is per server instance, so
+ * it can only ever make an answer a few seconds stale, never wrong for good.
+ *
+ * Deliberately NOT used by `assertCanManageEventRole`: changing who is an
+ * event admin is the one decision here where a stale answer is not acceptable.
+ */
+const societyAdminMemoMs = 15_000;
+const societyAdminMemo = new Map<string, { at: number; value: boolean }>();
+
+/** For tests, and for a code path that has just changed somebody's role. */
+export function clearSocietyAdminMemo() {
+  societyAdminMemo.clear();
+}
+
 /** Is this person a society admin over the society that owns this event? */
 export async function isSocietyAdminForEvent(supabase: Supabase, eventId: string, userId: string | null) {
   if (!userId) return false;
+
+  const key = `${eventId}:${userId}`;
+  const hit = societyAdminMemo.get(key);
+  if (hit && Date.now() - hit.at < societyAdminMemoMs) return hit.value;
+
   const organizationId = await societyIdForEvent(supabase, eventId);
-  return isSocietyAdmin(supabase, organizationId, userId);
+  const value = await isSocietyAdmin(supabase, organizationId, userId);
+
+  // Keep the map from growing for ever on a long-lived instance.
+  if (societyAdminMemo.size > 500) {
+    const cutoff = Date.now() - societyAdminMemoMs;
+    for (const [memoKey, entry] of societyAdminMemo) {
+      if (entry.at < cutoff) societyAdminMemo.delete(memoKey);
+    }
+    if (societyAdminMemo.size > 500) societyAdminMemo.clear();
+  }
+  societyAdminMemo.set(key, { at: Date.now(), value });
+  return value;
 }
 
 async function eventRole(supabase: Supabase, eventId: string, userId: string) {
