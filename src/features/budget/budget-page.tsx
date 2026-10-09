@@ -1,20 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Calculator, HandCoins, Scale } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { Calculator, HandCoins, Plus, Scale } from "lucide-react";
+import { useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
-import { FormField } from "@/components/shared/form-field";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { formatCurrencyCompact } from "@/features/dashboard/dashboard-utils";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { BudgetRow, getFirstEventId, useEventData } from "@/lib/event-data";
-import { useEventContext } from "@/lib/event-context";
+import { BudgetRow, useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
 import { apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
+import { BudgetEntrySheet } from "@/features/budget/budget-entry-sheet";
 import { PageTools } from "@/features/shared/page-tools";
 import { RowActions } from "@/features/shared/row-actions";
 import { useVocabulary } from "@/lib/vocabulary";
@@ -39,25 +36,10 @@ const budgetColumns: TableColumn<BudgetRow>[] = [
   { key: "status", label: "Status", getValue: (row) => row.status },
 ];
 
-function BudgetFields({ budget }: { budget?: BudgetRow }) {
-  return (
-    <>
-      <FormField label="Category" name="category" defaultValue={budget?.category} required />
-      <FormField label="Item" name="item" defaultValue={budget?.item} required />
-      <FormField label="Quantity" name="qty" type="number" defaultValue={budget?.qty ?? 1} />
-      <FormField label="Unit" name="unit" defaultValue={budget?.unit ?? "lot"} />
-      <FormField label="Unit Cost" name="unitCost" type="number" defaultValue={budget?.unitCost ?? 0} />
-      <FormField label="Actual Cost" name="actual" type="number" defaultValue={budget?.actual ?? 0} />
-      <FormField label="Funding Type" name="fundingType" defaultValue={budget?.fundingType ?? "Common Fund"} />
-      <FormField label="Status" name="status" defaultValue={budget?.status ?? "Planned"} />
-    </>
-  );
-}
-
 export function BudgetPage() {
   const vocab = useVocabulary();
   const { data } = useEventData();
-  const { selectedEventId } = useEventContext();
+  const [addOpen, setAddOpen] = useState(false);
   const access = usePageAccess("budget");
   const budgetRows = data.budgets;
   const budgetTable = useFilteredSortedRows(budgetRows, budgetColumns, "category");
@@ -87,9 +69,15 @@ export function BudgetPage() {
       </StatGrid>
       <PageTools
         action={
-          access.canEdit ? <CrudDialog title="Add Budget Item" triggerLabel="Add Budget Item" onSubmit={(formData) => addBudgetItem(formData, selectedEventId)}>
-            <BudgetFields />
-          </CrudDialog> : <span className="text-sm text-muted-foreground"></span>
+          access.canEdit ? (
+            <>
+              <Button type="button" onClick={() => setAddOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add Budget Item
+              </Button>
+              <BudgetEntrySheet open={addOpen} onOpenChange={setAddOpen} rows={budgetRows} />
+            </>
+          ) : <span className="text-sm text-muted-foreground"></span>
         }
       />
       <Card className="overflow-x-auto">
@@ -152,24 +140,6 @@ export function BudgetPage() {
 function BudgetActions({ budget }: { budget: BudgetRow }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-
-    try {
-      await updateBudget(budget.id!, new FormData(event.currentTarget));
-      await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-      setOpen(false);
-    } catch (item) {
-      setError(item instanceof Error ? item.message : "Unable to update budget item");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <>
@@ -181,59 +151,9 @@ function BudgetActions({ budget }: { budget: BudgetRow }) {
           await queryClient.invalidateQueries({ queryKey: ["event-data"] });
         }}
       />
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Budget Item</DialogTitle>
-          </DialogHeader>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <BudgetFields budget={budget} />
-            </div>
-            {error ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <BudgetEntrySheet open={open} onOpenChange={setOpen} budget={budget} rows={[]} />
     </>
   );
-}
-
-async function addBudgetItem(formData: FormData, selectedEventId?: string | null) {
-  // The event that is open, not the first one on the person's list: with more than one event
-  // the old lookup filed new rows under whichever event happened to come first.
-  const eventId = selectedEventId ?? (await getFirstEventId());
-  await apiFetch("/api/events?resource=budgets", {
-    method: "POST",
-    body: { eventId, ...budgetFields(formData) },
-  });
-}
-
-async function updateBudget(id: string, formData: FormData) {
-  await apiFetch(`/api/events?resource=budgets&id=${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    body: budgetFields(formData),
-  });
-}
-
-function budgetFields(formData: FormData) {
-  return {
-    category: formString(formData, "category"),
-    item: formString(formData, "item"),
-    estimated_qty: formNumber(formData, "qty"),
-    unit: formString(formData, "unit"),
-    unit_cost: formNumber(formData, "unitCost"),
-    actual_cost: formNumber(formData, "actual"),
-    funding_type: formString(formData, "fundingType"),
-    status: formString(formData, "status", "Planned"),
-  };
 }
 
 async function deleteBudget(id: string) {

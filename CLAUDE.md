@@ -938,11 +938,17 @@ fold and a 16px close icon.
   category chips (the event's own categories, plus "Type your own"), who paid, bill, with date and note
   under "Date and note". "Next" keeps the day, category and who paid. Bills, settling and "Mark not
   settled" are unchanged.
+- **Budget** ([budget-entry-sheet.tsx](src/features/budget/budget-entry-sheet.tsx)): category chips (the categories
+  already in use, most used first, plus "New category"), item, then quantity / unit / unit cost on one row
+  with the **estimate worked out underneath as you type**, and "Funded from" chips. Actual cost and status are
+  under "Actual cost and status" (at planning time the actual is nearly always zero). "Next" keeps category,
+  unit, funding and status. **The budget table itself is still a wide desktop table with no card list below
+  `lg`** (UI rules §5) - only the form was redone.
 - **Adds go into the event that is open.** Contributions, Sponsors and Budget used `getFirstEventId()`,
   which is the *first event on the person's list*, so with more than one event a new row could be filed
   under the wrong one. They now use the selected event (`useEventContext().selectedEventId`) and fall back
-  to the old lookup only when nothing is selected. Sponsors and Budget still use `CrudDialog`; moving
-  them onto `EntrySheet` is the next step.
+  to the old lookup only when nothing is selected. Sponsors still uses `CrudDialog` (with the event fix);
+  moving it onto `EntrySheet` is the next step.
 
 ## Hero options
 
