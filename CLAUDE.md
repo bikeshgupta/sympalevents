@@ -76,6 +76,17 @@ expenses, eventPlan, financials, source, fallbackReason }`.
   different variant (the dashboard omits tasks) starts from the same viewer's already-loaded
   read of that event, never another viewer's. `data` is still never undefined for the 34
   callers - while pending it is the demo shape, which nothing may draw.
+- **A reload draws from the last answers** ([query-persist.ts](src/lib/query-persist.ts)). A reload used to
+  start from nothing - sign-in, who you are, your events, the event, what is open to you, five round trips
+  in a row behind a skeleton. The last answer to each of `session`, `my-events`, `event-data`,
+  `event-access`, `page-access` and `page-visibility` is kept in `localStorage` and put back into the query
+  cache before the first render; every query still refetches behind it (stale-while-revalidate), so nothing
+  is fresher or staler than before. Cookies were rejected (4KB, sent with every request). **Never add**
+  anything a person files or settles (expenses with signed bill links, registrations, profile fields, tokens)
+  to `persistedRoots`; demo data is never kept. It is **wiped on sign-out** and whenever the session comes
+  back signed out, tied to the build (`__BUILD_ID__`, so a new deploy discards an older shape), and expires
+  after 24 hours. A failed refetch keeps the last real event rather than swapping in the demo.
+  `vercel.json` also marks `/assets/*` (hashed) immutable.
 - `source: "demo"` — Supabase unconfigured/unreadable; `src/data/demo.ts` is served
   instead, and `<DataSourceBadge>` surfaces it. **Every screen must stay readable and
   correct in both modes.**

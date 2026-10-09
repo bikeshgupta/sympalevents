@@ -80,6 +80,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [localApiPlugin(), react()],
+    // Identifies this build, so a copy of the cache saved by an older deploy is discarded
+    // instead of being fed to code that expects a different shape. See src/lib/query-persist.ts.
+    define: { __BUILD_ID__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? String(Date.now())) },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

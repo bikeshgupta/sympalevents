@@ -314,8 +314,9 @@ export function useEventData(options: UseEventDataOptions = {}) {
 
   const queryClient = useQueryClient();
   const viewerKey = session?.user.appUserId ?? "guest";
+  const queryKey = ["event-data", selectedEventId, { includeTasks }, viewerKey];
   const query = useQuery({
-    queryKey: ["event-data", selectedEventId, { includeTasks }, viewerKey],
+    queryKey,
     // Start from this same event, for this same person, if another screen has already read it.
     // The layout reads the event (with tasks) before any page mounts, and a page that asks for
     // a different variant (the dashboard leaves the tasks out) would otherwise be pending on
@@ -420,6 +421,11 @@ export function useEventData(options: UseEventDataOptions = {}) {
           previousEdition: payload.previousEdition ?? null,
         };
       } catch (error) {
+        // A flaky connection must not replace a real event the page already has with the demo.
+        // Throwing keeps the last good answer (react-query retains `data` through an error); the
+        // demo is only for when there is nothing real to show.
+        const previous = queryClient.getQueryData<EventData>(queryKey);
+        if (previous && previous.source === "supabase") throw error;
         const fallbackReason = error instanceof Error ? error.message : "Could not load this event";
         console.warn("Falling back to demo data:", fallbackReason);
         return {

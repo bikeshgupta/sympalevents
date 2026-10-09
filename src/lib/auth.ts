@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, type User } from "firebase/auth";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from "firebase/auth";
 import { apiFetch } from "@/lib/api";
+import { clearPersistedCache } from "@/lib/query-persist";
 import { firebaseAuth, firebasePersistenceReady, missingFirebaseConfigKeys } from "@/lib/firebase";
 
 export type EventRole = "admin" | "committee" | "read_only";
@@ -15,7 +16,7 @@ export type AuthSession = {
   };
 };
 
-async function getAppUser(user: User) {
+async function getAppUser() {
   try {
     const data = await apiFetch<{
       user: {
@@ -42,7 +43,7 @@ function getFirebaseSession(): Promise<AuthSession | null> {
       new Promise((resolve) => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
           unsubscribe();
-          const appUser = user ? await getAppUser(user) : null;
+          const appUser = user ? await getAppUser() : null;
           resolve(
             user
               ? {
@@ -83,6 +84,8 @@ export async function signInWithGoogle() {
 }
 
 export async function signOut() {
+  // Nothing from this person stays on the device for the next one.
+  clearPersistedCache();
   if (!firebaseAuth) return;
   await firebaseAuth.signOut();
   window.location.assign("/");
