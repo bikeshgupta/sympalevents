@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BudgetRow, getFirstEventId, useEventData } from "@/lib/event-data";
+import { useEventContext } from "@/lib/event-context";
 import { usePageAccess } from "@/lib/page-access";
 import { apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
@@ -56,6 +57,7 @@ function BudgetFields({ budget }: { budget?: BudgetRow }) {
 export function BudgetPage() {
   const vocab = useVocabulary();
   const { data } = useEventData();
+  const { selectedEventId } = useEventContext();
   const access = usePageAccess("budget");
   const budgetRows = data.budgets;
   const budgetTable = useFilteredSortedRows(budgetRows, budgetColumns, "category");
@@ -85,7 +87,7 @@ export function BudgetPage() {
       </StatGrid>
       <PageTools
         action={
-          access.canEdit ? <CrudDialog title="Add Budget Item" triggerLabel="Add Budget Item" onSubmit={addBudgetItem}>
+          access.canEdit ? <CrudDialog title="Add Budget Item" triggerLabel="Add Budget Item" onSubmit={(formData) => addBudgetItem(formData, selectedEventId)}>
             <BudgetFields />
           </CrudDialog> : <span className="text-sm text-muted-foreground"></span>
         }
@@ -204,8 +206,10 @@ function BudgetActions({ budget }: { budget: BudgetRow }) {
   );
 }
 
-async function addBudgetItem(formData: FormData) {
-  const eventId = await getFirstEventId();
+async function addBudgetItem(formData: FormData, selectedEventId?: string | null) {
+  // The event that is open, not the first one on the person's list: with more than one event
+  // the old lookup filed new rows under whichever event happened to come first.
+  const eventId = selectedEventId ?? (await getFirstEventId());
   await apiFetch("/api/events?resource=budgets", {
     method: "POST",
     body: { eventId, ...budgetFields(formData) },

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getFirstEventId, SponsorRow, useEventData } from "@/lib/event-data";
 import { CountsOnlyNotice } from "@/components/shared/counts-only-notice";
+import { useEventContext } from "@/lib/event-context";
 import { usePageAccess } from "@/lib/page-access";
 import { apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
@@ -39,6 +40,7 @@ const sponsorColumns: TableColumn<SponsorRow>[] = [
 
 export function SponsorsPage() {
   const { data } = useEventData();
+  const { selectedEventId } = useEventContext();
   const access = usePageAccess("sponsors");
   const vocab = useVocabulary();
   const sponsorRows = data.sponsors;
@@ -86,7 +88,7 @@ export function SponsorsPage() {
       </StatGrid>
       <PageTools
         action={
-          access.canEdit ? <CrudDialog title="Add Sponsor" triggerLabel="Add Sponsor" onSubmit={addSponsor}>
+          access.canEdit ? <CrudDialog title="Add Sponsor" triggerLabel="Add Sponsor" onSubmit={(formData) => addSponsor(formData, selectedEventId)}>
             <FormField label="Sponsor Name" name="name" required />
             <FormField label={`${vocab.unit} No`} name="flat" />
             <FormField label="Contact" name="contact" />
@@ -227,8 +229,10 @@ function SponsorActions({ sponsor }: { sponsor: SponsorRow }) {
   );
 }
 
-async function addSponsor(formData: FormData) {
-  const eventId = await getFirstEventId();
+async function addSponsor(formData: FormData, selectedEventId?: string | null) {
+  // The event that is open, not the first one on the person's list: with more than one event
+  // the old lookup filed new rows under whichever event happened to come first.
+  const eventId = selectedEventId ?? (await getFirstEventId());
   // Through the API so the write is attributable and audited - see
   // api/_lib/ledger.ts for why these three pages stopped writing direct.
   await apiFetch("/api/events?resource=sponsors", {

@@ -916,6 +916,34 @@ TRU WindChimes committee. Adding a society admin is therefore a row in `organiza
 (role `admin`), done by hand. The server and form share the one constant; flipping it is the
 society-registration release, which also needs a verified flag and a lookalike check.
 
+## Entry sheets (adding contributions and expenses on a phone)
+
+[entry-sheet.tsx](src/features/shared/entry-sheet.tsx) is the shell for "add / edit one row" forms.
+On a phone it is a **bottom sheet** (up to 92% of the screen, title and buttons pinned, only the
+fields scroll, 44px close button); from `sm` up it is the usual centred dialog. It exists because
+the old form was the generic centred dialog: on a phone a tall card with the Save button below the
+fold and a 16px close icon.
+
+- **Built for entering many in a row.** Two footer buttons: **Save & add next** (first in the DOM, so
+  Enter in any field means "next one", drawn on the right) and **Save & close**. After "next" only what
+  differs between entries is cleared; the rest is remembered, the cursor returns to the first field, and
+  a running "Added just now" list and "N added · ₹X" total show what has gone in.
+- **Contributions** ([contribution-entry-sheet.tsx](src/features/contributions/contribution-entry-sheet.tsx)):
+  flat and name on one row, a large amount field (number pad), UPI/Cash/Bank/Cheque and
+  Received/Committed/Returned as chips; owner/tenant, expected, date and reference sit under "More
+  details". A flat that already has a payment offers that household's name (one tap, never filled in
+  silently) and says what it has paid, so a second instalment is noticed rather than duplicated. Flats
+  are upper-cased on save. Editing uses the same sheet, without "add next".
+- **Expenses** ([expense-form-dialog.tsx](src/features/expenses/expense-form-dialog.tsx)): what it was, amount,
+  category chips (the event's own categories, plus "Type your own"), who paid, bill, with date and note
+  under "Date and note". "Next" keeps the day, category and who paid. Bills, settling and "Mark not
+  settled" are unchanged.
+- **Adds go into the event that is open.** Contributions, Sponsors and Budget used `getFirstEventId()`,
+  which is the *first event on the person's list*, so with more than one event a new row could be filed
+  under the wrong one. They now use the selected event (`useEventContext().selectedEventId`) and fall back
+  to the old lookup only when nothing is selected. Sponsors and Budget still use `CrudDialog`; moving
+  them onto `EntrySheet` is the next step.
+
 ## Hero options
 
 `events.hero_options` ([035](supabase/migrations/035_hero_options.sql), **not run

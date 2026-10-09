@@ -1,14 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CirclePlus, Download, HandCoins, Home, TrendingUp, Wallet } from "lucide-react";
-import { FormEvent, lazy, Suspense, useMemo, useState } from "react";
+import { CirclePlus, Download, HandCoins, Home, Plus, TrendingUp, Wallet } from "lucide-react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
-import { FormField } from "@/components/shared/form-field";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ContributionRow, SponsorRow, getFirstEventId, useEventData } from "@/lib/event-data";
+import { ContributionRow, SponsorRow, useEventData } from "@/lib/event-data";
 import { CountsOnlyNotice } from "@/components/shared/counts-only-notice";
 import { usePageAccess } from "@/lib/page-access";
 import { apiFetch } from "@/lib/api";
@@ -19,7 +17,7 @@ import {
 } from "@/features/contributions/collection-timeline-data";
 import { formatCurrencyCompact, formatEventWeekday } from "@/features/dashboard/dashboard-utils";
 import { formatCurrency } from "@/lib/utils";
-import { CrudDialog, formNumber, formString } from "@/features/shared/crud-dialog";
+import { ContributionEntrySheet } from "@/features/contributions/contribution-entry-sheet";
 import { PageTools } from "@/features/shared/page-tools";
 import { useVocabulary, withUnitColumn } from "@/lib/vocabulary";
 import { RowActions } from "@/features/shared/row-actions";
@@ -46,11 +44,6 @@ const CollectionTimelineChart = lazy(() =>
 function todayDateInputValue() {
   return new Date().toISOString().slice(0, 10);
 }
-
-const contributionStatuses = ["Received", "Committed", "Returned"];
-
-/** No universal contribution amount: the organiser enters this event's amount. */
-const DEFAULT_EXPECTED_CONTRIBUTION = 0;
 
 /** Renders a stored ISO date for humans; blank/"-" placeholders become an em dash. */
 function formatPaymentDate(value: string) {
@@ -130,52 +123,9 @@ function exportContributionsToCsv(rows: ContributionRow[], unit: string) {
   URL.revokeObjectURL(url);
 }
 
-function ContributionFields({ contribution }: { contribution?: ContributionRow }) {
-  const { unit } = useVocabulary();
-  return (
-    <>
-      <FormField label={`${unit} No`} name="flat" defaultValue={contribution?.flat} required />
-      <FormField label="Resident Name" name="name" defaultValue={contribution?.name} required />
-      <FormField label="Owner/Tenant" name="type" defaultValue={contribution?.type ?? "Owner"} />
-      <FormField
-        label="Expected Contribution"
-        name="expected"
-        type="number"
-        defaultValue={contribution?.expected ?? DEFAULT_EXPECTED_CONTRIBUTION}
-        required
-      />
-      <FormField label="Received" name="received" type="number" defaultValue={contribution?.received ?? 0} />
-      <FormField
-        label="Payment Date"
-        name="paymentDate"
-        type="date"
-        defaultValue={contribution?.paymentDate && contribution.paymentDate !== "-" ? contribution.paymentDate : todayDateInputValue()}
-      />
-      <FormField label="Payment Mode" name="mode" defaultValue={contribution?.mode && contribution.mode !== "-" ? contribution.mode : "UPI"} />
-      <div className="space-y-2">
-        <label className="text-sm font-medium" htmlFor={contribution ? `status-${contribution.id}` : "status"}>
-          Status
-        </label>
-        <select
-          id={contribution ? `status-${contribution.id}` : "status"}
-          name="status"
-          className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          defaultValue={contribution?.status ?? "Received"}
-        >
-          {contributionStatuses.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
-      </div>
-      <FormField label="Reference" name="reference" defaultValue={contribution?.reference} />
-    </>
-  );
-}
-
 export function ContributionsPage() {
   const { data, isFetching } = useEventData();
+  const [addOpen, setAddOpen] = useState(false);
   const access = usePageAccess("contributions");
   const vocab = useVocabulary();
   const contributionRows = data.contributions;
@@ -306,9 +256,13 @@ export function ContributionsPage() {
         searchLabel="Search contributions"
         action={
           access.canEdit ? (
-            <CrudDialog title="Add Contribution" triggerLabel="Add Contribution" onSubmit={addContribution}>
-              <ContributionFields />
-            </CrudDialog>
+            <>
+              <Button type="button" onClick={() => setAddOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add Contribution
+              </Button>
+              <ContributionEntrySheet open={addOpen} onOpenChange={setAddOpen} rows={contributionRows} />
+            </>
           ) : (
             <span className="text-sm text-muted-foreground">View-only access</span>
           )
@@ -703,24 +657,6 @@ function EmptyState({ hasRows, onClearFilters }: { hasRows: boolean; onClearFilt
 function ContributionActions({ contribution }: { contribution: ContributionRow }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-
-    try {
-      await updateContribution(contribution, new FormData(event.currentTarget));
-      await queryClient.invalidateQueries({ queryKey: ["event-data"] });
-      setOpen(false);
-    } catch (item) {
-      setError(item instanceof Error ? item.message : "Unable to update contribution");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <>
@@ -734,72 +670,9 @@ function ContributionActions({ contribution }: { contribution: ContributionRow }
         editLabel={`Edit contribution for ${contribution.flat}`}
         deleteLabel={`Delete contribution for ${contribution.flat}`}
       />
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Contribution</DialogTitle>
-          </DialogHeader>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <ContributionFields contribution={contribution} />
-            </div>
-            {error ? <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <ContributionEntrySheet open={open} onOpenChange={setOpen} contribution={contribution} rows={[]} />
     </>
   );
-}
-
-async function addContribution(formData: FormData) {
-  const eventId = await getFirstEventId();
-  // Through the API rather than straight to Supabase: it is what makes this
-  // write auditable, and what lets permission be decided by the same page
-  // access rule every other screen uses. See api/_lib/ledger.ts.
-  await apiFetch("/api/events?resource=contributions", {
-    method: "POST",
-    body: {
-      eventId,
-      flat_no: formString(formData, "flat"),
-      resident_name: formString(formData, "name"),
-      resident_type: formString(formData, "type", "Owner"),
-      expected_amount: formNumber(formData, "expected"),
-      received_amount: formNumber(formData, "received"),
-      received_date: formString(formData, "paymentDate", todayDateInputValue()),
-      payment_mode: formString(formData, "mode", "UPI"),
-      status: formString(formData, "status", "Received"),
-      reference: formString(formData, "reference"),
-    },
-  });
-}
-
-async function updateContribution(contribution: ContributionRow, formData: FormData) {
-  // Demo rows have no id; nothing on this page offers to edit one, but the
-  // type allows it, so say so plainly rather than sending "undefined".
-  if (!contribution.id) throw new Error("This row cannot be edited");
-
-  await apiFetch(`/api/events?resource=contributions&id=${encodeURIComponent(contribution.id)}`, {
-    method: "PATCH",
-    body: {
-      flat_no: formString(formData, "flat"),
-      resident_name: formString(formData, "name"),
-      resident_type: formString(formData, "type", "Owner"),
-      expected_amount: formNumber(formData, "expected"),
-      received_amount: formNumber(formData, "received"),
-      received_date: formString(formData, "paymentDate", todayDateInputValue()),
-      payment_mode: formString(formData, "mode", "UPI"),
-      status: formString(formData, "status", "Received"),
-      reference: formString(formData, "reference"),
-    },
-  });
 }
 
 async function deleteContribution(id: string) {
