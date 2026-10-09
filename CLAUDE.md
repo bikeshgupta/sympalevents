@@ -13,6 +13,15 @@ residents, sponsorships, budgets, expenses, tasks, and the day-wise event schedu
 **This app is LIVE in production.** Treat every change as a change to software real
 committee members are using today. See "Working agreement" below.
 
+## Migration status
+
+**Migrations 001-041 have all been applied to the live Supabase project** (confirmed by the owner on
+2026-10-09). Every "not run yet" / "has not been run" note further down this file is **history**: it
+describes the state when that feature was written. The degrade paths those notes describe (reads fall
+back, writes answer 501 naming the migration) stay in the code as safety nets for a fresh database or a
+future migration, and are no longer what production does. A migration after 041 is **not** applied until
+the owner says so.
+
 ## Commands
 
 ```bash

@@ -1,3 +1,6 @@
+> **Status (2026-10-09): migrations 001-041 are applied in production**, confirmed by the owner. The
+> per-migration "until it is run" notes below describe what the app does on a database that lacks them.
+
 # Migration execution checklist — 014 to 038
 
 **Which of these are applied is the owner's to know, not this file's.** 029 is
