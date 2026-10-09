@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  * Who is reading what the committee maintains.
  *
  * Collapsed by default, and the query is gated on that: an unopened panel
- * makes no request and runs no timer. Admin only - this is the one table in
+ * makes no request and runs no timer. Society admin only - this is the one table in
  * the app that says who was reading which page, and Settings is admin-only in
  * any case (it is the screen that controls all the others, so it is never
  * configurable).
@@ -24,13 +24,20 @@ import { cn } from "@/lib/utils";
  * credits follow.
  */
 export function TrafficCard() {
-  const { selectedEventId } = useEventContext();
+  const { selectedEventId, selectedEvent, societies } = useEventContext();
   const access = usePageAccess("settings");
   const [open, setOpen] = useState(false);
 
   const { data, isLoading, error } = useEventTraffic(selectedEventId, open);
 
-  if (!selectedEventId || access.role !== "admin") return null;
+  // The society admin's, not every event admin's (the server enforces it too).
+  // An event with no society has nobody above its admin, so there the admin keeps it.
+  const societyId = selectedEvent?.societyId ?? null;
+  const mayView = societyId
+    ? societies.some((society) => society.id === societyId && society.role === "admin")
+    : access.role === "admin";
+
+  if (!selectedEventId || !mayView) return null;
 
   const liveWindow = data?.liveWindowSeconds ?? 120;
   const liveCutoff = Date.now() - liveWindow * 1000;

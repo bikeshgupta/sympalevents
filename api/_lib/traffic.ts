@@ -1,3 +1,4 @@
+import { isSocietyAdmin, societyIdForEvent } from "./authority.js";
 import { resolvePageAccess } from "./page-visibility.js";
 import {
   assertServiceSupabase,
@@ -230,7 +231,7 @@ type VisitRow = {
 };
 
 /**
- * The Settings panel's read. Admin only - this is the one table that says who
+ * The Settings panel's read. Society admin only - this is the one table that says who
  * was reading what, and `settings` is admin-only in any case.
  */
 async function readTraffic(req: ApiRequest, res: ApiResponse) {
@@ -238,9 +239,21 @@ async function readTraffic(req: ApiRequest, res: ApiResponse) {
   if (!eventId) throw fail("eventId is required", 400);
 
   const { appUser } = await requireAppUser(req);
-  await requireEventAdmin(eventId, appUser.id);
-
   const supabase = assertServiceSupabase();
+
+  // Who was reading what is the society's to see, not each event admin's: an
+  // event admin is handed one event to run, not a record of its residents'
+  // browsing. An event with no society has nobody above its admin, so there
+  // the event admin keeps it rather than nobody being able to open it.
+  const organizationId = await societyIdForEvent(supabase, eventId);
+  if (organizationId) {
+    if (!(await isSocietyAdmin(supabase, organizationId, appUser.id))) {
+      throw fail("Only the society admin can see traffic", 403);
+    }
+  } else {
+    await requireEventAdmin(eventId, appUser.id);
+  }
+
   const since = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase

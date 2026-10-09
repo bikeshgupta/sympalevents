@@ -1931,7 +1931,7 @@ switch is not rendered and the sheet is always the committee copy.
 
 Who opens this event's pages, and who has been. A collapsible **Traffic**
 panel in Settings ([traffic-card.tsx](src/features/settings/traffic-card.tsx)),
-admin only, answering the question a committee had no way to ask: is any of
+society admin only, answering the question a committee had no way to ask: is any of
 this read?
 
 It records people's browsing, so most of what follows is a privacy decision
@@ -1988,7 +1988,7 @@ cold start to pay for a single-row upsert; `api/event-access.ts` imports
 - **Every beat is authorised against `resolvePageAccess`**, the same answer the
   route guard gets. Without it anyone could write rows into any event's table,
   and a visitor could claim to be reading a page they cannot open.
-- **`GET` needs `requireEventAdmin`.** It returns **names only** for signed-in
+- **`GET` is the society admin's, not every event admin's** (an event admin is handed one event to run, not a record of its residents' browsing; an event with no society falls back to `requireEventAdmin`). The Traffic card hides itself the same way. It returns **names only** for signed-in
   visitors - no email, no photograph, no role, the same rule the closing
   credits follow - and never a name for a guest.
 - A beat on the **same** page is throttled to one per 20 seconds, so a runaway
