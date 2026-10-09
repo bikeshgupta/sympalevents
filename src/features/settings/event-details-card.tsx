@@ -159,47 +159,51 @@ export function EventDetailsCard() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <label className="block text-sm font-medium" htmlFor="event-start-date">
                 Starts on
               </label>
               <Input
                 id="event-start-date"
+                className="w-full min-w-0"
                 type="date"
                 value={value.startDate}
                 onChange={(item) => change("startDate", item.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <label className="block text-sm font-medium" htmlFor="event-start-time">
                 Start time <span className="font-normal text-muted-foreground">(optional)</span>
               </label>
               <Input
                 id="event-start-time"
+                className="w-full min-w-0"
                 type="time"
                 value={value.startTime}
                 disabled={!timesReady}
                 onChange={(item) => change("startTime", item.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <label className="block text-sm font-medium" htmlFor="event-end-date">
                 Ends on
               </label>
               <Input
                 id="event-end-date"
+                className="w-full min-w-0"
                 type="date"
                 value={value.endDate}
                 min={value.startDate || undefined}
                 onChange={(item) => change("endDate", item.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <label className="block text-sm font-medium" htmlFor="event-end-time">
                 End time <span className="font-normal text-muted-foreground">(optional)</span>
               </label>
               <Input
                 id="event-end-time"
+                className="w-full min-w-0"
                 type="time"
                 value={value.endTime}
                 disabled={!timesReady}
