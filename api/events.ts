@@ -11,6 +11,7 @@ import { handleDashboardLayout } from "./_lib/layout.js";
 import { handleAnnouncements } from "./_lib/announcements.js";
 import { handleCommandCentre } from "./_lib/command-centre.js";
 import { handleGate } from "./_lib/gate.js";
+import { handleEventDetails } from "./_lib/event-details.js";
 import { handleOg } from "./_lib/og.js";
 import { handleOpportunities } from "./_lib/opportunities.js";
 import { handleCommunications } from "./_lib/communications.js";
@@ -119,6 +120,16 @@ export default async function handler(req: any, res: any) {
   if (resource === "command") {
     try {
       return await handleCommandCentre(req, res);
+    } catch (error) {
+      return handleApiError(res, error);
+    }
+  }
+
+  // Name, venue, dates, hours, and whether amounts are shown. Event admin only.
+  // (Settings -> Event details, and Customise dashboard -> Collections.)
+  if (resource === "details") {
+    try {
+      return await handleEventDetails(req, res);
     } catch (error) {
       return handleApiError(res, error);
     }
