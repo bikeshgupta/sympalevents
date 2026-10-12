@@ -129,6 +129,49 @@ export async function handleRegistration(req: Request, res: Response) {
   if (!access.canView)
     fail("You cannot access registration for this event", viewer ? 403 : 401);
   const canManage = access.canEdit;
+  if (req.method === "GET" && req.query?.passFor) {
+    // One household's pass, for an organiser to send on. The list strips the
+    // token on purpose, so this is the only road to it for somebody else's
+    // booking: one booking at a time, organisers only, and logged. Paid or
+    // free only - the same rule the resident's own /pass page follows, since an
+    // unpaid QR would just be turned back at the gate.
+    if (!canManage) fail("Organiser access required", 403);
+    const target = uuid.safeParse(String(req.query.passFor));
+    if (!target.success) fail("A valid booking is required");
+    const found = await db
+      .from("event_registrations")
+      .select("id,contact_name,flat,adults,children,food_count,status,payment_status,pass_token")
+      .eq("event_id", eventId)
+      .eq("id", target.data)
+      .maybeSingle();
+    dbError(found.error);
+    const row = found.data;
+    if (!row) fail("That booking was not found", 404);
+    if (row.status !== "active") fail("That booking is cancelled", 409);
+    if (!["verified", "free"].includes(String(row.payment_status))) {
+      fail("Verify the payment first - a pass is only issued once it is paid", 409);
+    }
+    if (!row.pass_token) fail("That booking has no pass yet", 409);
+    audit(req as never, {
+      action: "share_pass",
+      entityType: "registrations",
+      entityId: row.id,
+      eventId,
+      actor: { id: viewer!.id },
+      summary: `Issued the pass for ${row.contact_name} (${row.flat}) to share`,
+    });
+    sendJson(res, 200, {
+      pass: {
+        token: row.pass_token,
+        code: String(row.id).slice(0, 8).toUpperCase(),
+        name: row.contact_name,
+        flat: row.flat,
+        people: Number(row.adults) + Number(row.children),
+        food: Number(row.food_count),
+      },
+    });
+    return;
+  }
   if (req.method === "GET") {
     const configResult = await db
       .from("event_registration_settings")

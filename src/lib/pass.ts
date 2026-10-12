@@ -46,3 +46,35 @@ export async function passImage(token: string, caption: string[]): Promise<Blob>
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not make the image"))), "image/png"),
   );
 }
+
+/**
+ * Hand a pass picture to the phone's share sheet (WhatsApp is on it), or save
+ * it where there is no share sheet - a desktop browser, mostly. The file is the
+ * thing being sent, so a household gets a picture they can open at the gate
+ * rather than a link that needs an account.
+ */
+export async function sharePassImage(
+  blob: Blob,
+  filename: string,
+  message: string,
+): Promise<"shared" | "downloaded" | "cancelled"> {
+  const file = new File([blob], filename, { type: "image/png" });
+  const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+  if (typeof nav.share === "function" && nav.canShare?.({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], text: message });
+      return "shared";
+    } catch (error) {
+      if ((error as Error).name === "AbortError") return "cancelled";
+      // Any other failure: fall through to a plain download.
+    }
+  }
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+  return "downloaded";
+}

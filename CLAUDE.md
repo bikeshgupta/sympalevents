@@ -826,6 +826,31 @@ resident's page.
   and the button is disabled where it is missing; search by name, flat or booking code
   (or a pasted token) is the full fallback. The camera stops when the dialog closes.
 
+## Handing out passes and wristbands
+
+Two separate things, on purpose. The **QR pass is personal and the gate reads it**; the
+**wristband is common and says only "let in tonight"**. Both live on the organiser's Registrations
+screen (Attendees & entry).
+
+- **Share pass** ([share-pass-button.tsx](src/features/registration/share-pass-button.tsx)) is on every
+  row and card: it fetches that one booking's token (`GET ?resource=registration&passFor=<id>`, organisers
+  only, **paid or free and active only**, audited as `share_pass`), draws the QR picture with `passImage`
+  (event, flat, head count, booking code - never the payment reference) and hands it to the phone's share
+  sheet (WhatsApp) via `sharePassImage`, or downloads it where there is none. This is the only way an
+  organiser gets a token: the list still strips it, so households a committee member added on their behalf
+  (who have no account and no `/pass` page) can still be given a pass. It is disabled with a reason for an
+  unpaid booking rather than hidden.
+- **Wristbands** ([wristband-dialog.tsx](src/features/registration/wristband-dialog.tsx)): one design for
+  everybody - event name, dates and venue, a tag (ENTRY, GUEST, VOLUNTEER...), **no QR and nothing about a
+  person**, so a roll can be printed ahead and a photographed wrist reveals nothing. Per-event customising
+  is what the event already has (its colour preset, name, dates) plus a tag typed in the dialog and
+  remembered on that device in `localStorage` - **no migration**. The count starts from the booked
+  head count. The band is drawn in container units (`.wristband` in globals.css), so the preview and the
+  260 x 24 mm strip are one drawing; seven fit an A4 **landscape** sheet through a named `@page wristbands`
+  (outside any `@layer`), and the dialog tells people to choose Landscape in case their browser ignores
+  it. Print colours are forced (`print-color-adjust: exact`) because the band is a solid colour.
+  Verified by printing to PDF: A4 landscape, seven to a page, colour kept.
+
 ## Publishing, copying and creating events
 
 - **Publishing is checked on the server** ([api/_lib/readiness.ts](api/_lib/readiness.ts)),

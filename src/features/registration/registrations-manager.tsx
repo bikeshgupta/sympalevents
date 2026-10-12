@@ -1,10 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleDollarSign, Download, Plus, Search, UserCheck, Users } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { CircleDollarSign, Download, Plus, Search, UserCheck, Users, Watch } from "lucide-react";
+import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BookingCard, BookingForm } from "@/features/registration/registration-parts";
+import { SharePassButton } from "@/features/registration/share-pass-button";
+import { WristbandDialog } from "@/features/registration/wristband-dialog";
+import { useEventData } from "@/lib/event-data";
 import { apiFetch } from "@/lib/api";
 import type { RegistrationFilter, RegistrationPayload } from "@/lib/registration";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -92,6 +95,9 @@ export function RegistrationsManager({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [wristbands, setWristbands] = useState(false);
+  const { data: eventData } = useEventData({ includeTasks: false });
+  const eventName = eventData.event.name;
 
   // ---- quick add -----------------------------------------------------------
   const [name, setName] = useState("");
@@ -330,6 +336,10 @@ export function RegistrationsManager({
             <Download className="h-4 w-4" aria-hidden="true" />
             Export CSV
           </Button>
+          <Button type="button" variant="outline" onClick={() => setWristbands(true)}>
+            <Watch className="h-4 w-4" aria-hidden="true" />
+            Wristbands
+          </Button>
         </div>
 
         <div className="flex flex-wrap gap-2" role="group" aria-label="Filter bookings">
@@ -410,6 +420,9 @@ export function RegistrationsManager({
                       onToggleOpen={() => setOpenId(openId === row.id ? null : row.id)}
                       pending={pending}
                       onAction={(action, value) => onAction(row, action, value)}
+                      share={
+                        <SharePassButton eventId={eventId} eventName={eventName} row={row} onMessage={setNotice} />
+                      }
                     />
                   ))}
                 </tbody>
@@ -448,6 +461,9 @@ export function RegistrationsManager({
                   >
                     {openId === row.id ? "Hide details" : "Open"}
                   </button>
+                  <div className="mt-1">
+                    <SharePassButton eventId={eventId} eventName={eventName} row={row} onMessage={setNotice} />
+                  </div>
                   {openId === row.id ? (
                     <div className="mt-2">
                       <BookingCard row={row} manager pending={pending} onAction={(action, value) => onAction(row, action, value)} />
@@ -477,6 +493,13 @@ export function RegistrationsManager({
           </Button>
         </div>
       </section>
+
+      <WristbandDialog
+        open={wristbands}
+        onOpenChange={setWristbands}
+        event={eventData.event}
+        suggestedCount={summary?.attendees ?? 0}
+      />
     </div>
   );
 }
@@ -504,6 +527,7 @@ function TableRow({
   onToggleOpen,
   pending,
   onAction,
+  share,
 }: {
   row: Registration;
   open: boolean;
@@ -513,6 +537,8 @@ function TableRow({
   onToggleOpen: () => void;
   pending: boolean;
   onAction: (action: string, value?: string) => Promise<void>;
+  /** The row's "Share pass" button. */
+  share: ReactNode;
 }) {
   const people = row.adults + row.children;
   return (
@@ -544,7 +570,8 @@ function TableRow({
         <td className="py-2.5 pr-3 text-right align-middle tabular-nums">
           {row.checked_in_count}/{people}
         </td>
-        <td className="py-2.5 text-right align-middle">
+        <td className="whitespace-nowrap py-2.5 text-right align-middle">
+          <span className="mr-1 inline-block">{share}</span>
           <button
             type="button"
             aria-expanded={open}

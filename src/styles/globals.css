@@ -149,6 +149,101 @@
     }
   }
 
+
+  /*
+   * The entry wristband (features/registration/wristband-dialog.tsx). Sized in
+   * container units, so the preview in the dialog and the 260mm strip on paper
+   * are the same drawing at two scales. One colour per event, from its preset;
+   * the pale striped end is where the loose end sticks down.
+   */
+  .wristband {
+    container-type: inline-size;
+    display: flex;
+    width: 100%;
+    aspect-ratio: 260 / 24;
+    overflow: hidden;
+    border: 0.3mm dashed hsl(var(--muted-foreground));
+    border-radius: 1.2cqw;
+    background: var(--band);
+    color: #fff;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .wristband-print {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 2cqw;
+  }
+  .wristband-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.6cqw;
+  }
+  .wristband-gap {
+    align-self: stretch;
+    margin: 1.2cqw 0;
+    border-left: 0.25cqw solid rgba(255, 255, 255, 0.35);
+  }
+  .wristband-tag {
+    align-self: flex-start;
+    border-radius: 0.6cqw;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.2cqw 1cqw;
+    font-size: 1.45cqw;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    line-height: 1.2;
+  }
+  .wristband-name {
+    overflow: hidden;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 3.2cqw;
+    font-weight: 700;
+    line-height: 1.05;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wristband-name-sm {
+    font-size: 2.6cqw;
+  }
+  .wristband-name-xs {
+    font-size: 2cqw;
+  }
+  .wristband-dates {
+    overflow: hidden;
+    font-size: 1.5cqw;
+    line-height: 1.2;
+    opacity: 0.9;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wristband-tail {
+    display: flex;
+    width: 19%;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-left: 0.25cqw solid rgba(255, 255, 255, 0.5);
+    background: repeating-linear-gradient(135deg, var(--band-pale) 0 1.6cqw, #fff 1.6cqw 3.2cqw);
+    color: var(--band);
+    font-size: 1.3cqw;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .wristband-tail span {
+    background: rgba(255, 255, 255, 0.85);
+    padding: 0.3cqw 0.8cqw;
+    border-radius: 0.5cqw;
+  }
+
   /*
    * Countdown numerals. Playfair Display is loaded in index.html; the serif
    * fallbacks keep the same character if it fails to load. Tabular figures stop
@@ -237,4 +332,20 @@
 @media (prefers-reduced-motion: reduce) {
   .unveil { animation: none; -webkit-mask-image: none; mask-image: none; }
   .skeleton-sheen::after { display: none; }
+}
+
+/* The wristband sheet prints landscape on its own named page; every other
+   notice stays A4 portrait. Outside any layer, because @page does not belong in one. */
+@page wristbands {
+  size: A4 landscape;
+  margin: 12mm;
+}
+.wristband-sheet {
+  page: wristbands;
+}
+@media print {
+  /* 260mm wide makes each band 24mm tall: seven to a landscape A4 sheet. */
+  .wristband-sheet {
+    width: 260mm;
+  }
 }
