@@ -278,6 +278,20 @@ better default from a later release instead of being frozen to the one it was
 made with. Reading it costs nothing extra: it travels with the event in
 `?resource=data`. Only the write is its own resource, `?resource=layout`.
 
+**Who sees each widget is the committee's choice** (`audience` on a layout entry, set in Customise
+dashboard -> "Who sees it"): `auto` (the default, and what every arrangement saved before this means),
+`everyone` (signed out included), `signed_in`, or `members` (a role on the event). It is stored in the same
+`dashboard_layout` jsonb - **no migration** - and only a real choice is stored. Before this, the resident
+home dropped the Financial summary and My responsibilities through `organiserOnlyWidgets`, and
+`visibleLayout` hid the two money widgets from anyone who could not open Contributions, Sponsors, Budget or
+Expenses - so opening the Collections setting and the page to everyone still left residents without the
+widget, with nothing to change it. **A widget with a chosen audience follows that choice and skips both
+built-in rules; one on `auto` behaves exactly as before.** A resident preview counts as a resident (an
+organiser previewing sees what a resident would). Two things the choice does *not* do: a widget tied to a
+module is still drawn only where that module is open to the viewer (its content comes from that page), and
+amounts still follow Collections (`finance_visibility`), which the server enforces. Covered by
+`tests/widget-audience.test.mjs`.
+
 Widgets are rendered into **fragments, not wrapper divs**. Several of them
 draw nothing when they have nothing to show, and an empty wrapper still
 counts for the container's `space-y-4`, leaving a gap where nothing is.

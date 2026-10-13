@@ -43,6 +43,9 @@ const widgetKeys = new Set([
 
 const variants = new Set(["basic", "detailed"]);
 
+/** Who a widget is drawn for. `auto` is the default and is never stored. */
+const audiences = new Set(["everyone", "signed_in", "members"]);
+
 function fail(message: string, statusCode: number) {
   const error = new Error(message);
   Object.assign(error, { statusCode });
@@ -85,15 +88,17 @@ export async function handleDashboardLayout(req: ApiRequest, res: ApiResponse) {
         key: String(raw.key ?? ""),
         variant: String(raw.variant ?? "basic"),
         isVisible: raw.isVisible !== false,
+        audience: typeof raw.audience === "string" && audiences.has(raw.audience) ? raw.audience : undefined,
       }))
       .filter((entry) => {
         if (!widgetKeys.has(entry.key) || seen.has(entry.key)) return false;
         seen.add(entry.key);
         return true;
       })
-      .map((entry) => ({
+      .map(({ audience, ...entry }) => ({
         ...entry,
         variant: variants.has(entry.variant) ? entry.variant : "basic",
+        ...(audience ? { audience } : {}),
       }));
 
     if (!(layout as unknown[]).length) throw fail("A dashboard needs at least one widget", 400);

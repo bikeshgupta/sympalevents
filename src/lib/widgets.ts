@@ -143,11 +143,46 @@ export const widgetCatalogue: WidgetDefinition[] = [
 
 export const widgetByKey = new Map(widgetCatalogue.map((widget) => [widget.key, widget]));
 
+/**
+ * Who a widget is drawn for, chosen per widget by the committee.
+ *
+ *   auto       what the dashboard has always done - the default, and what an
+ *              arrangement saved before this existed means;
+ *   everyone   anybody who can open the dashboard, signed in or not;
+ *   signed_in  anybody signed in;
+ *   members    people with a role on the event (the committee, and read-only
+ *              members), and nobody else.
+ *
+ * The three named choices are the same three the Page Visibility settings use.
+ * This decides what the dashboard *draws* - it is presentation, like the
+ * resident view. What each widget is allowed to *contain* is still the
+ * server's call: amounts follow Collections, and a widget tied to a module is
+ * drawn only where that module is open to the viewer.
+ */
+export type WidgetAudience = "auto" | "everyone" | "signed_in" | "members";
+
+export const widgetAudiences: WidgetAudience[] = ["auto", "everyone", "signed_in", "members"];
+
+/** How this viewer relates to the event, for the audience check. */
+export type ViewerLevel = "guest" | "signed_in" | "member";
+
 export type LayoutEntry = {
   key: string;
   variant: WidgetVariant;
   isVisible: boolean;
+  /** Absent means `auto`. Stored only when somebody has chosen something else. */
+  audience?: WidgetAudience;
 };
+
+/** Has the committee chosen who sees this, rather than leaving it to the defaults? */
+export const hasChosenAudience = (entry: LayoutEntry) => Boolean(entry.audience && entry.audience !== "auto");
+
+function audienceAllows(audience: WidgetAudience, viewer: ViewerLevel) {
+  if (audience === "everyone") return true;
+  if (audience === "signed_in") return viewer !== "guest";
+  if (audience === "members") return viewer === "member";
+  return true;
+}
 
 /**
  * The layout an event starts with, which is exactly the order the dashboard
@@ -206,12 +241,17 @@ export function normaliseLayout(stored: unknown, isClosed: boolean, eventType?: 
     seen.add(key);
 
     const variant = (raw as Record<string, unknown>).variant;
+    const audience = (raw as Record<string, unknown>).audience;
     entries.push({
       key,
       variant: widget.variants.includes(variant as WidgetVariant)
         ? (variant as WidgetVariant)
         : widget.defaultVariant,
       isVisible: (raw as Record<string, unknown>).isVisible !== false,
+      // Only a real choice is kept; anything else is "auto" and stays absent.
+      ...(audience === "everyone" || audience === "signed_in" || audience === "members"
+        ? { audience: audience as WidgetAudience }
+        : {}),
     });
   }
 
@@ -231,14 +271,32 @@ export function normaliseLayout(stored: unknown, isClosed: boolean, eventType?: 
  *
  * `openPageKeys` of `null` means "do not filter by module" - demo mode, where
  * there is no admin to have configured anything and nothing real to protect.
+ *
+ * A widget the committee has given an audience follows that choice, and the
+ * old built-in rules for the money widgets (somebody must be able to open
+ * Contributions, Sponsors, Budget or Expenses) step aside - the committee has
+ * now said who sees it, and that is the more specific instruction. A widget
+ * left on `auto` behaves exactly as it always has. Either way a widget tied to
+ * a module is drawn only where that module is open to the viewer: its content
+ * comes from that page's own access rules.
  */
-export function visibleLayout(layout: LayoutEntry[], openPageKeys: Set<string> | null) {
+export function visibleLayout(layout: LayoutEntry[], openPageKeys: Set<string> | null, viewer: ViewerLevel = "member") {
   return layout.filter((entry) => {
     if (!entry.isVisible) return false;
     const widget = widgetByKey.get(entry.key);
     if (!widget) return false;
     if (openPageKeys === null) return true;
-    if (["financial-summary", "funding-progress"].includes(widget.key) && !["contributions","sponsors","budget","expenses"].some(key=>openPageKeys.has(key))) return false;
+
+    const chosen = hasChosenAudience(entry);
+    if (chosen && !audienceAllows(entry.audience as WidgetAudience, viewer)) return false;
+
+    if (
+      !chosen &&
+      ["financial-summary", "funding-progress"].includes(widget.key) &&
+      !["contributions", "sponsors", "budget", "expenses"].some((key) => openPageKeys.has(key))
+    ) {
+      return false;
+    }
     return widget.module === null || openPageKeys.has(widget.module);
   });
 }

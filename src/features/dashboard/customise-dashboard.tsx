@@ -11,7 +11,7 @@ import { useEventClosing } from "@/lib/closing";
 import { useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
 import { cn } from "@/lib/utils";
-import { normaliseLayout, widgetByKey, type LayoutEntry, type WidgetVariant } from "@/lib/widgets";
+import { normaliseLayout, widgetByKey, type LayoutEntry, type WidgetAudience, type WidgetVariant } from "@/lib/widgets";
 
 /**
  * Arranging the dashboard: what is on it, in what order, and how much of each.
@@ -87,6 +87,18 @@ export function CustomiseDashboardPage() {
 
   function setVariant(key: string, variant: WidgetVariant) {
     update(layout.map((entry) => (entry.key === key ? { ...entry, variant } : entry)));
+  }
+
+  /** "auto" is the default and is stored as no choice at all. */
+  function setAudience(key: string, audience: WidgetAudience) {
+    update(
+      layout.map((entry) => {
+        if (entry.key !== key) return entry;
+        const { audience: _previous, ...rest } = entry;
+        void _previous;
+        return audience === "auto" ? rest : { ...rest, audience };
+      }),
+    );
   }
 
   async function handleSave() {
@@ -176,9 +188,27 @@ export function CustomiseDashboardPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{widget.title}</p>
                   <p className="text-xs text-muted-foreground">{widget.description}</p>
+                  {entry.key === "financial-summary" || entry.key === "funding-progress" ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Amounts are also governed by the Collections setting below.
+                    </p>
+                  ) : null}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {widget.required ? null : (
+                    <select
+                      aria-label={`Who can see ${widget.title}`}
+                      className="h-10 max-w-[13rem] rounded-md border bg-background px-2 text-sm"
+                      value={entry.audience ?? "auto"}
+                      onChange={(field) => setAudience(entry.key, field.target.value as WidgetAudience)}
+                    >
+                      <option value="auto">Who sees it: automatic</option>
+                      <option value="everyone">Everyone, no sign-in</option>
+                      <option value="signed_in">Anyone signed in</option>
+                      <option value="members">Committee members only</option>
+                    </select>
+                  )}
                   {widget.variants.length > 1 ? (
                     <select
                       aria-label={`How much of ${widget.title} to show`}

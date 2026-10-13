@@ -12,7 +12,7 @@ import { useEventAccess } from "@/lib/event-access";
 import { useEventPath } from "@/lib/event-path";
 import { usePageAccess } from "@/lib/page-access";
 import { cn } from "@/lib/utils";
-import { layoutRows, normaliseLayout, visibleLayout } from "@/lib/widgets";
+import { hasChosenAudience, layoutRows, normaliseLayout, visibleLayout, type ViewerLevel } from "@/lib/widgets";
 import { EventActions } from "@/features/registration/event-actions";
 import { ResidentPrimaryAction } from "@/features/dashboard/resident-primary-action";
 import { getEventStatus } from "@/lib/event-status";
@@ -161,8 +161,16 @@ export function DashboardPage() {
   // The resident's home is the same widgets in the same order the committee
   // arranged them, minus the ones that are the organiser's own (the money maths
   // and the task list), with one action placed directly under the hero.
+  //
+  // A widget the committee has given an audience follows that choice instead:
+  // the organiser-only rule is only the default for a widget left on "auto".
+  // An organiser previewing the resident's view is a resident for this
+  // purpose, so the preview shows what a resident would really get.
+  const viewerLevel: ViewerLevel = !isResident ? "member" : session?.user ? "signed_in" : "guest";
   const rows = layoutRows(
-    visibleLayout(layout, openPageKeys).filter((entry) => !isResident || !organiserOnlyWidgets.has(entry.key)),
+    visibleLayout(layout, openPageKeys, viewerLevel).filter(
+      (entry) => !isResident || hasChosenAudience(entry) || !organiserOnlyWidgets.has(entry.key),
+    ),
   );
   const status = getEventStatus(
     {
