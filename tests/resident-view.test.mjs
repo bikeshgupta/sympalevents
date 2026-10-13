@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isEventOrganiser, isOrganiserPage, resolveViewMode, organiserOnlyWidgets } from '../src/lib/resident-view.ts';
+import { isEventOrganiser, isOrganiserPage, menuHidesPage, resolveViewMode, organiserOnlyWidgets } from '../src/lib/resident-view.ts';
 import { isRegistrationOpen, resolveResidentAction } from '../src/lib/resident-action.ts';
 import { artworkKeyFor, usesBundledPhoto } from '../src/lib/hero-artwork.ts';
 
@@ -74,4 +74,13 @@ test('hero artwork follows the template, and only a pre-template festival keeps 
   assert.equal(usesBundledPhoto({ templateKey: 'festival', eventType: 'festival' }), false);
   assert.equal(usesBundledPhoto({ templateKey: 'garba', eventType: 'cultural' }), false);
   assert.equal(usesBundledPhoto({ templateKey: null, eventType: 'sports' }), false);
+});
+
+test('a real resident\'s menu is whatever the server allows; only a preview trims organiser pages', () => {
+  for (const page of ['budget', 'contributions', 'sponsors', 'expenses', 'tasks']) {
+    assert.equal(menuHidesPage(page, { mode: 'resident', isPreview: false }), false, page);
+    assert.equal(menuHidesPage(page, { mode: 'resident', isPreview: true }), true, page);
+    assert.equal(menuHidesPage(page, { mode: 'organiser', isPreview: false }), false, page);
+  }
+  assert.equal(menuHidesPage('dashboard', { mode: 'resident', isPreview: true }), false);
 });

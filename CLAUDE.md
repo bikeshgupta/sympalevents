@@ -387,16 +387,19 @@ Expenses and Tasks. The rules are in [src/lib/resident-view.ts](src/lib/resident
   and a way back. Kept in `sessionStorage`, not `localStorage`: a per-tab
   convenience that must not outlive the tab and leave somebody wondering next
   week where their menu went. Storage can throw; it falls back to memory.
-- **The resident menu** drops `organiserOnlyPages` (contributions, sponsors,
-  budget, expenses, tasks, volunteers, contacts, settings) and says "Home" and
-  "Schedule" where the organiser's says "Overview" and "Events" - unless the
-  event has named a module itself. It is a **deny-list**: a page this file has
-  never heard of reaches a resident the server allows rather than vanishing.
-  The header says "Community event", not "Committee workspace", and "Request
-  access" moves from the header into the account menu.
-  **Budget is in that list.** It is a public page by default and was in every
-  resident's menu before; it is now out of it (still reachable by link). Take it
-  out of `organiserOnlyPages` if the committee wants it back.
+- **The resident menu is whatever the server says they may open** - the committee's Page Visibility is
+  the whole rule. A page set to "Anyone with the link" is in the menu for a signed-out visitor, "Any
+  signed-in user" appears once they sign in, and a page they were granted appears for them (`menuHidesPage`
+  in `resident-view.ts`). **It used to drop `organiserOnlyPages`** (contributions, sponsors, budget, expenses,
+  tasks...) even when the committee had opened them, so an open page had no menu entry; that deny-list now
+  trims the menu **only for an organiser previewing the resident's view**, whose server list is their own
+  and not a resident's. It still says "Home" and "Schedule" where the organiser's says "Overview" and
+  "Events" - unless the event has named a module itself. The command centre, communications and settings
+  never reach a resident: the server sends them only to an admin or committee member. A consequence to
+  know: **Tasks defaults to "any signed-in user"**, so it now appears in every signed-in resident's menu
+  (it was always openable by link); set it to members-only in Modules to keep it out. The header says
+  "Community event", not "Committee workspace", and "Request access" moves from the header into the account
+  menu.
 - **The resident's home** is the same widgets in the order the committee arranged
   them, minus `organiserOnlyWidgets` (Financial summary, My responsibilities),
   with one card directly under the hero: `ResidentPrimaryAction`. Funding

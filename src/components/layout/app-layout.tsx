@@ -17,7 +17,7 @@ import { useTrafficHeartbeat } from "@/lib/traffic";
 import { themeVariables } from "@/lib/themes";
 import { EventLoadingShell } from "@/components/shared/event-loading";
 import { useEventData } from "@/lib/event-data";
-import { isOrganiserPage } from "@/lib/resident-view";
+import { menuHidesPage } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
 import { navItems } from "./nav-items";
 
@@ -89,9 +89,10 @@ export function AppLayout() {
   const orderedFromServer = updatesItem
     ? fromServer.flatMap((item) => (pageKeyFromHref(item.href) === "dashboard" ? [item, updatesItem] : [item]))
     : fromServer;
-  // A resident's menu is the pages for attending the event; the ones for
-  // running it are left out. Presentation only: the server's list above is
-  // still what decides what they may open, and a direct link still works.
+  // A resident's menu is whatever the server says they may open - public pages
+  // for a visitor, signed-in pages once they sign in, and pages they were given.
+  // Only an organiser previewing the resident's view has the organiser pages
+  // trimmed (see menuHidesPage).
   const view = useViewMode();
   const residentMenu = view.mode === "resident" && !isDemoNav;
   // The organiser's menu is folded into groups; a resident's is short enough to
@@ -101,7 +102,7 @@ export function AppLayout() {
     // The demo has no organisers, so no command centre to offer.
     isDemoNav ? navItems.filter((item) => !["/command", "/communications", "/updates"].includes(item.href)) : orderedFromServer
   )
-    .filter((item) => !residentMenu || !isOrganiserPage(pageKeyFromHref(item.href)))
+    .filter((item) => !menuHidesPage(pageKeyFromHref(item.href), { mode: residentMenu ? "resident" : "organiser", isPreview: view.isPreview }))
     .map((item) => {
       const pageKey = pageKeyFromHref(item.href);
       // What this event calls a page wins. Failing that, a resident's menu

@@ -52,6 +52,24 @@ export function isOrganiserPage(pageKey: string) {
 }
 
 /**
+ * Whether a page is left out of the menu.
+ *
+ * A real resident's menu is exactly what the server says they may open: a page
+ * set to "Anyone with the link" is there for a signed-out visitor, one set to
+ * "Any signed-in user" appears once they sign in, and a page they have been
+ * given access to appears for them. The committee's own visibility settings are
+ * the whole rule - this file no longer second-guesses them.
+ *
+ * Only an organiser *previewing* the resident's view still has the organiser
+ * pages trimmed, because the list the server sent is their own (everything an
+ * organiser may open), not a resident's, and a preview that showed the lot
+ * would not be a preview.
+ */
+export function menuHidesPage(pageKey: string, view: { mode: ViewMode; isPreview: boolean }) {
+  return view.mode === "resident" && view.isPreview && isOrganiserPage(pageKey);
+}
+
+/**
  * Whether somebody is an organiser of this event.
  *
  * A role of any kind counts, `read_only` included: those members were given
