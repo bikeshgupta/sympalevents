@@ -22,6 +22,10 @@ import { useViewMode } from "@/lib/view-mode";
 import { navItems } from "./nav-items";
 import { menuGlass } from "@/lib/glass";
 import { MenuIdentity, MenuList, MenuTile, menuRow } from "@/components/layout/menu-list";
+import { cn } from "@/lib/utils";
+import { pageKeyFromPath } from "@/lib/page-access";
+import { IosPage } from "@/components/ui/ios-page";
+import { iosPageKeys } from "@/components/ui/ios-page-context";
 
 function pageKeyFromHref(href: string) {
   return href.split("/").filter(Boolean)[0] || "dashboard";
@@ -35,6 +39,8 @@ export function AppLayout() {
     useEventContext();
   const { eventId: eventIdFromRoute, societySlug, eventSlug } = useParams();
   const location = useLocation();
+  // The committee's working pages wear the iOS-style theme (see components/ui/ios-page-context.ts).
+  const ios = iosPageKeys.has(pageKeyFromPath(location.pathname));
 
   // A readable address has to become an id before any screen can load, and the
   // person opening it may have no account and no stored selection - so the
@@ -165,11 +171,12 @@ export function AppLayout() {
   }
 
   return (
-    // The event's colour preset, set as CSS variables on the root rather than
-    // by any second styling mechanism - every `bg-primary`, focus ring and
-    // accent in the app is already reading these. A default-themed event sets
-    // nothing at all, so it inherits globals.css untouched. See lib/themes.ts.
-    <div className="min-h-screen bg-background" style={themeVariables(event?.theme)}>
+    <IosPage active={ios}>
+    {/* The event's colour preset, set as CSS variables on the root rather than
+        by any second styling mechanism - every `bg-primary`, focus ring and
+        accent in the app is already reading these. A default-themed event sets
+        nothing at all, so it inherits globals.css untouched. See lib/themes.ts. */}
+    <div className={cn("min-h-screen", ios ? "bg-[hsl(42_26%_94%)]" : "bg-background")} style={themeVariables(event?.theme)}>
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card lg:block">
         {/* The society's own name and logo, when it has them. A deployment
             with no society yet falls back to the app's name, which is what
@@ -187,7 +194,12 @@ export function AppLayout() {
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur lg:px-6">
+        <header
+          className={cn(
+            "sticky top-0 z-30 flex h-16 items-center gap-3 border-b px-4 backdrop-blur lg:px-6",
+            ios ? "bg-[hsl(42_26%_94%/0.78)] backdrop-blur-xl" : "bg-background/95",
+          )}
+        >
           {/* The app icon is the way home: every event in the society, not
               just the one open. Its own link, so the event title beside it can
               be a pure switcher. */}
@@ -348,6 +360,7 @@ export function AppLayout() {
         </main>
       </div>
     </div>
+    </IosPage>
   );
 }
 

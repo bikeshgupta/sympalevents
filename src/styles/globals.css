@@ -388,6 +388,62 @@
     }
   }
 
+  /*
+   * The iOS-themed working pages (components/ui/ios-page.tsx sets data-ios-page on <body>). The primitives (Card,
+   * Button, Input) change through React context; these few rules cover what is plain markup in every page: the
+   * page title, tables and native selects and text areas.
+   */
+  [data-ios-page] main h2.text-2xl.font-semibold,
+  [data-ios-page] main h2.text-xl.font-semibold.sm\:text-2xl,
+  [data-ios-page] main h1.text-2xl.font-semibold {
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 1.875rem;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+
+  [data-ios-page] select,
+  [data-ios-page] textarea {
+    border-radius: 0.75rem;
+    border-color: transparent;
+    background-color: hsl(var(--foreground) / 0.045);
+  }
+
+  /* The few blocks that are hand-drawn boxes rather than a Card (task and prasad cards, small panels). */
+  [data-ios-page] main .rounded-lg.border.bg-card {
+    border-color: transparent;
+    border-radius: 1.25rem;
+    box-shadow:
+      0 1px 2px hsl(var(--foreground) / 0.05),
+      0 0 0 1px rgb(0 0 0 / 0.04);
+  }
+
+  [data-ios-page] table thead {
+    background: transparent;
+  }
+
+  [data-ios-page] table th {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  [data-ios-page] table th button {
+    font-weight: 600;
+  }
+
+  [data-ios-page] table tbody tr {
+    border-color: hsl(var(--foreground) / 0.08);
+  }
+
+  @media (hover: hover) {
+    [data-ios-page] table tbody tr:hover {
+      background: hsl(var(--foreground) / 0.025);
+    }
+  }
+
   /* iOS-style list: rows touch, with a hairline between them that starts after the icon (or at --ios-inset). */
   .ios-list > * {
     position: relative;

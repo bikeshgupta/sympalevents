@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useIosPage } from "@/components/ui/ios-page-context";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,6 +25,7 @@ export function GroupedCards({ children }: { children: React.ReactNode }) {
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const flat = React.useContext(FlatCardsContext);
   const grouped = React.useContext(GroupedCardsContext);
+  const ios = useIosPage();
   return (
     <div
       className={cn(
@@ -31,7 +33,9 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
           ? "mt-7 text-card-foreground first:mt-0"
           : flat
           ? "border-t py-7 text-card-foreground first:border-t-0 first:pt-1"
-          : "rounded-lg border bg-card text-card-foreground shadow-sm",
+          : ios
+            ? "rounded-3xl bg-card text-card-foreground shadow-[0_1px_2px_hsl(var(--foreground)/0.05)] ring-1 ring-black/[0.04]"
+            : "rounded-lg border bg-card text-card-foreground shadow-sm",
         className,
       )}
       {...props}

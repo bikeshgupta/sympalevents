@@ -80,11 +80,48 @@ export function BudgetPage() {
           ) : <span className="text-sm text-muted-foreground"></span>
         }
       />
-      <Card className="overflow-x-auto">
+      <Card className="overflow-hidden">
         <TableToolbar
           resultCount={budgetTable.rows.length}
           totalCount={budgetRows.length}
         />
+        {/* A phone gets one row per item (UI rules 5: a wide table is not a mobile design); from lg it is the table. */}
+        <ul className="ios-list border-t lg:hidden" style={{ ["--ios-inset" as string]: "1rem" } as React.CSSProperties}>
+          {budgetTable.rows.map((row) => {
+            const est = row.qty * row.unitCost;
+            return (
+              <li key={row.id ?? row.item} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold leading-snug">{row.item}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.category} · {row.qty} {row.unit} · {row.fundingType}
+                    </p>
+                  </div>
+                  <StatusBadge status={row.status} />
+                </div>
+                <dl className="mt-2 grid grid-cols-3 gap-2 tabular-nums">
+                  {[
+                    ["Estimated", formatCurrency(est)],
+                    ["Actual", formatCurrency(row.actual)],
+                    ["Variance", formatCurrency(est - row.actual)],
+                  ].map(([label, amount]) => (
+                    <div key={label}>
+                      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+                      <dd className="text-sm font-medium">{amount}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {row.id && access.canEdit ? (
+                  <div className="mt-2 flex justify-end">
+                    <BudgetActions budget={row} />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="hidden overflow-x-auto lg:block">
         <table className="min-w-[1100px] w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
@@ -132,6 +169,7 @@ export function BudgetPage() {
             })}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

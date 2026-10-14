@@ -1,12 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { SOCIETY_REGISTRATION_OPEN, societyRegistrationClosedMessage } from "../../../shared/society-registration";
-import { ArrowLeft, Check, ChevronDown, Flame, Music, PartyPopper, Plus, Trophy } from "lucide-react";
+import { ArrowLeft, ChevronDown, Copy, Flame, Music, PartyPopper, Plus, SlidersHorizontal, Trophy } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { IosPage } from "@/components/ui/ios-page";
 import { enabledModuleCount, eventTemplates, type EventTemplate } from "@/data/event-templates";
+import { BlockRow, FieldRow, ListGroup, ListRow } from "@/features/settings/ios-list";
+import { fieldInput } from "@/features/settings/ios-styles";
+import type { SectionTone } from "@/features/settings/settings-sections";
 import { DuplicateEventForm } from "@/features/settings/duplicate-event-form";
 import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
 import { moduleLabelFor } from "@/lib/module-labels";
@@ -39,6 +41,16 @@ const templateIcons: Record<string, typeof Flame> = {
   cultural: Music,
   mixed: PartyPopper,
   blank: Plus,
+};
+
+/** Each kind of event gets its own icon colour in the list, as iOS gives every row one. */
+const templateTones: Record<string, SectionTone> = {
+  garba: "pink",
+  festival: "orange",
+  sports: "green",
+  cultural: "indigo",
+  mixed: "blue",
+  blank: "gray",
 };
 
 type Step = 1 | 2 | 3;
@@ -162,356 +174,298 @@ export function CreateEventWizard() {
     }
   }
 
+  const stepTitles: Record<Step, string> = { 1: "What kind of event is this?", 2: "When and where", 3: "Review and create" };
+  const primaryButton = "h-12 flex-1 rounded-2xl text-base sm:flex-none sm:px-8";
+  const secondaryButton = "h-12 rounded-2xl text-base";
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex h-16 items-center gap-3 border-b bg-card px-4 lg:px-8">
-        <Link to="/dashboard" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          Back to the app
-        </Link>
-      </header>
+    <IosPage active>
+      <div className="min-h-screen bg-[hsl(42_26%_94%)]">
+        {/* A frosted bar with a back pill, as on iOS. */}
+        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-black/[0.06] bg-[hsl(42_26%_94%/0.78)] px-4 backdrop-blur-xl backdrop-saturate-150 lg:px-8">
+          <Link
+            to="/dashboard"
+            className="glass glass-press inline-flex h-9 items-center gap-0.5 rounded-full pl-2 pr-3.5 text-[15px] font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-[18px] w-[18px]" aria-hidden />
+            Back to the app
+          </Link>
+        </header>
 
-      <div className="mx-auto w-full max-w-4xl px-4 py-8 lg:py-10">
-        <div className="flex items-baseline justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">New event</h1>
-          <p className="shrink-0 text-xs text-muted-foreground sm:text-sm">Step {step} of 3</p>
-        </div>
+        <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-6">
+          <h1 className="font-display text-3xl leading-tight sm:text-4xl">New event</h1>
 
-        <ol className="mt-5 flex items-start" aria-label="Progress">
-          {([1, 2, 3] as Step[]).map((item, index) => (
-            <li key={item} className={cn("flex items-start", index > 0 && "flex-1")}>
-              {index > 0 ? (
-                <span
-                  className={cn("mt-[7px] h-0.5 flex-1", item <= step ? "bg-primary" : "bg-border")}
-                  aria-hidden
-                />
-              ) : null}
-              <span className="flex w-24 flex-col items-center gap-1.5">
-                <span
-                  className={cn(
-                    "h-3.5 w-3.5 rounded-full border-2",
-                    item <= step ? "border-primary bg-primary" : "border-border bg-card",
-                  )}
-                  aria-hidden
-                />
-                <span className={cn("text-xs", item === step ? "font-semibold text-primary" : "text-muted-foreground")}>
+          {/* Three bars, the way iOS onboarding shows progress. */}
+          <ol className="mt-4 flex gap-2" aria-label={`Progress: step ${step} of 3`}>
+            {([1, 2, 3] as Step[]).map((item) => (
+              <li key={item} className="flex-1" aria-current={item === step ? "step" : undefined}>
+                <span className={cn("block h-1.5 rounded-full", item <= step ? "bg-primary" : "bg-black/[0.1]")} />
+                <span className={cn("mt-1.5 block text-xs", item === step ? "font-semibold text-primary" : "text-muted-foreground")}>
                   {stepNames[item]}
                 </span>
-              </span>
-            </li>
-          ))}
-        </ol>
+              </li>
+            ))}
+          </ol>
 
-        {step === 1 ? (
-          <section className="mt-8">
-            <h2 className="text-lg font-semibold">What kind of event is this?</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Pick the closest fit. It only sets the starting point - you can change anything afterwards, in Settings.
-            </p>
+          <h2 className="mt-7 text-[13px] uppercase tracking-wide text-muted-foreground">
+            Step {step} of 3 · {stepTitles[step]}
+          </h2>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {eventTemplates.map((item) => {
-                const Icon = templateIcons[item.key] ?? Flame;
-                const selected = item.key === templateKey;
-                return (
-                  <button
+          {step === 1 ? (
+            <section>
+              <ListGroup
+                className="mt-2"
+                footer={
+                  <>
+                    Pick the closest fit. It only sets the starting point - you can change anything afterwards, in Settings.{" "}
+                    {template.tagline}
+                  </>
+                }
+              >
+                {eventTemplates.map((item) => (
+                  <ListRow
                     key={item.key}
-                    type="button"
+                    icon={templateIcons[item.key] ?? Flame}
+                    tone={templateTones[item.key] ?? "gray"}
+                    title={item.name}
+                    sub={item.examples}
+                    subWrap
+                    value={`${enabledModuleCount(item)} modules`}
+                    checked={item.key === templateKey}
                     onClick={() => chooseTemplate(item.key)}
-                    aria-pressed={selected}
-                    className={cn(
-                      "flex flex-col rounded-lg border bg-card p-4 text-left transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      selected && "border-primary bg-accent/40 ring-1 ring-primary",
-                    )}
-                  >
-                    <span className="flex items-start">
-                      <span
-                        className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-md",
-                          selected ? "bg-primary text-primary-foreground" : "bg-muted text-primary",
-                        )}
-                      >
-                        <Icon className="h-5 w-5" aria-hidden />
-                      </span>
-                      <span className="flex-1" />
-                      {selected ? <Check className="h-5 w-5 text-primary" aria-label="Selected" /> : null}
-                    </span>
-                    <span className="mt-3 text-base font-semibold">{item.name}</span>
-                    <span className="mt-1 text-sm text-muted-foreground">{item.examples}</span>
-                    <span className="mt-3 text-xs font-medium text-muted-foreground">
-                      {enabledModuleCount(item)} modules on
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                  />
+                ))}
+              </ListGroup>
 
-            <p className="mt-5 text-sm text-muted-foreground">{template.tagline}</p>
-
-            {copyable.length ? (
-              <div className="mt-6 rounded-lg border bg-card">
-                <button
-                  type="button"
-                  aria-expanded={showCopy}
-                  onClick={() => setShowCopy((value) => !value)}
-                  className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span>Running one of your events again? Copy it instead</span>
-                  <ChevronDown className={cn("h-4 w-4 transition-transform", showCopy && "rotate-180")} aria-hidden />
-                </button>
-                {showCopy ? (
-                  <div className="space-y-3 border-t p-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="copy-from">Which event?</Label>
-                      <select
-                        id="copy-from"
-                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                        value={copyFrom}
-                        onChange={(field) => setCopyFrom(field.target.value)}
-                      >
-                        <option value="">Choose an event</option>
-                        {copyable.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </select>
+              {copyable.length ? (
+                <>
+                  <ListGroup>
+                    <ListRow
+                      icon={Copy}
+                      tone="blue"
+                      title="Running one of your events again?"
+                      sub="Copy it instead"
+                      onClick={() => setShowCopy((value) => !value)}
+                      trailing={<ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform", showCopy && "rotate-180")} aria-hidden />}
+                      chevron={false}
+                    />
+                  </ListGroup>
+                  {showCopy ? (
+                    <div className="animate-in fade-in-0 slide-in-from-left-4 duration-300">
+                      <ListGroup>
+                        <FieldRow id="copy-from" label="Which event?">
+                          <select
+                            id="copy-from"
+                            className={`${fieldInput} appearance-none [text-align-last:right]`}
+                            value={copyFrom}
+                            onChange={(field) => setCopyFrom(field.target.value)}
+                          >
+                            <option value="">Choose an event</option>
+                            {copyable.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name}
+                              </option>
+                            ))}
+                          </select>
+                        </FieldRow>
+                      </ListGroup>
+                      {copyFrom ? (
+                        <div className="mt-4">
+                          <DuplicateEventForm
+                            ios
+                            key={copyFrom}
+                            eventId={copyFrom}
+                            defaultName={`${copyable.find((item) => item.id === copyFrom)?.name ?? ""} (copy)`}
+                          />
+                        </div>
+                      ) : null}
                     </div>
-                    {copyFrom ? (
-                      <DuplicateEventForm
-                        key={copyFrom}
-                        eventId={copyFrom}
-                        defaultName={`${copyable.find((item) => item.id === copyFrom)?.name ?? ""} (copy)`}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
+                  ) : null}
+                </>
+              ) : null}
+
+              <div className="mt-6 flex gap-3">
+                <Button type="button" variant="outline" className={secondaryButton} onClick={() => navigate(-1)}>
+                  Cancel
+                </Button>
+                <Button type="button" className={primaryButton} onClick={() => setStep(2)}>
+                  Next
+                </Button>
               </div>
-            ) : null}
+            </section>
+          ) : null}
 
-            <div className="mt-6 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => navigate(-1)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={() => setStep(2)}>
-                Next
-              </Button>
-            </div>
-          </section>
-        ) : null}
-
-        {step === 2 ? (
-          <section className="mt-8">
-            <h2 className="text-lg font-semibold">When and where</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              An event belongs to a society. Anyone who belongs to that society will find this event in their switcher.
-            </p>
-
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="event-name">Event name</Label>
-                <Input
-                  id="event-name"
-                  value={eventName}
-                  onChange={(field) => setEventName(field.target.value)}
-                  placeholder={template.eventType === "sports" ? "Box Cricket Cup 2026" : "Ganesh Utsav 2026"}
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="society">Society</Label>
+          {step === 2 ? (
+            <section>
+              <ListGroup
+                className="mt-2"
+                footer="An event belongs to a society. Anyone who belongs to that society will find this event in their switcher."
+              >
+                <FieldRow id="event-name" label="Name">
+                  <input
+                    id="event-name"
+                    className={fieldInput}
+                    value={eventName}
+                    onChange={(field) => setEventName(field.target.value)}
+                    placeholder={template.eventType === "sports" ? "Box Cricket Cup 2026" : "Ganesh Utsav 2026"}
+                    required
+                  />
+                </FieldRow>
                 {ownSocieties.length > 1 || (ownSocieties.length === 1 && SOCIETY_REGISTRATION_OPEN) ? (
-                  <select
-                    id="society"
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={societyId}
-                    onChange={(field) => setSocietyId(field.target.value)}
-                  >
-                    {ownSocieties.map((society) => (
-                      <option key={society.id} value={society.id}>
-                        {society.name}
-                      </option>
-                    ))}
-                    {SOCIETY_REGISTRATION_OPEN ? <option value={NEW_SOCIETY}>Create a new society</option> : null}
-                  </select>
+                  <FieldRow id="society" label="Society">
+                    <select
+                      id="society"
+                      className={`${fieldInput} appearance-none [text-align-last:right]`}
+                      value={societyId}
+                      onChange={(field) => setSocietyId(field.target.value)}
+                    >
+                      {ownSocieties.map((society) => (
+                        <option key={society.id} value={society.id}>
+                          {society.name}
+                        </option>
+                      ))}
+                      {SOCIETY_REGISTRATION_OPEN ? <option value={NEW_SOCIETY}>Create a new society</option> : null}
+                    </select>
+                  </FieldRow>
                 ) : ownSocieties.length === 1 ? (
                   // One society and no way to start another: show it, fixed, rather than a one-item dropdown.
-                  <p id="society" className="flex h-10 w-full items-center rounded-md border bg-muted px-3 text-sm font-medium">
-                    {ownSocieties[0].name}
-                  </p>
-                ) : null}
-                {blockedNoSociety ? (
-                  <p role="alert" className="rounded-md bg-amber-100 p-3 text-sm text-amber-900">
-                    {societyRegistrationClosedMessage} Ask your society&rsquo;s committee to add you, then come back.
-                  </p>
+                  <ListRow title="Society" value={ownSocieties[0].name} chevron={false} />
                 ) : null}
                 {creatingSociety ? (
-                  <Input
-                    aria-label="New society name"
-                    value={societyName}
-                    onChange={(field) => setSocietyName(field.target.value)}
-                    placeholder="Sunrise Residency"
-                    className={ownSocieties.length ? "mt-2" : undefined}
-                  />
+                  <FieldRow id="new-society" label="New society">
+                    <input
+                      id="new-society"
+                      aria-label="New society name"
+                      className={fieldInput}
+                      value={societyName}
+                      onChange={(field) => setSocietyName(field.target.value)}
+                      placeholder="Sunrise Residency"
+                    />
+                  </FieldRow>
                 ) : null}
-                {blockedNoSociety ? null : (
-                  <p className="text-xs text-muted-foreground">
-                    {creatingSociety
-                      ? "A new society is created and you become its admin. You can rename it later."
-                      : "This event joins that society."}
-                  </p>
-                )}
+              </ListGroup>
+              {blockedNoSociety ? (
+                <p role="alert" className="mt-2 rounded-2xl bg-amber-100 p-3 text-sm text-amber-900">
+                  {societyRegistrationClosedMessage} Ask your society&rsquo;s committee to add you, then come back.
+                </p>
+              ) : (
+                <p className="mt-1.5 px-4 text-[13px] text-muted-foreground">
+                  {creatingSociety
+                    ? "A new society is created and you become its admin. You can rename it later."
+                    : "This event joins that society."}
+                </p>
+              )}
+
+              <ListGroup header="When">
+                <FieldRow id="start-date" label="Starts">
+                  <input id="start-date" className={fieldInput} type="date" value={startDate} onChange={(field) => setStartDate(field.target.value)} required />
+                </FieldRow>
+                <FieldRow id="start-time" label="Start time" hint="optional">
+                  <input id="start-time" className={fieldInput} type="time" value={startTime} onChange={(field) => setStartTime(field.target.value)} />
+                </FieldRow>
+                <FieldRow id="end-date" label="Ends">
+                  <input id="end-date" className={fieldInput} type="date" value={endDate} onChange={(field) => setEndDate(field.target.value)} required />
+                </FieldRow>
+                <FieldRow id="end-time" label="End time" hint="optional">
+                  <input id="end-time" className={fieldInput} type="time" value={endTime} onChange={(field) => setEndTime(field.target.value)} />
+                </FieldRow>
+              </ListGroup>
+
+              <ListGroup header="Where">
+                <FieldRow id="location" label="Venue">
+                  <input id="location" className={fieldInput} value={location} onChange={(field) => setLocation(field.target.value)} placeholder="Society ground" />
+                </FieldRow>
+              </ListGroup>
+
+              {datesBackwards ? (
+                <p className="mt-4 rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">The end date is before the start date.</p>
+              ) : null}
+              {timesBackwards ? (
+                <p className="mt-4 rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">
+                  On a one-day event the end time has to be after the start time.
+                </p>
+              ) : null}
+
+              <div className="mt-6 flex gap-3">
+                <Button type="button" variant="outline" className={secondaryButton} onClick={() => setStep(1)}>
+                  Back
+                </Button>
+                <Button type="button" className={primaryButton} onClick={() => setStep(3)} disabled={!detailsComplete || datesBackwards || timesBackwards}>
+                  Next
+                </Button>
               </div>
+            </section>
+          ) : null}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="start-date">Starts</Label>
-                <Input
-                  id="start-date"
-                  type="date"
-                  value={startDate}
-                  onChange={(field) => setStartDate(field.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="end-date">Ends</Label>
-                <Input
-                  id="end-date"
-                  type="date"
-                  value={endDate}
-                  onChange={(field) => setEndDate(field.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="start-time">
-                  Start time <span className="font-normal text-muted-foreground">(optional)</span>
-                </Label>
-                <Input id="start-time" type="time" value={startTime} onChange={(field) => setStartTime(field.target.value)} />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="end-time">
-                  End time <span className="font-normal text-muted-foreground">(optional)</span>
-                </Label>
-                <Input id="end-time" type="time" value={endTime} onChange={(field) => setEndTime(field.target.value)} />
-              </div>
-
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="location">Where</Label>
-                <Input
-                  id="location"
-                  value={location}
-                  onChange={(field) => setLocation(field.target.value)}
-                  placeholder="Society ground"
-                />
-              </div>
-            </div>
-
-            {datesBackwards ? (
-              <p className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                The end date is before the start date.
-              </p>
-            ) : null}
-
-            {timesBackwards ? (
-              <p className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                On a one-day event the end time has to be after the start time.
-              </p>
-            ) : null}
-
-            <div className="mt-6 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setStep(1)}>
-                Back
-              </Button>
-              <Button type="button" onClick={() => setStep(3)} disabled={!detailsComplete || datesBackwards || timesBackwards}>
-                Next
-              </Button>
-            </div>
-          </section>
-        ) : null}
-
-        {step === 3 ? (
-          <form className="mt-8" onSubmit={handleCreate}>
-            <h2 className="text-lg font-semibold">Review and create</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Started from the <span className="font-medium text-foreground">{template.name}</span> template. Your event
-              stays private - only organisers can see it - until you publish it.
-            </p>
-
-            <dl className="mt-5 divide-y rounded-lg border bg-card text-sm">
-              <div className="flex flex-wrap justify-between gap-2 p-3">
-                <dt className="text-muted-foreground">Event</dt>
-                <dd className="font-medium">{eventName}</dd>
-              </div>
-              <div className="flex flex-wrap justify-between gap-2 p-3">
-                <dt className="text-muted-foreground">When</dt>
-                <dd className="font-medium">
-                  {startDate}
-                  {endDate !== startDate ? ` to ${endDate}` : ""}
-                  {startTime ? `, ${startTime}${endTime ? `-${endTime}` : ""}` : ""}
-                </dd>
-              </div>
-              <div className="flex flex-wrap justify-between gap-2 p-3">
-                <dt className="text-muted-foreground">Where</dt>
-                <dd className="font-medium">{location || "Not set yet"}</dd>
-              </div>
-              <div className="p-3">
-                <dt className="text-muted-foreground">It will have</dt>
-                <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                  {modules
-                    .filter((module) => module.isEnabled)
-                    .map((module) => (
-                      <span key={module.pageKey} className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-primary">
-                        {module.labelOverride ?? moduleLabelFor(module.pageKey)}
-                      </span>
-                    ))}
-                </dd>
-              </div>
-            </dl>
-
-            <p className="mt-3 text-sm text-muted-foreground">
-              After you create it, the command centre lists what is still needed before you publish.
-            </p>
-
-            <div className="mt-4 rounded-lg border bg-card">
-              <button
-                type="button"
-                aria-expanded={showModules}
-                onClick={() => setShowModules((value) => !value)}
-                className="flex min-h-12 w-full items-center justify-between gap-3 px-4 text-left text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          {step === 3 ? (
+            <form onSubmit={handleCreate}>
+              <ListGroup
+                className="mt-2"
+                footer={
+                  <>
+                    Started from the <span className="font-medium text-foreground">{template.name}</span> template. Your event
+                    stays private - only organisers can see it - until you publish it. After you create it, the command
+                    centre lists what is still needed before you publish.
+                  </>
+                }
               >
-                <span>Customise modules (optional)</span>
-                <ChevronDown className={cn("h-4 w-4 transition-transform", showModules && "rotate-180")} aria-hidden />
-              </button>
+                <ListRow title="Event" value={eventName} chevron={false} />
+                <ListRow
+                  title="When"
+                  value={`${startDate}${endDate !== startDate ? ` to ${endDate}` : ""}${startTime ? `, ${startTime}${endTime ? `-${endTime}` : ""}` : ""}`}
+                  chevron={false}
+                />
+                <ListRow title="Where" value={location || "Not set yet"} chevron={false} />
+                <BlockRow>
+                  <p className="text-[13px] uppercase tracking-wide text-muted-foreground">It will have</p>
+                  <p className="mt-2 flex flex-wrap gap-1.5">
+                    {modules
+                      .filter((module) => module.isEnabled)
+                      .map((module) => (
+                        <span key={module.pageKey} className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-primary">
+                          {module.labelOverride ?? moduleLabelFor(module.pageKey)}
+                        </span>
+                      ))}
+                  </p>
+                </BlockRow>
+              </ListGroup>
+
+              <ListGroup>
+                <ListRow
+                  icon={SlidersHorizontal}
+                  tone="gray"
+                  title="Customise modules"
+                  sub="Optional"
+                  onClick={() => setShowModules((value) => !value)}
+                  chevron={false}
+                  trailing={<ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform", showModules && "rotate-180")} aria-hidden />}
+                />
+              </ListGroup>
               {showModules ? (
-                <div className="border-t p-4">
-                  <ModuleEditor modules={modules} onChange={setModules} disabled={saving} />
+                <div className="mt-2 animate-in fade-in-0 slide-in-from-left-4 duration-300">
+                  <ModuleEditor ios modules={modules} onChange={setModules} disabled={saving} />
                 </div>
               ) : null}
-            </div>
 
-            {error ? <p className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
+              {error ? <p className="mt-4 rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
 
-            <div className="mt-6 flex flex-wrap items-center gap-2">
-              <p className="text-sm text-muted-foreground">Your event stays private until you publish it.</p>
-              <span className="flex-1" />
-              <Button type="button" variant="outline" onClick={() => chooseTemplate(templateKey)} disabled={saving}>
-                Reset to template
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setStep(2)} disabled={saving}>
-                Back
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Creating..." : "Create draft"}
-              </Button>
-            </div>
-          </form>
-        ) : null}
+              <div className="mt-6 space-y-3">
+                <Button type="submit" className="h-12 w-full rounded-2xl text-base" disabled={saving}>
+                  {saving ? "Creating..." : "Create draft"}
+                </Button>
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" className={`${secondaryButton} flex-1`} onClick={() => setStep(2)} disabled={saving}>
+                    Back
+                  </Button>
+                  <Button type="button" variant="outline" className={`${secondaryButton} flex-1`} onClick={() => chooseTemplate(templateKey)} disabled={saving}>
+                    Reset to template
+                  </Button>
+                </div>
+              </div>
+            </form>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </IosPage>
   );
 }

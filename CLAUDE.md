@@ -2281,6 +2281,30 @@ position in the menu (`ModuleEditor ios`, same fields and handlers; the wizard k
   `tests/settings-sections.test.mjs`. The Team code (requests, roster, Member Access) moved to `team-panel.tsx` /
   `team-data.ts` unchanged; Modules to `modules-card.tsx`.
 
+## The iOS-style working pages
+
+The committee's working pages - contributions, sponsors, budget, expenses, tasks, prasad, events, teams, fixtures,
+get involved, contacts, participate, the command centre, communications - and the **New event wizard** wear the same
+theme as Event Settings. It is **scoped, not global**: `iosPageKeys` in
+[ios-page-context.ts](src/components/ui/ios-page-context.ts) lists the page keys, AppLayout turns it on for them
+(`<IosPage active>` in ios-page.tsx), and **the dashboard, auctions, closing page, gate and everything else draw
+exactly as before.**
+
+- **Mechanism.** A React context (`useIosPage()`) read by the shared primitives - `Card` (white, `rounded-3xl`, no
+  border, a hairline ring), `StatCard` (`rounded-2xl`), `Button` (`rounded-xl`; outline is a white pill), `Input` (a soft
+  grey field, no outline) - plus `data-ios-page` on `<body>` (so dialogs, which portal there, match) that a few CSS rules
+  in globals.css hang off: serif page titles, native selects/text areas, table headings (small caps, no fill, hairline
+  rows) and hand-drawn `rounded-lg border bg-card` blocks. The page background is the warm grey
+  (`hsl(42 26% 94%)`) and the header is frosted glass.
+- **A new working page** joins by adding its page key to `iosPageKeys`; nothing else. Do not hard-code the look into a
+  page.
+- **Budget has a phone layout now** (one row per item with Estimated / Actual / Variance, same edit and delete); from
+  `lg` it is the table. Contributions' phone list is one grouped card with hairlines, not a card per resident.
+- **The wizard** ([create-event-wizard.tsx](src/features/onboarding/create-event-wizard.tsx)) is a grouped list per step
+  (kinds of event as rows with a coloured icon and a tick; details as label/value rows; a review list), a frosted bar
+  with a back pill, and three progress bars. State, validation and the create call are unchanged. It reuses
+  `ListGroup` / `ListRow` / `FieldRow` from the Settings feature and `DuplicateEventForm ios`.
+
 ## Liquid glass and openable panels
 
 Anything that opens over the page, and the Event Settings section rows, share one material and one motion.

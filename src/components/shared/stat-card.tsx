@@ -2,6 +2,7 @@ import { LucideIcon } from "lucide-react";
 import { Children, ReactNode } from "react";
 import { AnimatedNumber } from "@/components/shared/animated-number";
 import { Card, CardContent } from "@/components/ui/card";
+import { useIosPage } from "@/components/ui/ios-page-context";
 import { cn } from "@/lib/utils";
 
 /**
@@ -46,9 +47,10 @@ export function StatCard({
   format?: (value: number) => string;
 }) {
   const animate = typeof countTo === "number" && typeof format === "function";
+  const ios = useIosPage();
 
   return (
-    <Card className="min-w-0 transition-shadow hover:shadow-md">
+    <Card className={cn("min-w-0 transition-shadow hover:shadow-md", ios && "rounded-2xl")}>
       <CardContent className="px-2 py-2 sm:px-3">
         <div className="flex items-baseline gap-1.5">
           {isLoading ? (

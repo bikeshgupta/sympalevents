@@ -270,7 +270,7 @@ export function ContributionsPage() {
       />
 
       {/* Mobile: a card per resident. The desktop table is 980px wide and unusable on a phone. */}
-      <div className="space-y-1.5 lg:hidden">
+      <Card className="overflow-hidden lg:hidden">
         <TableToolbar
           resultCount={visibleRows.length}
           totalCount={contributionRows.length}
@@ -280,18 +280,20 @@ export function ContributionsPage() {
           sortNote={contributionTable.isDefaultSort ? "Newest first" : undefined}
         />
         {visibleRows.length ? (
-          visibleRows.map((row, index) => (
+          <div className="ios-list border-t" style={{ ["--ios-inset" as string]: "0.75rem" } as React.CSSProperties}>
+          {visibleRows.map((row, index) => (
             <ContributionCard
               key={rowKey(row, index)}
               row={row}
               index={index}
               canEdit={access.canEdit}
             />
-          ))
+          ))}
+          </div>
         ) : (
           <EmptyState hasRows={contributionRows.length > 0} onClearFilters={contributionTable.clearFilters} />
         )}
-      </div>
+      </Card>
 
       {/* Desktop: the full table. */}
       <Card className="hidden overflow-x-auto lg:block">
@@ -607,8 +609,7 @@ function ContributionCard({
     .join(" · ");
 
   return (
-    <Card className="animate-fade-up" style={staggerStyle(index)}>
-      <CardContent className="px-3 py-2">
+    <div className="animate-fade-up px-3 py-2" style={staggerStyle(index)}>
         <div className="flex items-baseline justify-between gap-2">
           <p className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</p>
           <p className="shrink-0 text-sm tabular-nums">
@@ -627,8 +628,7 @@ function ContributionCard({
             </div>
           ) : null}
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 
