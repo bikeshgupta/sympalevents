@@ -1,11 +1,16 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Eye, LogIn, LogOut, Menu, X } from "lucide-react";
+import { Eye, LogIn, LogOut, Menu, UserPen, X } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { NavList } from "@/components/layout/nav-list";
-import { ListGroup, ListRow } from "@/features/settings/ios-list";
 import { signOut, type AuthSession } from "@/lib/auth";
 import type { navItems } from "./nav-items";
 import { overlayGlass } from "@/lib/glass";
+import { cn } from "@/lib/utils";
+
+/** The two account actions pinned under the menu: white pills sharing the row, each as wide as its words need. */
+const footerButton =
+  "flex min-h-11 min-w-0 flex-auto items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-white px-3 text-sm font-medium shadow-[0_1px_2px_hsl(var(--foreground)/0.05)] ring-1 ring-black/[0.04] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-black/[0.05]";
 
 /**
  * The mobile navigation, as a right-hand drawer behind a round button at the
@@ -82,7 +87,8 @@ export function NavDrawer({
         <DialogPrimitive.Content
           className="fixed inset-y-0 right-0 z-50 flex w-[min(21rem,88vw)] flex-col bg-[hsl(42_26%_94%)] shadow-[-12px_0_32px_-16px_hsl(var(--foreground)/0.35)] outline-none duration-300 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
         >
-          {/* The same grouped lists as Event Settings: who you are, then the pages, then sign out. */}
+          {/* One panel: who you are on a line, every page in one scrolling list, and the two account actions pinned
+              underneath so they never scroll away. */}
           <div className="flex h-14 shrink-0 items-center justify-between px-4">
             <DialogPrimitive.Title className="font-display text-xl">Menu</DialogPrimitive.Title>
             <DialogPrimitive.Close
@@ -96,80 +102,86 @@ export function NavDrawer({
             Your account, and every page you have access to.
           </DialogPrimitive.Description>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
-            {/* Who you are, first. */}
-            {session ? (
-              <ListGroup>
-                <ListRow
-                  big
-                  lead={
-                    session.user.avatarUrl ? (
-                      <img
-                        src={session.user.avatarUrl}
-                        alt=""
-                        className="h-12 w-12 shrink-0 rounded-full border object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden="true"
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border bg-muted text-base font-semibold"
-                      >
-                        {(userName[0] ?? "U").toUpperCase()}
-                      </span>
-                    )
-                  }
-                  title={userName}
-                  sub={session.user.email ?? undefined}
-                  onClick={() => {
-                    close();
-                    onEditName();
-                  }}
+          {session ? (
+            <button
+              type="button"
+              onClick={() => {
+                close();
+                onEditName();
+              }}
+              className="mx-2 mb-2 flex shrink-0 items-center gap-3 rounded-2xl px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-black/[0.05] [@media(hover:hover)]:hover:bg-black/[0.03]"
+            >
+              {session.user.avatarUrl ? (
+                <img
+                  src={session.user.avatarUrl}
+                  alt=""
+                  className="h-10 w-10 shrink-0 rounded-full border object-cover"
+                  referrerPolicy="no-referrer"
                 />
-              </ListGroup>
-            ) : (
-              <ListGroup footer="You are browsing as a guest. Sign in to see the pages the committee has given you.">
-                <ListRow icon={LogIn} tone="blue" title="Sign in with Google" href="/login" onLinkClick={close} />
-              </ListGroup>
-            )}
-
-            {viewSwitch ? (
-              <ListGroup>
-                <ListRow
-                  icon={Eye}
-                  tone="gray"
-                  title={viewSwitch.isPreview ? "Exit resident view" : "View as resident"}
-                  chevron={false}
-                  onClick={() => {
-                    close();
-                    viewSwitch.onToggle();
-                  }}
-                />
-              </ListGroup>
-            ) : null}
-
-            <nav aria-label="Pages" className="mt-6">
-              {items.length ? (
-                <NavList items={items} grouped={grouped} onNavigate={close} />
               ) : (
-                <p className="mt-6 px-2 text-sm text-muted-foreground">No pages are open to you on this event yet.</p>
+                <span
+                  aria-hidden="true"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-semibold"
+                >
+                  {(userName[0] ?? "U").toUpperCase()}
+                </span>
               )}
-            </nav>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-semibold leading-tight">{userName}</span>
+                {session.user.email ? (
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">{session.user.email}</span>
+                ) : null}
+              </span>
+              <span className="sr-only">My profile</span>
+              <UserPen className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+            </button>
+          ) : (
+            <p className="mb-3 shrink-0 px-5 text-sm text-muted-foreground">
+              You are browsing as a guest. Sign in to see the pages the committee has given you.
+            </p>
+          )}
 
-            {session ? (
-              <ListGroup>
-                <ListRow
-                  icon={LogOut}
-                  tone="red"
-                  title="Sign out"
-                  chevron={false}
-                  onClick={() => {
-                    close();
-                    void signOut();
-                  }}
-                />
-              </ListGroup>
+          <nav aria-label="Pages" className="flex min-h-0 flex-1 flex-col px-4">
+            {items.length ? (
+              <NavList items={items} grouped={grouped} onNavigate={close} />
+            ) : (
+              <p className="px-1 text-sm text-muted-foreground">No pages are open to you on this event yet.</p>
+            )}
+          </nav>
+
+          <div className="flex shrink-0 gap-2 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            {viewSwitch ? (
+              <button
+                type="button"
+                aria-pressed={viewSwitch.isPreview}
+                onClick={() => {
+                  close();
+                  viewSwitch.onToggle();
+                }}
+                className={footerButton}
+              >
+                <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{viewSwitch.isPreview ? "Exit resident view" : "View as resident"}</span>
+              </button>
             ) : null}
+            {session ? (
+              <button
+                type="button"
+                onClick={() => {
+                  close();
+                  void signOut();
+                }}
+                className={cn(footerButton, "text-destructive")}
+              >
+                <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Sign out
+              </button>
+            ) : (
+              <Link to="/login" onClick={close} className={cn(footerButton, "bg-primary text-primary-foreground")}>
+                <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Sign in with Google
+              </Link>
+            )}
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

@@ -2332,14 +2332,17 @@ Anything that opens over the page, and the Event Settings section rows, share on
   arrive from the right; going back (the sheet closing, Team's list returning, the wizard's previous step) goes the
   other way (the list and the earlier step come in from the left). In-place reveals (copy-from, Customise modules)
   drop from the top instead, since they go nowhere. Page-to-page navigation from the menu is **not** animated.
-- **One look for every menu.** The phone drawer and the desktop sidebar are the same iOS grouped lists as Event Settings
-  (`NavList` in nav-list.tsx draws both from `ListGroup` / `ListRow`): a warm grey ground, rounded white lists, a coloured
-  icon tile per page (the tile's colour belongs to the page's group - Finance is green, Programme red, and so on - so it
-  says "what kind of thing", not "which row"), the current page tinted at every width, and a fold (Registrations,
-  Programme, Team, Finance) is a row that opens its pages inside its own list. The drawer opens with who you are (a row
-  that opens the name editor), then "View as resident", the pages, and Sign out. Rows are 48px with 15px text everywhere.
-  Hover tints are `[@media(hover:hover)]` only, so a tapped row never stays tinted. Do not give the menu its own row style
-  again: change `ListRow` and every menu follows.
+- **The menu is one panel** (`NavList` in nav-list.tsx, the phone drawer and the desktop sidebar alike; mocked and
+  chosen over separate Settings-style lists): one rounded white card on the warm grey, hairlines between rows, **plain
+  line icons** (no coloured tiles - asked for), rows 44px with 15px text, the current page tinted. Registrations,
+  Programme, Team and Finance are folds that open in place, their pages as plain indented rows on a faint tint; the fold
+  holding the current page opens by itself. The card sizes to its content and scrolls inside itself when longer than the
+  room, with a fade at the foot while there is more below. The drawer puts who you are on one line above it (opens My
+  profile) and pins **View as resident** and **Sign out** (or Sign in) as two buttons underneath, so they never scroll
+  away. The current row is matched on the page's own route segment (`routeSegmentFromPath`), not the whole path - a page
+  has three address shapes - and not the page key, which folds `/updates` into the dashboard. Fold ids carry a
+  `useId()` prefix because the sidebar and the drawer are both in the page. Settings keeps its coloured tiles.
+  Hover tints are `[@media(hover:hover)]` only, so a tapped row never stays tinted.
 - **Event Settings on a phone**: the open section is a `fixed` sheet under the app header that slides in from the right
   and back out to the right; the index stays mounted underneath and keeps its scroll position. It is `invisible` +
   `aria-hidden` while closed (visibility is transitioned with the transform so it stays visible for the whole slide out),

@@ -105,7 +105,8 @@ const pageKeyAliases: Record<string, string> = {
  *   /e/<eventId>/budget                            -> budget
  *   /society/<societySlug>/events/<eventSlug>/budget -> budget
  */
-export function pageKeyFromPath(pathname: string) {
+/** The page's own segment of a path, after any `/e/<id>` or `/society/<s>/events/<e>` prefix, before aliases. */
+export function routeSegmentFromPath(pathname: string) {
   const segments = pathname.split("/").filter(Boolean);
 
   const relevant =
@@ -115,7 +116,11 @@ export function pageKeyFromPath(pathname: string) {
         ? segments.slice(2)
         : segments;
 
-  const pageKey = relevant[0] || "dashboard";
+  return relevant[0] || "dashboard";
+}
+
+export function pageKeyFromPath(pathname: string) {
+  const pageKey = routeSegmentFromPath(pathname);
   return pageKeyAliases[pageKey] ?? pageKey;
 }
 
