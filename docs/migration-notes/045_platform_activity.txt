@@ -1,0 +1,308 @@
+MIGRATION 045 - platform_activity  (YOU run this by hand; nothing here is automatic)
+File: supabase/migrations/045_platform_activity.sql
+Status: PREPARED, NOT APPLIED. Treat the schema as unavailable until you send me the results.
+Design: docs/society-platform-plan-v2.4.txt (section 2). Your decisions on it are recorded in section 0 below.
+
+WHAT IT DOES (plain words)
+  Makes the app's existing visit tracking able to describe more than event pages, without a second set of
+  tables. event_visits and event_page_views keep their names and keep working exactly as before; they gain
+  a "surface" (which part of Sympal), an optional society, and an optional event. It also adds
+  app_users.last_seen_at, seeded once. Nothing is renamed, dropped or deleted, and no application code
+  changes with this migration: the new columns simply wait for the code that fills them.
+
+WHAT IT CHANGES
+  event_visits and event_page_views, each:
+    + surface text not null default 'event'        every existing row becomes 'event' (they all are)
+    + organization_id uuid null  -> organizations, ON DELETE SET NULL    (existing rows filled from their event)
+    ~ event_id: NOT NULL removed; its foreign key changes from ON DELETE CASCADE to ON DELETE SET NULL
+    + 2 indexes (by society, by surface) alongside the existing per-event index
+    + a tidy-shape CHECK on surface; table and column comments
+  app_users:
+    + last_seen_at timestamptz null, seeded once from updated_at where null (below)
+    + comments on last_seen_at and updated_at
+
+HOW A VISIT IS SCOPED (stored here, applied by code later)
+  scope = surface + organization_id + event_id. One visit = one continuous stay in one scope, in one tab.
+    society / TRU / -            Society Home visit
+    society_admin / TRU / -      a NEW visit
+    event / TRU / Ganesh         a NEW visit; Overview -> Schedule -> Gallery stay ONE visit (page views)
+    event / TRU / Badminton      a NEW visit
+    profile / - / -              its own visit
+    event_create / TRU / -       its own visit
+    proposal / TRU / -           its own visit
+  Surfaces: event, society, society_admin, profile, event_create, proposal. Login is not tracked. The
+  list is enforced by the SERVER, not by a database constraint, so adding a surface is a reviewed code
+  change; the CHECK only keeps the column lower-case letters and underscores.
+
+ABOUT THE ONE-TIME SEED (app_users.last_seen_at = updated_at where last_seen_at is null)
+  Until now the server rewrote updated_at on every authenticated request, so it is the best record there is
+  of when each person was last active. The seed copies it once so the field is not empty on day one.
+  - The seeded values are APPROXIMATE HISTORICAL AUTHENTICATED ACTIVITY inferred from that legacy
+    behaviour. A profile edit also moves updated_at. They are not recorded activity.
+  - Do NOT use them to claim historical daily/weekly active users, or to reconstruct activity that was never
+    recorded. Real activity starts being recorded when the tracking code ships.
+  - After 045 and that code, last_seen_at is the authoritative activity field. updated_at returns to meaning
+    "the user record was modified", but only once the separate requireAppUser change ships (see section 6);
+    until then it is still rewritten per request and its column comment says so.
+  - The seed runs only when the column is being created, so re-running the file can never re-seed.
+  - Anonymous activity never affects last_seen_at (a code rule; there is no database mechanism for it).
+
+DELETION AND RETENTION (confirmed)
+  event_id and organization_id are ON DELETE SET NULL: traffic facts survive the deletion of an event or a
+  society and stop being attributable to it (a society delete cascades to its events, so both become null).
+  No cascade deletes traffic history anywhere. No retention or pruning is added; nothing deletes raw rows.
+  Behavioural events are not created or collected.
+
+------------------------------------------------------------------------------------
+1. PRE-CHECKS  (run each in the Supabase SQL editor; send me ALL results)
+------------------------------------------------------------------------------------
+
+-- A. The new columns must not exist yet (expect 0 rows).
+select table_name, column_name from information_schema.columns
+where table_schema = 'public'
+  and ((table_name in ('event_visits','event_page_views') and column_name in ('surface','organization_id'))
+    or (table_name = 'app_users' and column_name = 'last_seen_at'));
+
+-- B. Both tables exist and event_id is currently NOT NULL (expect 2 rows, is_nullable = NO).
+select table_name, is_nullable from information_schema.columns
+where table_schema = 'public' and table_name in ('event_visits','event_page_views') and column_name = 'event_id'
+order by table_name;
+
+-- C. The current foreign keys on event_id (expect 2 rows, on_delete = CASCADE). The migration finds them by
+--    column, not by name, so a different name is fine - but send me what you see.
+select c.conrelid::regclass as table_name, c.conname,
+       case c.confdeltype when 'c' then 'CASCADE' when 'n' then 'SET NULL' when 'a' then 'NO ACTION' when 'r' then 'RESTRICT' else c.confdeltype::text end as on_delete
+from pg_constraint c
+where c.contype = 'f' and c.confrelid = 'public.events'::regclass
+  and c.conrelid in ('public.event_visits'::regclass, 'public.event_page_views'::regclass)
+order by 1;
+
+-- D. How big are they (confirms the one-time society backfill is small).
+select (select count(*) from public.event_visits)     as visits,
+       (select count(*) from public.event_page_views) as page_views,
+       (select count(*) from public.app_users)        as users,
+       pg_size_pretty(pg_total_relation_size('public.event_visits'))     as visits_size,
+       pg_size_pretty(pg_total_relation_size('public.event_page_views')) as page_views_size;
+
+-- E. Nothing in the database depends on these two tables through a view or function (expect 0 rows).
+select 'view' as kind, schemaname || '.' || viewname as name from pg_views
+where schemaname not in ('pg_catalog','information_schema') and (definition ilike '%event_visits%' or definition ilike '%event_page_views%')
+union all
+select 'function', n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname not in ('pg_catalog','information_schema') and (p.prosrc ilike '%event_visits%' or p.prosrc ilike '%event_page_views%');
+
+-- F. The seed source is populated (expect 0 users with a null updated_at) and shows what it will copy.
+select count(*) filter (where updated_at is null) as null_updated_at,
+       min(updated_at) as oldest, max(updated_at) as newest
+from public.app_users;
+
+-- G. Events always have a society (the backfill relies on it). Expect 0.
+select count(*) from public.events where organization_id is null;
+
+-- H. Separate read-only file, still yours to run and send me (it decides the updated_at question):
+--    docs/migration-notes/app_users_updated_at_dependencies.sql
+
+------------------------------------------------------------------------------------
+2. RUN
+------------------------------------------------------------------------------------
+Two steps, in this order, in the SQL editor:
+  Part 1  everything down to "commit;" in supabase/migrations/045_platform_activity.sql (it is one
+          transaction: all or nothing).
+  Part 2  the last two statements (alter table ... validate constraint ...). They check the existing rows
+          against the relaxed foreign keys with only a light lock, so visitors' heartbeats are not blocked.
+          Until Part 2 runs the keys are already enforced for every new row and every delete. Send me an
+          error if either fails.
+Part 1 takes brief locks while it alters the two tables and rewrites organization_id for existing rows;
+the tables are small, but run it at a quiet moment.
+
+------------------------------------------------------------------------------------
+3. VERIFICATION SQL
+------------------------------------------------------------------------------------
+
+-- V1. The columns (expect surface text NO default 'event'; organization_id uuid YES; event_id YES; last_seen_at YES).
+select table_name, column_name, data_type, is_nullable, column_default
+from information_schema.columns
+where table_schema = 'public'
+  and ((table_name in ('event_visits','event_page_views') and column_name in ('surface','organization_id','event_id'))
+    or (table_name = 'app_users' and column_name = 'last_seen_at'))
+order by table_name, column_name;
+
+-- V2. The foreign keys (expect 4 rows: event_id and organization_id on each table, all SET NULL, validated = true).
+select c.conrelid::regclass as table_name, c.conname, c.convalidated as validated,
+       case c.confdeltype when 'n' then 'SET NULL' when 'c' then 'CASCADE' else c.confdeltype::text end as on_delete
+from pg_constraint c
+where c.contype = 'f' and c.confrelid in ('public.events'::regclass, 'public.organizations'::regclass)
+  and c.conrelid in ('public.event_visits'::regclass, 'public.event_page_views'::regclass)
+order by 1, 2;
+
+-- V3. The indexes (expect the four new ones plus the existing per-event ones).
+select tablename, indexname from pg_indexes
+where schemaname = 'public' and tablename in ('event_visits','event_page_views') order by 1, 2;
+
+-- V4. Existing traffic was attributed to its society (expect 0 - rows whose event still exists but has no society).
+select (select count(*) from public.event_visits v where v.event_id is not null and v.organization_id is null
+          and exists (select 1 from public.events e where e.id = v.event_id)) as visits_unattributed,
+       (select count(*) from public.event_page_views p where p.event_id is not null and p.organization_id is null
+          and exists (select 1 from public.events e where e.id = p.event_id)) as page_views_unattributed;
+
+-- V5. Nothing was lost: compare with pre-check D (visits, page_views, users must be identical).
+select (select count(*) from public.event_visits) as visits,
+       (select count(*) from public.event_page_views) as page_views,
+       (select count(*) from public.app_users) as users;
+
+-- V6. The seed (expect users_without_last_seen = 0, and seeded_equal_updated close to every user - a few
+--     may differ if somebody signed in between the two parts, which is fine).
+select count(*) filter (where last_seen_at is null)          as users_without_last_seen,
+       count(*) filter (where last_seen_at = updated_at)     as seeded_equal_updated,
+       count(*)                                              as users
+from public.app_users;
+
+-- V7. Behaviour test. Creates a throwaway society, event, visits and users and proves: code written before
+--     045 (no surface, no society) still inserts and gets surface 'event'; society/profile visits need no
+--     event; a malformed surface is refused; deleting an event keeps its traffic and its society attribution;
+--     deleting a society keeps the traffic with no society; deleting a user keeps their visits; the
+--     conditional once-an-hour last_seen_at statement writes once and then not again inside the hour; then it
+--     deletes everything it made. Expect a NOTICE starting with OK. (Run on a scratch PostgreSQL built from
+--     migrations 001-046, with pre-existing traffic loaded first, and passed; also re-run-safe.)
+do $$
+declare
+  org uuid; ev uuid; u uuid; v1 uuid := gen_random_uuid(); v2 uuid := gen_random_uuid(); v3 uuid := gen_random_uuid();
+  n int; failed boolean; before_seen timestamptz;
+begin
+  insert into public.app_users (firebase_uid, email, full_name) values ('__a_u','__a_u@test.invalid','A U') returning id into u;
+  insert into public.organizations (name) values ('__activity_test__') returning id into org;
+  insert into public.events (organization_id, name, start_date, end_date) values (org, 'AEv', current_date, current_date) returning id into ev;
+
+  -- 1. code written before 045 still works: no surface, no organization given -> 'event', null org
+  insert into public.event_visits (id, event_id, visitor_key, page_key) values (v1, ev, '__vk', 'dashboard');
+  if (select surface from public.event_visits where id = v1) <> 'event' then raise exception 'FAILED 1: default surface'; end if;
+  -- 1b. such rows get their society from the idempotent post-deploy backfill
+  update public.event_visits v set organization_id = e.organization_id from public.events e where e.id = v.event_id and v.organization_id is null;
+  if (select organization_id from public.event_visits where id = v1) is distinct from org then raise exception 'FAILED 1b: backfill'; end if;
+  -- 2. a non-event surface needs no event
+  insert into public.event_visits (id, visitor_key, surface, organization_id, page_key) values (v2, '__vk', 'society', org, 'home');
+  insert into public.event_page_views (visit_id, surface, organization_id, page_key) values (v2, 'society', org, 'home');
+  insert into public.event_visits (id, visitor_key, surface, page_key) values (v3, '__vk', 'profile', 'profile');
+  -- 3. a malformed surface is refused
+  failed := false; begin insert into public.event_visits (id, visitor_key, surface) values (gen_random_uuid(), '__vk', 'Bad Surface!'); exception when check_violation then failed := true; end;
+  if not failed then raise exception 'FAILED 3: bad surface accepted'; end if;
+  insert into public.event_page_views (visit_id, event_id, organization_id, page_key) values (v1, ev, org, 'dashboard');
+  -- 4. deleting the EVENT keeps its traffic; the society attribution stays
+  delete from public.events where id = ev;
+  if (select count(*) from public.event_visits where id = v1 and event_id is null) <> 1 then raise exception 'FAILED 4a: event visit lost or still pointing'; end if;
+  if (select organization_id from public.event_visits where id = v1) is distinct from org then raise exception 'FAILED 4b: society attribution lost on event delete'; end if;
+  if (select count(*) from public.event_page_views where visit_id = v1 and event_id is null and organization_id = org) <> 1 then raise exception 'FAILED 4c: page view'; end if;
+  -- 5. deleting the SOCIETY keeps the traffic, unattributed
+  delete from public.organizations where id = org;
+  select count(*) into n from public.event_visits where id in (v1, v2) and organization_id is null;
+  if n <> 2 then raise exception 'FAILED 5a: visits lost or still attributed (%)', n; end if;
+  if (select count(*) from public.event_page_views where visit_id in (v1, v2) and organization_id is null) <> 2 then raise exception 'FAILED 5b: page views'; end if;
+  -- 6. deleting the USER keeps their visits (already so)
+  update public.event_visits set user_id = u where id = v3;
+  delete from public.app_users where id = u;
+  if (select count(*) from public.event_visits where id = v3 and user_id is null) <> 1 then raise exception 'FAILED 6'; end if;
+  -- 7. last_seen_at: new users start null; the conditional once-an-hour update behaves
+  insert into public.app_users (firebase_uid, email, full_name) values ('__a_u2','__a_u2@test.invalid','A U2') returning id into u;
+  if (select last_seen_at from public.app_users where id = u) is not null then raise exception 'FAILED 7a: new user has a last_seen_at'; end if;
+  update public.app_users set last_seen_at = now() where id = u and (last_seen_at is null or last_seen_at < now() - interval '1 hour');
+  select last_seen_at into before_seen from public.app_users where id = u;
+  if before_seen is null then raise exception 'FAILED 7b: first write did not happen'; end if;
+  update public.app_users set last_seen_at = now() + interval '1 second' where id = u and (last_seen_at is null or last_seen_at < now() - interval '1 hour');
+  if (select last_seen_at from public.app_users where id = u) <> before_seen then raise exception 'FAILED 7c: a second write inside the hour went through'; end if;
+  update public.app_users set last_seen_at = now() - interval '2 hours' where id = u;
+  update public.app_users set last_seen_at = now() where id = u and (last_seen_at is null or last_seen_at < now() - interval '1 hour');
+  if (select last_seen_at from public.app_users where id = u) < now() - interval '1 minute' then raise exception 'FAILED 7d: a stale value was not refreshed'; end if;
+
+  delete from public.event_page_views where visit_id in (v1, v2, v3);
+  delete from public.event_visits where id in (v1, v2, v3);
+  delete from public.app_users where id = u;
+  raise notice 'OK: old-style inserts default to event; non-event surfaces work; event and society deletion keep traffic (set null); last_seen_at throttle is conditional; test data removed';
+end $$;
+
+-- V8. Nothing left behind (expect 0, 0, 0).
+select (select count(*) from public.organizations where name = '__activity_test__') as societies,
+       (select count(*) from public.app_users where email like '\_\_a\_%@test.invalid') as users,
+       (select count(*) from public.event_visits where visitor_key = '__vk') as visits;
+
+------------------------------------------------------------------------------------
+4. AFTER THE CODE SHIPS: ONE IDEMPOTENT CATCH-UP
+------------------------------------------------------------------------------------
+Between running 045 and deploying the tracking code, the OLD code keeps writing visits without a society.
+After the new code is live, run this once; it fills those rows and is harmless to repeat. (I will remind
+you at that point; the new code always sets the society itself.)
+
+update public.event_visits v set organization_id = e.organization_id
+  from public.events e where e.id = v.event_id and v.organization_id is null;
+update public.event_page_views p set organization_id = e.organization_id
+  from public.events e where e.id = p.event_id and p.organization_id is null;
+
+------------------------------------------------------------------------------------
+5. ROLLBACK CONSIDERATIONS
+------------------------------------------------------------------------------------
+- The migration is additive/loosening, so the app does not need rolling back with it: old code ignores the
+  new columns and works against either shape.
+- Rolling back LOSES information. The old shape cannot hold a visit with no event, so rows that have no
+  event (every non-event surface, and event traffic whose event was deleted after 045) cannot be kept in the
+  original tables. The block below first copies them into two archive tables, then removes them from the
+  originals. The archive tables hold visitor keys: drop them when you no longer need them.
+  Dropping surface/organization_id and last_seen_at also discards those values (the seeded last_seen_at
+  cannot be re-created exactly afterwards).
+- Rolling back restores ON DELETE CASCADE on event_id, i.e. deleting an event deletes its traffic again.
+- Tested on the scratch database: archive, rollback, and re-applying 045 afterwards all worked.
+
+-- 0. Keep the rows the old shape cannot hold (non-event surfaces, and traffic of events deleted since 045).
+create table public.event_visits_045_archive     as select * from public.event_visits     where event_id is null;
+create table public.event_page_views_045_archive as select * from public.event_page_views where event_id is null;
+
+begin;
+delete from public.event_page_views where event_id is null;
+delete from public.event_visits     where event_id is null;
+
+alter table public.event_visits drop constraint if exists event_visits_event_id_fkey;
+alter table public.event_visits add constraint event_visits_event_id_fkey
+  foreign key (event_id) references public.events(id) on delete cascade;
+alter table public.event_visits alter column event_id set not null;
+drop index if exists public.event_visits_org_started_idx;
+drop index if exists public.event_visits_surface_started_idx;
+alter table public.event_visits drop constraint if exists event_visits_surface_shape;
+alter table public.event_visits drop column if exists surface, drop column if exists organization_id;
+
+alter table public.event_page_views drop constraint if exists event_page_views_event_id_fkey;
+alter table public.event_page_views add constraint event_page_views_event_id_fkey
+  foreign key (event_id) references public.events(id) on delete cascade;
+alter table public.event_page_views alter column event_id set not null;
+drop index if exists public.event_page_views_org_opened_idx;
+drop index if exists public.event_page_views_surface_opened_idx;
+alter table public.event_page_views drop constraint if exists event_page_views_surface_shape;
+alter table public.event_page_views drop column if exists surface, drop column if exists organization_id;
+
+comment on table public.event_visits is null;
+comment on table public.event_page_views is null;
+
+alter table public.app_users drop column if exists last_seen_at;
+comment on column public.app_users.updated_at is null;
+commit;
+
+------------------------------------------------------------------------------------
+6. WHAT COMES AFTER (separate changes - none is part of this migration)
+------------------------------------------------------------------------------------
+a. The tracking code (after you report 045 applied and V1-V8 pass): scope-aware visits, the six-surface
+   allowlist with its per-surface authorisation, the heartbeat mounted on the new screens (not Login), and the
+   last_seen_at write - conditional in SQL (last_seen_at is null or older than one hour) with the in-memory
+   throttle only as an optimisation, never touching anonymous requests. It degrades when a column is absent.
+b. requireAppUser optimisation: a SEPARATE, isolated change after 045 is applied and verified, with tests for
+   first sign-in, returning unchanged user, changed Google email, changed Google photo, concurrent first
+   requests, a missing app_users row and authentication failure. It will also evaluate whether "read on
+   every request, then maybe upsert" is the right steady state at all (alternatives: a short-lived
+   per-instance cache of the verified user, with its staleness trade-offs for name/photo changes; or
+   verifying the token and reading the row only where a route needs more than the id). Nothing there is
+   assumed. The app_users.updated_at dependency question stays OPEN until you send the output of
+   docs/migration-notes/app_users_updated_at_dependencies.sql.
+c. Retention/rollups and behavioural events: Platform Control Center decisions; not here.
+
+------------------------------------------------------------------------------------
+7. BEFORE AND AFTER YOU RUN IT
+------------------------------------------------------------------------------------
+Before: nothing in the app uses the new columns. After: the app behaves exactly as before until the tracking
+code ships. Send me every pre-check result, then the results of Part 1, Part 2 and V1-V8. Until then I treat
+045 as NOT applied and do not write code that depends on it.

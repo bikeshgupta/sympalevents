@@ -25,11 +25,12 @@ the owner says so.
 `supabase/migrations/` with the pre-check / verification / rollback in `docs/migration-notes/`). Society role
 management is not production-ready until 042 is applied. The planned sequence is 043 event_proposals, 044
 audit scope, 045 platform readiness (see `docs/society-platform-plan-v2.4.txt`).
-**043_event_proposals and 046_event_role_history are PREPARED, not applied** (notes in `docs/migration-notes/`;
+**043_event_proposals, 045_platform_activity and 046_event_role_history are PREPARED, not applied** (notes in `docs/migration-notes/`;
 both were run, with their verification blocks, against a scratch PostgreSQL built from 001-042 - not against
 Supabase). 043 now also replaces `create_event_draft` so the event-creation limit (per person, 40) lives in one
-function and approval obeys it. 044 and 045 do not exist: 045 is a design only (generalise `event_visits` /
-`event_page_views`, keep their names; impact review in v2.3 section 3). No application code reads 043 or 046 yet.
+function and approval obeys it. 044 does not exist. 045 generalises `event_visits` / `event_page_views` (names kept; surface +
+organization_id, both ids ON DELETE SET NULL; scope = surface + organization + event) and adds
+`app_users.last_seen_at` (seeded once from `updated_at`, approximate). No application code reads 043, 045 or 046 yet.
 
 ## Commands
 

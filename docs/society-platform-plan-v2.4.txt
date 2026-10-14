@@ -190,3 +190,27 @@ Status: NO MIGRATION IS APPLIED. 045 is NOT written. No application code was cha
        select (select count(*) from event_visits) as visits, (select count(*) from event_page_views) as page_views;
  Once you answer, I write 045 (SQL, pre-checks, verification, rollback - tested on the scratch database) and
  the code behind it with its degrade path. Nothing is applied until you run it and send me the result.
+
+
+=====================================================================
+4. UPDATE - YOUR ANSWERS TO v2.4 (supersedes 2.3 and section 3 above)
+=====================================================================
+
+ Q1 seed last_seen_at from updated_at: YES (once, only where null; approximate; not DAU/WAU history).
+ Q2 requireAppUser optimisation: LATER, SEPARATE, after 045 is applied and verified; the steady-state design
+    (read-then-maybe-upsert vs a short per-instance cache vs reading only where needed) is to be evaluated
+    on its own, not assumed. Test list: first sign-in, returning unchanged user, changed Google email,
+    changed Google photo, concurrent first requests, missing row, authentication failure.
+ Q3 updated_at dependency check: OPEN until you send the output of
+    docs/migration-notes/app_users_updated_at_dependencies.sql.
+ Q4 SCOPE CHANGED: scope = surface + organization_id + event_id. Society Home (society) and Society
+    Management (society_admin) are DIFFERENT visits. An event's pages (Overview -> Schedule -> Gallery) are one
+    visit with page views. profile, event_create and proposal are each their own visit. A visit has exactly
+    one surface for its whole life.
+ Q5 row counts: pre-check D in the 045 notes.
+ Surfaces confirmed: event, society, society_admin, profile, event_create, proposal. Login not tracked.
+ Names kept; ON DELETE SET NULL on both ids; no retention deletion; behavioural events design only.
+ Migration 045 is PREPARED: supabase/migrations/045_platform_activity.sql and
+ docs/migration-notes/045_platform_activity.txt (pre-checks A-H, two-part run, verification V1-V8, catch-up
+ step, rollback with archive). Run on a scratch PostgreSQL with existing traffic loaded: all verification
+ passes, it is re-runnable, rollback and re-apply work. Not applied.
