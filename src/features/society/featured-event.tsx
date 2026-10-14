@@ -38,7 +38,7 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
       )}
     >
       
-      <div className="relative aspect-[6/5] w-full bg-primary/90 sm:aspect-[16/8]">
+      <div className="relative aspect-[16/10] w-full bg-primary/90 sm:aspect-[16/6]">
         <EventArtwork
           eventType={event.eventType}
           imageUrl={event.heroImageUrl}
@@ -67,30 +67,30 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
         <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/90">{eventEyebrow(event)}</p>
 
-          <h2 className="font-display mt-1.5 text-[28px] font-semibold leading-[1.12] text-white drop-shadow-sm sm:text-4xl">
+          <h2 className="font-display mt-1.5 text-2xl font-semibold leading-[1.15] text-white drop-shadow-sm sm:text-4xl">
             {event.name}
           </h2>
 
           {event.location || metric ? (
-            <ul className="mt-2 space-y-0.5 text-sm text-white/90">
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-white/90">
               {event.location ? (
-                <li className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 truncate">{event.location}</span>
-                </li>
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{event.location}</span>
+                </span>
               ) : null}
               {metric ? (
-                <li className="flex items-center gap-2">
-                  <Users className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 truncate tabular-nums">{metric}</span>
-                </li>
+                <span className="inline-flex items-center gap-1.5 tabular-nums">
+                  <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {metric}
+                </span>
               ) : null}
-            </ul>
+            </p>
           ) : null}
 
           <span
             className={cn(
-              "mt-3 inline-flex h-10 items-center rounded-lg bg-white px-4 text-sm font-semibold text-foreground",
+              "mt-2.5 inline-flex h-9 items-center rounded-lg bg-white px-3.5 text-sm font-semibold text-foreground",
               "shadow-sm transition-transform group-hover:translate-x-0.5",
             )}
           >

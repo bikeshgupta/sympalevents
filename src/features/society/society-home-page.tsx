@@ -8,7 +8,6 @@ import { groupByMonth, pickFeaturedEvent, residentVisibleEvents } from "@/featur
 import { FeaturedEvent } from "@/features/society/featured-event";
 import { firstNameOf, greetingFor } from "@/features/society/greeting";
 import { SocietyAccount } from "@/features/society/society-account";
-import { SocietyActions } from "@/features/society/society-actions";
 import { SocietyHeader } from "@/features/society/society-header";
 import { PassesShelf } from "@/features/society/society-shelves";
 import { useSession } from "@/lib/auth";
@@ -114,22 +113,20 @@ export function SocietyHomePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
-      <SocietyAccount role={memberRole} />
+      <SocietyAccount
+        role={memberRole}
+        canManage={canManage}
+        isSocietyAdmin={isSocietyAdmin}
+        societySlug={society?.slug}
+        draftCount={drafts.length}
+        onShowDrafts={() => setManaging(true)}
+      />
 
       {society ? (
         <div className="mt-4">
           <SocietyHeader society={society} greeting={greeting} />
         </div>
       ) : null}
-
-      <SocietyActions
-        canManage={canManage}
-        isSocietyAdmin={isSocietyAdmin}
-        societySlug={society?.slug}
-        draftCount={drafts.length}
-        draftsOpen={managing}
-        onToggleDrafts={() => setManaging((value) => !value)}
-      />
 
       {data?.ready === false ? (
         <p className="mt-4 flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
@@ -139,8 +136,17 @@ export function SocietyHomePage() {
       ) : null}
 
       {managing && canManage && drafts.length ? (
-        <section className="mt-2" aria-label="Draft events">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Draft events</h2>
+        <section className="mt-3" aria-label="Draft events">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Draft events</h2>
+            <button
+              type="button"
+              onClick={() => setManaging(false)}
+              className="min-h-10 rounded-md px-2 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Hide
+            </button>
+          </div>
           <ul className="mt-1 divide-y">
             {drafts.map((event) => (
               <li key={event.id}>
@@ -299,7 +305,7 @@ function SocietyHomeSkeleton() {
       <div className="mt-4 h-3 w-44 rounded bg-muted" />
       <div className="mt-2 h-7 w-64 rounded-md bg-muted" />
       <div className="mt-2 h-4 w-52 rounded bg-muted" />
-      <div className="-mx-4 mt-4 aspect-[6/5] bg-muted sm:mx-0 sm:aspect-[16/8] sm:rounded-2xl" />
+      <div className="-mx-4 mt-4 aspect-[16/10] bg-muted sm:mx-0 sm:aspect-[16/6] sm:rounded-2xl" />
       <div className="mt-7 h-7 w-28 rounded bg-muted" />
       <div className="mt-4 space-y-4">
         {[0, 1].map((key) => (

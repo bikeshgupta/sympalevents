@@ -2172,7 +2172,7 @@ community space", not an event dashboard**: built from type, spacing, imagery an
 the page's sections back into bordered, filled, rounded containers; rounded shapes are kept only for the hero,
 thumbnails and the role badge. Headings, tab labels and the hero title use `.font-display`.
 
-- **Order:** account line -> society + greeting -> quick actions -> Your passes (if any) -> featured hero (edge to
+- **Order:** account line -> society + greeting -> Your passes (if any) -> featured hero (compact, 16:10, edge to
   edge on a phone, `-mx-4`) -> Events (Upcoming / Live / Past text tabs, editorial rows with hairlines) -> From your
   community. Behaviour is unchanged: `getEventStatus` is the status authority, one read feeds the page, permissions
   are `canManage` + the viewer's society role, drafts stay out of the lists.
@@ -2180,9 +2180,10 @@ thumbnails and the role badge. Headings, tab labels and the hero title use `.fon
   society, My profile / Sign out; a Sign in row when signed out). The role is a label, never a permission.
 - **Greeting** (`greeting.ts`, pure): "Good morning/afternoon/evening, <first name>" from the device's hour; a visitor
   gets the society's name as the heading. Nothing about any society or person is written into the components.
-- **Quick actions** (`SocietyActions`): plain links, shown only where the existing permissions allow; **Drafts · N**
-  appears only when there are drafts (count from the data already loaded). Create event stays the committee's and
-  society admin's; residents propose (not built, see the plan).
+- **Actions live in the account menu** (`SocietyAccount`), not on the page: Create event, Manage society (society admin)
+  and Drafts · N (only when there are drafts), then My profile and Sign out. They appear only where the existing
+  permissions allow (`canManage`, society admin), so a resident's menu is just profile and sign out. A dot on the
+  avatar says drafts are waiting. Drafts opens a short list under the greeting with a Hide button.
 - **The hero** uses the event's photograph, else the artwork its template (or, failing that, its TYPE) already has -
   one reusable system (`EventArtwork`), anchored right (`artworkPosition`) so the motif survives a tall phone crop.
   It carries only real facts; there is no "Music - Dance - Community" tag line because events have no such field.
