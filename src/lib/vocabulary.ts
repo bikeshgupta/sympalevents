@@ -1,5 +1,6 @@
 import { useEventAccess } from "@/lib/event-access";
 import { pageLabels } from "@/lib/page-access";
+import { titleCase } from "@/lib/title-case";
 
 /**
  * What this event calls things.
@@ -20,7 +21,7 @@ import { pageLabels } from "@/lib/page-access";
  */
 
 export type Vocabulary = {
-  /** What this event calls the given module. */
+  /** What this event calls the given module, every word capitalised (it heads the page, as it names the menu row). */
   labelFor: (pageKey: string) => string;
   /** Singular, capitalised: "Flat", "Team". */
   unit: string;
@@ -60,7 +61,7 @@ export function useVocabulary(): Vocabulary {
   const unit = (access?.unitLabel ?? "").trim() || "Flat";
 
   return {
-    labelFor: (pageKey: string) => labels.get(pageKey) ?? pageLabels[pageKey] ?? pageKey,
+    labelFor: (pageKey: string) => titleCase(labels.get(pageKey) ?? pageLabels[pageKey] ?? pageKey),
     unit,
     unitPlural: pluralise(unit),
     unitLower: unit.toLowerCase(),

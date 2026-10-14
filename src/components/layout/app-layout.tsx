@@ -5,6 +5,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from "rea
 import { AnnouncementsBell } from "@/components/layout/announcements-bell";
 import { EventSwitcher } from "@/components/layout/event-switcher";
 import { NavDrawer } from "@/components/layout/nav-drawer";
+import { PageTurn } from "@/components/shared/page-turn";
 import { NavList } from "@/components/layout/nav-list";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
@@ -22,6 +23,7 @@ import { useViewMode } from "@/lib/view-mode";
 import { navItems } from "./nav-items";
 import { menuGlass } from "@/lib/glass";
 import { MenuIdentity, MenuList, MenuTile, menuRow } from "@/components/layout/menu-list";
+import { titleCase } from "@/lib/title-case";
 import { cn } from "@/lib/utils";
 import { pageKeyFromPath } from "@/lib/page-access";
 import { IosPage } from "@/components/ui/ios-page";
@@ -118,7 +120,8 @@ export function AppLayout() {
       // and "Events".
       const residentLabel = residentMenu ? { dashboard: "Home", "event-plan": "Schedule" }[pageKey] : undefined;
       const label = labelByPageKey.get(pageKey) ?? residentLabel ?? item.label;
-      return { ...item, label };
+      // Every word capitalised, however a committee typed the name in Settings -> Modules.
+      return { ...item, label: titleCase(label) };
     });
   const [requestMessage, setRequestMessage] = useState<string | null>(null);
   const canRequestCommitteeAccess = Boolean(
@@ -356,7 +359,9 @@ export function AppLayout() {
           {requestMessage ? (
             <div className="mb-4 rounded-md border bg-card px-4 py-3 text-sm text-muted-foreground">{requestMessage}</div>
           ) : null}
-          <Outlet />
+          <PageTurn>
+            <Outlet />
+          </PageTurn>
         </main>
       </div>
     </div>

@@ -115,12 +115,28 @@ export function NavList({
                 <Icon className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">{entry.label}</span>
                 <ChevronDown
-                  className={cn("h-4 w-4 shrink-0 text-muted-foreground/70 transition-transform", open && "rotate-180")}
+                  className={cn("h-4 w-4 shrink-0 text-muted-foreground/70 transition-transform duration-300", open && "rotate-180")}
                   aria-hidden="true"
                 />
               </button>
-              {open ? (
-                <ul id={panel} className="ios-list border-t border-black/[0.06] bg-black/[0.025]" style={{ ["--ios-inset" as string]: "2.875rem" } as CSSProperties}>
+              {/* Opens and closes smoothly: a one-row grid whose track goes from 0fr to 1fr, so the height follows
+                  the content without measuring it. Closed, the pages stay in the DOM but are hidden from screen
+                  readers and out of the tab order. */}
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                )}
+              >
+                <ul
+                  id={panel}
+                  aria-hidden={open ? undefined : true}
+                  className={cn(
+                    "ios-list min-h-0 overflow-hidden bg-black/[0.025] shadow-[inset_0_0.5px_0_hsl(var(--foreground)/0.14)] transition-opacity duration-300",
+                    open ? "opacity-100" : "opacity-0",
+                  )}
+                  style={{ ["--ios-inset" as string]: "2.875rem" } as CSSProperties}
+                >
                   {entry.items.map((item) => {
                     const current = isCurrent(item);
                     return (
@@ -128,6 +144,7 @@ export function NavList({
                         <Link
                           to={path(item.href)}
                           onClick={onNavigate}
+                          tabIndex={open ? undefined : -1}
                           aria-current={current ? "page" : undefined}
                           className={cn(
                             "flex min-h-10 items-center py-2 pl-[2.875rem] pr-4 text-[15px] text-foreground/85",
@@ -141,7 +158,7 @@ export function NavList({
                     );
                   })}
                 </ul>
-              ) : null}
+              </div>
             </li>
           );
         })}

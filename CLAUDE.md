@@ -2331,7 +2331,17 @@ Anything that opens over the page, and the Event Settings section rows, share on
   The Settings sheet, a person's page inside Team, the wizard's next step, dialogs and the entry sheet (from `sm`) all
   arrive from the right; going back (the sheet closing, Team's list returning, the wizard's previous step) goes the
   other way (the list and the earlier step come in from the left). In-place reveals (copy-from, Customise modules)
-  drop from the top instead, since they go nowhere. Page-to-page navigation from the menu is **not** animated.
+  drop from the top instead, since they go nowhere.
+- **Every page change turns too** (`PageTurn` in [page-turn.tsx](src/components/shared/page-turn.tsx), wrapping
+  AppLayout's `<Outlet />` and, through `PageTurnOutlet`, the routes outside it): a new page fades in from 24px to the
+  right, the browser's Back brings it from the left, 320ms. A `?section=`/`#anchor` change and a redirect (REPLACE)
+  do not turn, nor does the first page of a visit or one arriving through the loading unveil. It is the Web
+  Animations API with no fill, so the wrapper carries **no transform once it ends** - a transform makes its element
+  the containing block for `position: fixed` descendants. The one fixed thing inside a page is Settings' phone sheet
+  (`data-fixed-overlay`); arriving with a section open (`arrivesWithFixedOverlay`, decided from the address because
+  the page draws after the turn starts) fades without sliding. Script-driven, so it checks `prefers-reduced-motion`
+  itself. Do not replace it with a keyed remount: that would throw away a page's state whenever its address shape
+  changed.
 - **The menu is one panel** (`NavList` in nav-list.tsx, the phone drawer and the desktop sidebar alike; mocked and
   chosen over separate Settings-style lists): one rounded white card on the warm grey, hairlines between rows, **plain
   line icons** (no coloured tiles - asked for), rows 44px with 15px text, the current page tinted. Registrations,
@@ -2342,6 +2352,11 @@ Anything that opens over the page, and the Event Settings section rows, share on
   away. The current row is matched on the page's own route segment (`routeSegmentFromPath`), not the whole path - a page
   has three address shapes - and not the page key, which folds `/updates` into the dashboard. Fold ids carry a
   `useId()` prefix because the sidebar and the drawer are both in the page. Settings keeps its coloured tiles.
+  A fold opens and closes smoothly (a one-row grid from `0fr` to `1fr`; closed, its links are `aria-hidden` and out of
+  the tab order). **Page names have every word capitalised** wherever they are shown - the menu and each page's
+  heading (`useVocabulary().labelFor`) - through `titleCase()` ([title-case.ts](src/lib/title-case.ts), tested): a
+  committee may type "get involved" in Settings -> Modules and the menu still reads "Get Involved". Only the first
+  letter is touched, a word with a capital inside ("iPhone") is left alone, and what is stored is never changed.
   Hover tints are `[@media(hover:hover)]` only, so a tapped row never stays tinted.
 - **Event Settings on a phone**: the open section is a `fixed` sheet under the app header that slides in from the right
   and back out to the right; the index stays mounted underneath and keeps its scroll position. It is `invisible` +

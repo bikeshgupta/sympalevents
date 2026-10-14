@@ -360,6 +360,8 @@ function SettingsShell() {
             // tabbed into or read out. Visibility is transitioned with the transform, so it stays visible for the
             // whole slide out and only then is taken away.
             aria-hidden={active === null ? true : undefined}
+            // Fixed on a phone: a page turn arriving with a section open fades instead of sliding (see page-turn.tsx).
+            data-fixed-overlay=""
             className={cn(
               "fixed inset-x-0 bottom-0 top-16 z-30 min-w-0 overflow-y-auto overscroll-contain px-4 pb-28 pt-3",
               groupedBackground,

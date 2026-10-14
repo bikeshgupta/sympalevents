@@ -6,6 +6,7 @@ import { PassPage } from "@/features/registration/pass-page";
 import { EventIndex } from "@/features/command/event-index";
 import { RegistrationPage } from "@/features/registration/registration-page";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { PageTurnOutlet } from "@/components/shared/page-turn";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RouteGuard } from "@/components/layout/route-guard";
 import { AccessDeniedPage } from "@/features/auth/access-denied-page";
@@ -77,22 +78,25 @@ function eventRoutes(indexElement = <EventIndex />) {
 export function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/access-denied" element={<AccessDeniedPage />} />
-      {/* Outside AppLayout: no event is selected yet, so the sidebar and the
-          route guard have nothing to be about. */}
-      <Route path="/new-event" element={<CreateEventWizard />} />
-      <Route path="/profile" element={<ProfilePage />} />
-      {/* The permanent link. Resolves a token and hands over to the path form. */}
-      <Route path="/s/:token" element={<ShareLinkPage />} />
+      {/* The pages outside AppLayout slide in on a page turn like every event page does. See page-turn.tsx. */}
+      <Route element={<PageTurnOutlet />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/access-denied" element={<AccessDeniedPage />} />
+        {/* Outside AppLayout: no event is selected yet, so the sidebar and the
+            route guard have nothing to be about. */}
+        <Route path="/new-event" element={<CreateEventWizard />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        {/* The permanent link. Resolves a token and hands over to the path form. */}
+        <Route path="/s/:token" element={<ShareLinkPage />} />
 
-      {/* A society's events - the front door. Outside AppLayout: this page is
-          about choosing an event, so the event sidebar has nothing to be
-          about yet. `/society` with no slug resolves to the viewer's own. */}
-      <Route path="/society" element={<SocietyHomePage />} />
-      <Route path="/society/:societySlug" element={<SocietyHomePage />} />
-      {/* Private to society admins; the server decides, this only draws. */}
-      <Route path="/society/:societySlug/admin" element={<SocietyAdminPage />} />
+        {/* A society's events - the front door. Outside AppLayout: this page is
+            about choosing an event, so the event sidebar has nothing to be
+            about yet. `/society` with no slug resolves to the viewer's own. */}
+        <Route path="/society" element={<SocietyHomePage />} />
+        <Route path="/society/:societySlug" element={<SocietyHomePage />} />
+        {/* Private to society admins; the server decides, this only draws. */}
+        <Route path="/society/:societySlug/admin" element={<SocietyAdminPage />} />
+      </Route>
 
       {/* The readable address. The `society` and `events` segments are what
           make it collision-proof: a society slugged "login" or "dashboard" can
