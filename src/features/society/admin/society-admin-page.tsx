@@ -108,18 +108,20 @@ export function SocietyAdminPage() {
         </div>
       </div>
 
-      <header className="mt-3 flex items-center gap-3">
+      <header className="mt-5 flex items-center gap-3">
         {society.logoUrl ? (
-          <img src={society.logoUrl} alt="" aria-hidden className="h-12 w-12 shrink-0 rounded-xl border object-cover" />
+          <img src={society.logoUrl} alt="" aria-hidden className="h-11 w-11 shrink-0 rounded-xl border object-cover" />
         ) : null}
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold leading-tight sm:text-3xl">{society.name}</h1>
-          <p className="truncate text-sm text-muted-foreground">
-            Society management{society.city ? ` · ${society.city}` : ""} · private to society admins
+          <h1 className="font-display break-words text-[28px] font-semibold leading-[1.15] sm:text-4xl">{society.name}</h1>
+          <p className="mt-1 text-[15px] text-muted-foreground">
+            Society management{society.city ? ` · ${society.city}` : ""}
           </p>
         </div>
       </header>
 
+      {/* Text tabs on a hairline, a teal underline under the chosen one - the same treatment as Society Home's
+          Upcoming / Live / Past. Scrolls sideways inside its own row if a phone is too narrow, never the page. */}
       <div
         ref={tablist}
         role="tablist"
@@ -138,7 +140,7 @@ export function SocietyAdminPage() {
             tabIndex={tab === item.key ? 0 : -1}
             onClick={() => choose(item.key)}
             className={cn(
-              "-mb-px min-h-11 shrink-0 border-b-2 px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "font-display -mb-px min-h-11 shrink-0 border-b-2 px-3 text-base font-medium transition-colors first:pl-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               tab === item.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
@@ -147,7 +149,7 @@ export function SocietyAdminPage() {
         ))}
       </div>
 
-      <div id="society-panel" role="tabpanel" aria-labelledby={`society-tab-${tab}`} className="mt-5">
+      <div id="society-panel" role="tabpanel" aria-labelledby={`society-tab-${tab}`} className="mt-2">
         {tab === "overview" ? <OverviewTab society={society} /> : null}
         {tab === "members" ? <MembersTab societyId={society.id} filter={memberFilter} onFilter={setFilter} /> : null}
         {tab === "events" ? <EventsAccessTab societyId={society.id} filter={eventFilter} onFilter={setFilter} /> : null}

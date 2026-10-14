@@ -2207,7 +2207,8 @@ society admin, and a society committee member, are refused. Every part calls the
 `requireSocietyAdmin()` in [authority.ts](api/_lib/authority.ts) on the server; the React page only declines to draw
 for others so they are told why.
 
-- **Overview**: identity, People (Members / Admins / Committee / Residents), Events (Total / Upcoming / Live /
+- **The Overview is built like Society Home - type, spacing and hairlines, not cards**: People and Events are each a single row of four figures (a number over a label, hairline between), every one a link to its filtered list; below them "Society details" and "Invite residents" are plain sections (`SocietyForm variant="page"`; Settings keeps the default boxed card). Do not put the figures, the form or the code back in bordered cards.
+- **Overview** content: identity, People (Members / Admins / Committee / Residents), Events (Total / Upcoming / Live /
   Completed), the society details form, and - once `event_proposals` exists - a pending-proposals card. The
   proposal count is `null` (unknown) before migration 043, never `0`. Event phase is classified by
   `shared/event-status.ts`, the same function the screens use (`src/lib/event-status.ts` re-exports it).

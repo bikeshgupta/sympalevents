@@ -1,16 +1,19 @@
-import { CalendarCheck, CalendarClock, CalendarDays, ChevronRight, Radio, ShieldCheck, UserCog, UserRound, Users } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { StatCard, StatGrid } from "@/components/shared/stat-card";
-import { Card, CardContent } from "@/components/ui/card";
 import { SocietyForm } from "@/features/settings/society-card";
 import type { SocietyOption } from "@/lib/event-context";
 import { useSocietyOverview } from "@/lib/society-admin";
+import { cn } from "@/lib/utils";
 
 /**
- * The society at a glance: who is in it, what it is running, and what is
- * waiting. Deliberately lightweight - this is management information, not the
- * analytics product, and it counts only this society's own members and events.
+ * The society at a glance: who is in it, what it is running, and what is waiting - then its details and the
+ * code that lets residents in.
+ *
+ * Deliberately lightweight, and deliberately not boxed: it is built from type, spacing and hairlines in the same
+ * language as Society Home (a stat is a number over a label, sections are divided by a thin rule), rather than
+ * from a card per figure. It is management information, not the analytics product, and counts only this
+ * society's own members and events. Every number still opens the list it counts, with the same filter in the
+ * address (`?tab=members&filter=admin`) as before.
  */
 export function OverviewTab({ society }: { society: SocietyOption }) {
   const { data, isLoading, error } = useSocietyOverview(society.id);
@@ -26,84 +29,128 @@ export function OverviewTab({ society }: { society: SocietyOption }) {
   const members = data?.members;
   const events = data?.events;
   const pending = data?.pendingProposals ?? null;
-  const show = (value: number | undefined) => (value === undefined ? "…" : String(value));
 
   return (
-    <div className="space-y-6">
+    <div>
       {/* Waiting work comes first, so an admin does not have to go looking for it.
           Null means the proposals table does not exist yet, which is not "none". */}
       {pending !== null && pending > 0 ? (
-        <Card className="border-primary/40 bg-primary/5">
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold">
-                {pending} event {pending === 1 ? "proposal" : "proposals"}
-              </p>
-              <p className="text-sm text-muted-foreground">Waiting for review</p>
-            </div>
-            <span className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-primary">
-              Review
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </span>
-          </CardContent>
-        </Card>
+        <div className="flex items-center gap-3 border-b pb-4">
+          <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">
+              {pending} event {pending === 1 ? "proposal" : "proposals"}
+            </p>
+            <p className="text-sm text-muted-foreground">Waiting for review</p>
+          </div>
+          <span className="inline-flex min-h-10 items-center gap-1 text-sm font-medium text-primary">
+            Review
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </span>
+        </div>
       ) : null}
 
-      <section aria-labelledby="people-heading" className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <h2 id="people-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            People
-          </h2>
-          <Link to="?tab=members" className="inline-flex min-h-10 items-center text-sm font-medium text-primary">
-            Manage members
-          </Link>
-        </div>
-        <StatGrid>
-          <Tile to="?tab=members" label="Show all members"><StatCard title="Members" value={show(members?.total)} icon={Users} isLoading={isLoading} /></Tile>
-          <Tile to="?tab=members&filter=admin" label="Show society admins"><StatCard title="Society admins" shortTitle="Admins" value={show(members?.admins)} icon={ShieldCheck} isLoading={isLoading} /></Tile>
-          <Tile to="?tab=members&filter=committee" label="Show committee members"><StatCard title="Committee" shortTitle="Team" value={show(members?.committee)} icon={UserCog} isLoading={isLoading} /></Tile>
-          <Tile to="?tab=members&filter=resident" label="Show residents"><StatCard title="Residents" value={show(members?.residents)} icon={UserRound} isLoading={isLoading} /></Tile>
-        </StatGrid>
-      </section>
+      <StatSection
+        heading="People"
+        link={{ to: "?tab=members", label: "Manage members" }}
+        loading={isLoading}
+        stats={[
+          { label: "Members", value: members?.total, to: "?tab=members", title: "Show all members" },
+          { label: "Admins", value: members?.admins, to: "?tab=members&filter=admin", title: "Show society admins" },
+          { label: "Committee", value: members?.committee, to: "?tab=members&filter=committee", title: "Show committee members" },
+          { label: "Residents", value: members?.residents, to: "?tab=members&filter=resident", title: "Show residents" },
+        ]}
+      />
 
-      <section aria-labelledby="events-heading" className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <h2 id="events-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Events
-          </h2>
-          <Link to="?tab=events" className="inline-flex min-h-10 items-center text-sm font-medium text-primary">
-            Events &amp; access
-          </Link>
-        </div>
-        <StatGrid>
-          <Tile to="?tab=events" label="Show all events"><StatCard title="Total events" shortTitle="Total" value={show(events?.total)} icon={CalendarDays} isLoading={isLoading} /></Tile>
-          <Tile to="?tab=events&filter=upcoming" label="Show upcoming events"><StatCard title="Upcoming" value={show(events?.upcoming)} icon={CalendarClock} isLoading={isLoading} /></Tile>
-          <Tile to="?tab=events&filter=live" label="Show live events"><StatCard title="Live" value={show(events?.live)} icon={Radio} isLoading={isLoading} /></Tile>
-          <Tile to="?tab=events&filter=completed" label="Show completed events"><StatCard title="Completed" shortTitle="Past" value={show(events?.completed)} icon={CalendarCheck} isLoading={isLoading} /></Tile>
-        </StatGrid>
-        {events && events.draft > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Total includes {events.draft} {events.draft === 1 ? "draft" : "drafts"}, which {events.draft === 1 ? "is" : "are"} not published yet.
-          </p>
-        ) : null}
-      </section>
+      <StatSection
+        heading="Events"
+        link={{ to: "?tab=events", label: "Events & access" }}
+        loading={isLoading}
+        divided
+        stats={[
+          { label: "Total", value: events?.total, to: "?tab=events", title: "Show all events" },
+          { label: "Upcoming", value: events?.upcoming, to: "?tab=events&filter=upcoming", title: "Show upcoming events" },
+          { label: "Live", value: events?.live, to: "?tab=events&filter=live", title: "Show live events" },
+          { label: "Past", value: events?.completed, to: "?tab=events&filter=completed", title: "Show completed events" },
+        ]}
+        note={
+          events && events.draft > 0
+            ? `Total includes ${events.draft} ${events.draft === 1 ? "draft" : "drafts"}, which ${events.draft === 1 ? "is" : "are"} not published yet.`
+            : null
+        }
+      />
 
-      <section aria-label="Society details">
-        <SocietyForm society={society} inEvent={false} />
-      </section>
+      <div className="mt-8 border-t pt-8">
+        <SocietyForm society={society} inEvent={false} variant="page" />
+      </div>
     </div>
   );
 }
 
-/** A tile that opens the list it counts. The card keeps its own look; the link only adds the way in. */
-function Tile({ to, label, children }: { to: string; label: string; children: ReactNode }) {
+type Stat = { label: string; value: number | undefined; to: string; title: string };
+
+/**
+ * A heading with its link, and a single row of figures under it.
+ *
+ * No box per figure: a number over a muted label, a hairline between neighbours. The row is four equal columns
+ * at every width - four short numbers are what a phone's width holds - and each column is a link of its own, with
+ * a visible focus ring and a tap area taller than the figure. A value still loading shows a quiet bar, never a 0.
+ */
+function StatSection({
+  heading,
+  link,
+  stats,
+  loading,
+  divided = false,
+  note,
+}: {
+  heading: string;
+  link: { to: string; label: string };
+  stats: Stat[];
+  loading: boolean;
+  /** A hairline above the section, used for every section after the first. */
+  divided?: boolean;
+  note?: string | null;
+}) {
+  const id = `${heading.toLowerCase()}-heading`;
   return (
-    <Link
-      to={to}
-      title={label}
-      className="block min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      {children}
-    </Link>
+    <section aria-labelledby={id} className={cn("pt-5", divided && "mt-5 border-t")}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 id={id} className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {heading}
+        </h2>
+        <Link
+          to={link.to}
+          className="inline-flex min-h-10 items-center gap-1 rounded-md text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {link.label}
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      </div>
+
+      <div className="mt-1 grid grid-cols-4">
+        {stats.map((stat, index) => (
+          <Link
+            key={stat.label}
+            to={stat.to}
+            title={stat.title}
+            className={cn(
+              "block min-w-0 py-2 pr-1 transition-colors hover:bg-muted/40",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+              index > 0 && "border-l pl-3 sm:pl-5",
+            )}
+          >
+            {loading || stat.value === undefined ? (
+              <span className="block h-8 w-8 animate-pulse rounded bg-muted" aria-hidden="true" />
+            ) : (
+              <span className="block text-3xl font-semibold leading-none tabular-nums">{stat.value}</span>
+            )}
+            <span className="mt-1.5 block truncate text-[13px] text-muted-foreground">{stat.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
+    </section>
   );
 }
