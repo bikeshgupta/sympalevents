@@ -1,0 +1,629 @@
+SYMPAL EVENTS - REVISED PLAN (v2)
+Society Management  |  Event Proposals & Approvals  |  Platform Control Center (data readiness)
+Status: PLAN ONLY. No application code or SQL has been changed. Nothing here has been run.
+Supersedes: docs/society-admin-plan.txt (which mixed society admin and platform analytics).
+Date: 2026-10-14
+
+Legend used on every item:
+  [BUILD NOW]                    implement in this work
+  [PREPARE NOW / BUILD LATER]    get the data / structure right now, UI later
+  [EXISTS / REUSE]               already in the code or schema; reuse, do not rebuild
+
+
+=====================================================================
+0. HEADLINE FINDINGS FROM THE AUDIT (read these first)
+=====================================================================
+
+ F1. TRAFFIC HISTORY IS BEING DELETED.  [BUILD NOW - code fix]
+     api/_lib/traffic.ts deletes every event_visits row older than 90 days, across
+     ALL events, each time any admin opens the Traffic panel (a "retention" step on
+     the read). So the visit-level history (devices, browsers, cities, repeat
+     visitors, visit duration) that a future Platform Control Center needs is
+     already being thrown away. Fix: stop the delete now. (Per-page history in
+     event_page_views and the audit log are kept forever, so those are fine.)
+     Removing the Traffic card from Settings also stops that read, but the delete
+     must be removed explicitly so it cannot return when the read moves.
+
+ F2. audit_log ALREADY HAS THE RIGHT SCOPE COLUMNS.  [EXISTS / REUSE]
+     It has event_id AND organization_id (both nullable), actor, action,
+     entity_type, entity_id, summary, changes jsonb, request_id. api/_lib/audit.ts
+     already resolves organization_id from the event at write time. So NO
+     scope_type/scope_id model is needed and nothing needs to be squeezed into
+     entity_id. We only add missing audit CALLS (society join, role changes,
+     proposals) and one index.
+
+ F3. A REQUIRE-SOCIETY-ADMIN CHECK ALREADY EXISTS, BUT IS PRIVATE.  [EXISTS / REUSE]
+     requireSocietyAdmin() is a private helper inside api/_lib/societies.ts, and
+     authority.ts has isSocietyAdmin(). We consolidate them into ONE exported
+     requireSocietyAdmin() in authority.ts and use it for every society-management
+     route. An event admin alone does not satisfy it.
+
+ F4. EVERY CURRENT EVENT ADMIN IS PROBABLY A SOCIETY ADMIN.  [BUILD NOW - pre-check]
+     Migration 023's backfill made everyone with a role on an event a member of that
+     event's society carrying the SAME role, choosing admin where they had several.
+     So existing event admins were promoted to society admins. Before the new page
+     goes live we run a pre-check listing each society's admins so you can confirm
+     that is what you want, and demote anyone who should not have society-wide access.
+
+ F5. A MEMBER'S FLAT/UNIT IS A PRIVATE PROFILE FIELD.  [DECISION NEEDED]
+     The only place a person's flat lives is app_users.flat (migration 041), and
+     the product promises it is "private: returned to its owner and nobody else".
+     Showing it in the Society Admin roster changes that promise. See decision D1.
+
+ F6. REMOVING SOMEONE FROM A SOCIETY CAN ERASE THEIR CREDIT.  [BUILD NOW - design]
+     The closing page derives the "committee" credits from event_members. If we
+     revoke event access by deleting event_members rows, those people vanish from the
+     credits of past events. The existing manual-credit list (event_closing.extra_core)
+     is the mechanism built for exactly this, so removal must snapshot their name
+     into it BEFORE deleting access. See section 3.
+
+ F7. THERE IS NO SOCIETY-LEVEL ACTIVITY TRACKING FOR ANYTHING OUTSIDE AN EVENT.
+     Visits to the Society home, login, profile and new-event pages are not tracked
+     (the heartbeat only runs inside an event). Sign-in time / "last active" is not
+     stored anywhere. These cannot be reconstructed later. See sections 8 and 9.
+
+
+=====================================================================
+1. THREE LEVELS - SEPARATE CONCEPTS
+=====================================================================
+
+ LEVEL 1  SOCIETY MANAGEMENT          [BUILD NOW]
+   Route : /society/<slug>/admin
+   Who   : Society Admins only
+   Scope : one society - its identity, members, roles, events, approvals
+   Not   : analytics product, platform-wide anything
+
+ LEVEL 2  EVENT PROPOSALS / APPROVALS [BUILD NOW]
+   Who   : residents (society members) propose; Society Admins decide
+   Scope : one society's pipeline from idea -> approved draft event
+   Lives : an Approvals tab inside Society Management, plus the proposer's own status
+
+ LEVEL 3  SYMPAL PLATFORM CONTROL CENTER   [PREPARE NOW / BUILD LATER]
+   Route : (future) /platform, /platform/users, /societies, /events, /activity,
+           /analytics, /system
+   Who   : a separate Platform Admin / Super Admin model (NOT society admin,
+           NOT event admin)
+   Scope : all societies, all events, all users
+   Now   : only data readiness - make sure what is collected is sufficient.
+           No platform pages, no platform routes, no platform-admin UI.
+
+ Three scopes of "insights" later (NOT built now, only the data is protected):
+   Event Admin  -> lightweight Event Insights for their own event
+   Society Admin-> lightweight society insights
+   Platform Admin-> everything, cross-society
+
+
+=====================================================================
+2. LEVEL 1 - SOCIETY MANAGEMENT: ARCHITECTURE AND EXACT PERMISSIONS
+=====================================================================
+
+2.1  What the page contains                                      [BUILD NOW]
+   Header : society name, logo (organizations.logo_url if set), city,
+            basic info (address slug, invite code for admins)
+   Tabs   : Overview | Members | Events & Access | Approvals
+   Summary (lightweight, counted server-side):
+            Members, Society Admins, Committee, Residents,
+            Total events, Upcoming, Live, Completed
+   Society details editing (name, city) is moved here from Settings
+   (the Settings society card stays as a small link until this is confirmed).
+
+2.2  Members tab                                                 [BUILD NOW]
+   Columns : name | flat/unit | society role | joined
+   Filters : All | Admins | Committee | Residents ; search by name and flat/unit
+   Role actions from the roster (no email entry needed):
+            resident -> committee, resident -> admin,
+            committee -> resident, admin -> committee / resident, remove
+   "Add member by email" : separate and optional - only for someone who has
+            already signed in once (their app_users row exists). Not required for
+            role changes.
+   Unit wording: the vocabulary already exists per event (events.unit_label,
+            default "Flat"); the roster uses the society's most recent event's
+            unit_label and falls back to "Flat". No new vocabulary system.
+   Joined date: organization_members.created_at. (Rows created by the 023 backfill
+            carry the backfill date, so the label is "Member since", and we note that
+            older rows show the migration date.)
+   The roster is NEVER public and never returned to ordinary residents.
+
+2.3  EXACT PERMISSION MATRIX
+
+   Action / data                          | Society | Society   | Event admin | Resident | Other-society | Anonymous
+                                          | Admin   | Committee | only        | member   | user          |
+   ---------------------------------------+---------+-----------+-------------+----------+---------------+----------
+   Open /society/<slug>/admin             |   YES   |    no     |     no      |    no    |      no       |   no
+   See society roster (name/flat/role)    |   YES   |    no     |     no      |    no    |      no       |   no
+   Change roles / remove members          |   YES   |    no     |     no      |    no    |      no       |   no
+   See / rotate invite code               |   YES   |    no     |     no      |    no    |      no       |   no
+   Edit society name / city / address     |   YES   |    no     |     no      |    no    |      no       |   no
+   See Events & Access grid               |   YES   |    no     |     no      |    no    |      no       |   no
+   Review / approve / reject proposals    |   YES   |    no     |     no      |    no    |      no       |   no
+   Propose an event                       |   YES   |   YES     |     no*     |   YES    |      no       |   no
+   See own proposal + its status          | (all)   |   own     |     own     |   own    |      no       |   no
+   Create a draft event directly          |   YES   |   YES     |     -       |    no    |      no       |   no
+   Manage an event they are admin of      |   YES   |   -       |     YES     |    no    |      no       |   no
+
+   * "Event admin only" means a person who administers some event but is not a
+     member of the society as a resident. Proposing requires society membership.
+   Server-side only: every route above calls the single requireSocietyAdmin()
+   (or a membership check for proposing). The React route/button hiding is
+   convenience, never the control.
+
+2.4  Last-admin protection                                       [BUILD NOW - API]
+   The API refuses, with a plain sentence, any change that would leave a society
+   with zero admins: removing the last admin, demoting the last admin, or a Society
+   Admin demoting/removing themselves when they are the only one.
+   Race note: an API check cannot fully prevent two admins demoting each other in
+   the same instant. The database trigger (migration 043, section 11) closes that
+   later; API protection ships first, as you asked.
+
+2.5  Events & Access tab                                         [BUILD NOW]
+   One row per event of the society:
+       Event | Status (draft/upcoming/live/completed/cancelled) |
+       "2 admins - 8 committee" | "12 pages" | Manage ->
+   Counts come from event_members and event_page_visibility (enabled pages).
+   "Manage ->" links to that event's EXISTING Settings. We do not duplicate
+   Settings here.
+   Reuse: event phase/status logic already exists (src/lib/event-status.ts and the
+   society-home aggregates). The pure function must live where the API can import it
+   (move to shared/ and re-export; small refactor).
+
+2.6  Privacy                                                     [BUILD NOW]
+   See section 10.
+
+
+=====================================================================
+3. MEMBER REMOVAL - ACCESS VERSUS HISTORY                         [BUILD NOW]
+=====================================================================
+
+Principle: ACCESS and HISTORICAL ATTRIBUTION are different things.
+
+Schema audit (what removal can and cannot touch):
+ - organization_members is a plain join table. Nothing else has a foreign key
+   to it, so deleting a row only removes society membership.
+ - event_members and event_page_permissions are the access tables. History tables
+   (contributions, expenses.submitted_by/settled_by, registrations,
+   task_comments/task_assignees, event_gallery_*, event_feedback, audit_log, etc.)
+   reference app_users(id), NOT event_members, so deleting access rows does not
+   delete or orphan any history.
+ - EXCEPTION (finding F6): closing-page committee credits are derived from
+   event_members. Deleting the row would drop the person from the credits.
+
+Removal behaviour:
+   1. Snapshot credit: for every event of the society where the person holds an
+      event role and the event has (or may have) closing credits, append their
+      display name to event_closing.extra_core (existing manual-credit list,
+      de-duplicated by name; this is what that field is for).
+   2. Revoke access: delete their event_members and event_page_permissions rows
+      for that society's events, and any open access request.
+   3. Delete their organization_members row (society membership).
+   4. Write an audit entry (who removed whom, from which society, what was
+      revoked).
+   NEVER touched: contributions, registrations, expenses, comments, gallery,
+   reviews, tasks, audit entries, organizer credits, historical actions.
+   Their app_users account is untouched; they can be re-invited later.
+   Confirmation dialog states: "X will lose access to the society and N events.
+   Everything they recorded stays." and warns if X is the only admin of an event
+   ("society admins will still be able to manage it").
+   Until migration 043, steps run in API order (credits -> events -> society) and
+   are not atomic; a SQL function reinforces this later. We say so plainly in code
+   comments and do not claim atomicity.
+
+
+=====================================================================
+4. LEVEL 2 - EVENT PROPOSAL LIFECYCLE                            [BUILD NOW]
+=====================================================================
+
+   Resident (society member)
+        |  Propose event  (name, type, short description, proposed date(s),
+        |                  venue, optional note)
+        v
+   PENDING  --(Society Admin reviews)-->
+        |-- Approve ........ -> APPROVED -> normal event created as a DRAFT
+        |-- Request changes  -> CHANGES REQUESTED (note shown to proposer;
+        |                      proposer edits and resubmits -> PENDING)
+        |-- Reject .......... -> REJECTED (final, reason shown)
+        |-- Discard ......... -> ARCHIVED (soft; confirmation required; hidden
+        |                      from queues; row kept for audit)
+   Proposer may also WITHDRAW their own pending proposal (-> ARCHIVED).
+
+   APPROVAL NEVER PUBLISHES. Approval creates a Draft event; the organizer
+   configures it with existing tools and explicitly publishes when ready.
+   Publishing keeps its existing readiness checks.
+
+   Proposer experience (no need to contact an admin):
+     "Pending society approval"
+     "Changes requested: <note>"   [Edit & Resubmit]
+     "Approved - Continue setting up event ->"  (links to the new draft)
+     "Rejected: <reason>"
+   Shown on the Society home as a private "Your proposals" shelf (only the
+   proposer sees their own) and in the proposer's account area.
+
+   Who becomes event admin of the approved event: the proposer (so they can
+   configure and publish). Society admins are admins of every event regardless.
+
+   Proposal form is deliberately small. It does not ask the proposer to configure
+   modules. Event types/templates reuse the existing set (festival, sports,
+   cultural, mixed, custom) - see section 6.
+
+   Draft visibility [BUILD NOW]: because proposals live in their own table (section
+   5), they never appear in event lists, the Society home, switchers, dashboards,
+   finance, traffic or link previews. Approved drafts follow the existing draft
+   rule (visible to society admin/committee and their own event roles only).
+
+
+=====================================================================
+5. DATA MODEL: event_proposals TABLE  vs  approval_status ON events
+=====================================================================
+>>> THIS IS THE STOP POINT. Nothing is migrated until you approve a choice. <<<
+
+Option A - approval_status (and related columns) on events
+Option B - dedicated event_proposals table; an events row is created only on approval
+
+What the code audit found:
+ - `events` is read in MANY places, each filtering drafts its own way: society home
+   (status_override='draft' hidden unless manager), event switcher / my-events
+   (via event_members), event data, publication access, link previews (og), resolve,
+   duplicate, command centre, traffic, closing, finance. Adding "pending/rejected"
+   rows means every one of them must be taught a new state. One missed filter leaks
+   a proposal into a public surface or pollutes counts.
+ - A rejected/discarded proposal would become a permanent junk events row with
+   modules, registration settings, finance tables and a traffic target.
+ - create_event_draft (migration 033) ALREADY inserts events + event_members +
+   event_page_visibility + event_registration_settings atomically, and refuses
+   members who are not admin/committee - so a resident cannot use it today.
+
+Comparison:
+
+   Concern                               | A: status on events          | B: event_proposals table
+   --------------------------------------+------------------------------+------------------------------
+   Pollutes normal event queries         | YES - must filter everywhere | NO - separate table
+   Rejected/discarded rows               | stay as fake events          | stay as proposals only
+   Risk of leaking a pending proposal    | HIGH (many read paths)       | LOW (one new read path)
+   Finance/traffic/dashboard pollution   | possible                     | impossible
+   Cost of "draft" semantics             | overloads status_override    | event is a plain Draft on approval
+   Proposal data that is not event data  | awkward extra columns        | natural (review note, version)
+   Resubmit / request-changes cycle      | mutates a live-looking event | edits a proposal row
+   Platform analytics on proposals       | mixed into events counts     | clean: proposals vs events
+   Migration risk to existing events     | touches the events table     | touches nothing existing
+   Atomic creation on approval           | n/a (row exists)             | one SQL function, one transaction
+   Extra work                            | smaller migration            | one table + one function
+
+RECOMMENDATION: Option B (event_proposals), exactly as you prefer.
+   - A proposal is not an event. It becomes one only on approval.
+   - It leaves every existing events query, module, finance and traffic path
+     untouched, so it cannot regress anything live.
+   - Approval runs one database function (approve_event_proposal) that locks the
+     proposal row, checks it is still pending, creates the event Draft with its
+     members and modules in one transaction, links proposal.event_id, and marks it
+     approved. It does NOT call create_event_draft (which requires admin/committee
+     membership); it performs the same inserts for the proposer.
+   - Template modules: the template catalogue is client code today
+     (src/data/event-templates.ts). The server must default modules for the
+     approved event, so the pure catalogue data is moved to shared/ and re-exported
+     (the file has one type-only import to remove).
+
+Proposed table (for review - NOT final until approved):
+   event_proposals(
+     id uuid pk, organization_id -> organizations, proposed_by -> app_users,
+     name, event_type, template_key, description, location, note,
+     start_date, end_date, start_time, end_time,
+     status ('pending'|'changes_requested'|'approved'|'rejected'|'archived'),
+     review_note, reviewed_by -> app_users, reviewed_at,
+     event_id -> events (set on approval), version int (optimistic concurrency),
+     submitted_at, created_at, updated_at, archived_at )
+   RLS on, zero policies (the project standing rule); all access via the API with
+   the service role. Discard = archived_at (soft). No hard deletes.
+   Lifecycle history is NOT a separate table: every transition writes an audit_log
+   row (entity_type 'event_proposal', organization_id set), which also feeds future
+   platform analytics (time-to-decision, approval rate).
+
+
+=====================================================================
+6. EXISTING MODULE / TEMPLATE FUNCTIONALITY THAT WILL BE REUSED
+=====================================================================
+
+All [EXISTS / REUSE]. We build NO second module system.
+ - Templates: src/data/event-templates.ts (5 templates; module seeds, event type,
+   unit label, tagline) - moved to shared/ so the server can read the same data.
+ - Modules/pages per event: event_page_visibility (page_key, visibility,
+   is_enabled, label_override, sort_order), created at event creation.
+ - Editing modules after creation: Settings -> Modules (module-editor.tsx) already
+   enables/disables, renames, orders, and sets visibility per page.
+ - Vocabulary: events.unit_label ("Flat", "Team") already travels with the event.
+ - Dashboard widgets and per-widget audience: shipped (dashboard_layout).
+ - Page catalogue (eventPageKeys) includes the pages you listed:
+     Schedule (event-plan), Sponsors, Gallery/Reviews (closing), Contributions,
+     Prasad, Registration, Teams, Fixtures (and Results via fixtures), Gate, etc.
+ - Draft -> publish: set_event_publication + readiness checks already exist.
+ - "Run an event again" (duplicate) already exists for repeat events.
+ After approval, the organizer simply continues in the existing Settings and
+ Modules; our only addition is that the approved Draft starts from the proposal's
+ template defaults. If a module you named (e.g. "Performances") is not in the page
+ catalogue today, that is a separate feature to scope - we will list any such gaps
+ in Phase D rather than invent modules.
+
+
+=====================================================================
+7. LEVEL 3 - PLATFORM CONTROL CENTER: FUTURE ARCHITECTURE
+   [PREPARE NOW / BUILD LATER] - no platform UI is built now
+=====================================================================
+
+Authorization (future, designed now so nothing blocks it):
+   - A separate PlatformAdmin identity, independent of society and event roles.
+     Society Admin and Event Admin grant NOTHING here.
+   - Recommended: a small platform_admins table (user_id, created_at, created_by),
+     checked by a single requirePlatformAdmin() on the server, plus a documented
+     manual way to add the first one (like adding the first society admin).
+     An environment-variable allowlist of emails is the lighter alternative.
+   - Not built now. Decision deferred until the first platform page is planned.
+
+Future routes (not built): /platform, /platform/users, /platform/societies,
+   /platform/events, /platform/activity, /platform/analytics, /platform/system.
+
+Data it will read (all must exist and be retained - see sections 8-9):
+   Entities : organizations, app_users, organization_members, events, event_members
+   Business : audit_log (who did what, per society and event)
+   Behaviour: event_visits, event_page_views (+ future event-less visits)
+   Activity : registrations, contributions, sponsors, expenses, gallery, reviews
+   Design rule: platform analytics reads these directly and through periodic
+   rollups (future platform_daily_rollups) so long-term trends survive any raw
+   retention policy. Society/event insights later read the same sources, scoped.
+
+
+=====================================================================
+8. CURRENT DATA COVERAGE MATRIX (what we actually capture today)
+=====================================================================
+
+Columns: captured? | source | retention | identity | society id | event id | change
+
+ METRIC / ACTION                | CAPTURED  | TABLE / SOURCE                      | RETENTION          | IDENTITY      | SOCIETY | EVENT | CHANGE REQUIRED
+ -------------------------------+-----------+-------------------------------------+--------------------+---------------+---------+-------+--------------------------------------
+ Society created                | YES       | organizations.created_at; audit      | indefinite         | actor user    | YES     | -     | none
+ Society renamed/edited         | YES       | audit_log (entity 'society')         | indefinite         | actor         | YES     | -     | none
+ Resident joined society        | PARTIAL   | organization_members.created_at only | row lives until    | user          | YES     | -     | ADD audit entry on join
+                                |           | (no audit entry)                     | removed (then gone)|               |         |       |
+ Society role changed / removed | NO        | no UI exists today                   | -                  | -             | -       | -     | ADD with the new role management
+ Member removal history         | NO        | row is deleted, nothing recorded     | lost               | -             | -       | -     | ADD audit (who/what/when)
+ User account created           | YES       | app_users.created_at                 | indefinite         | user          | -       | -     | none
+ User sign-in / last active     | NO        | only event_visits.user_id (event     | 90 days (F1)       | user          | via     | YES   | PROPOSED: app_users.last_seen_at
+                                |           | pages only)                          |                    |               | event   |       | (throttled); see D3
+ Profile changes                | YES       | audit_log (entity 'app_user')        | indefinite         | actor         | -       | -     | none
+ Event created                  | YES       | events.created_at; audit 'event'     | indefinite         | actor         | YES (a) | YES   | none
+ Event proposed / decided       | n/a       | (not built)                          | -                  | -             | -       | -     | built with audit entries
+ Event published / unpub / cancel| YES      | audit_log (registration route)       | indefinite         | actor         | YES (a) | YES   | none
+ Event closed                   | YES       | event_closing.closed_at; audit       | indefinite         | actor         | YES (a) | YES   | none
+ Event details changed          | YES       | audit_log 'event'                    | indefinite         | actor         | YES (a) | YES   | none
+ Event admin / member changed   | YES       | audit_log 'event_member'             | indefinite         | actor         | YES (a) | YES   | none
+ Page grants changed            | YES       | audit_log 'event_page_permissions'   | indefinite         | actor         | YES (a) | YES   | none
+ Module enabled/disabled/renamed| YES       | audit_log 'page_visibility'          | indefinite         | actor         | YES (a) | YES   | none
+ Schedule changed               | YES       | audit_log 'schedule_item'            | indefinite         | actor         | YES (a) | YES   | none
+ Contributions/sponsors/budget  | YES       | audit_log via ledger route           | indefinite         | actor         | YES (a) | YES   | none
+ Expenses (add/edit/settle)     | YES       | audit_log 'expense'                  | indefinite         | actor         | YES (a) | YES   | none
+ Registrations (+ payment verify)| YES      | audit_log 'registration(s)'          | indefinite         | actor         | YES (a) | YES   | none
+ Pass shared                    | YES       | audit_log 'share_pass'               | indefinite         | actor         | YES (a) | YES   | none
+ Registrations count/status     | YES       | event_registrations (created_at)     | indefinite         | user          | via ev  | YES   | none
+ Contribution amounts over time | YES       | contributions/sponsors (created_at)  | indefinite         | resident      | via ev  | YES   | none
+ Gallery uploads/reactions/cmts | ROWS ONLY | event_gallery_* (created_at, user)   | indefinite         | user          | via ev  | YES   | none (behavioural; deletions not logged - acceptable)
+ Reviews                        | ROWS ONLY | event_feedback (upsert overwrites)   | latest only        | user          | via ev  | YES   | acceptable
+ Page visits (visit level)      | YES       | event_visits                         | **90 DAYS THEN     | user or guest | via ev  | YES   | STOP THE DELETE (F1); rollups later
+                                |           |                                      | DELETED (F1)**     | (visitor_key) |         |       |
+ Page views + dwell time        | YES       | event_page_views                     | indefinite         | user or none  | via ev  | YES   | none (verify populated; dwell is null when a tab is closed)
+ Device / browser / city / ctry | YES       | event_visits (coarse, no IP)         | 90 DAYS (F1)       | -             | via ev  | YES   | same as visits
+ Visits outside an event        | NO        | Society home, login, profile,        | -                  | -             | -       | -     | PREPARE: event-less visit record (D4)
+                                |           | new-event are not tracked            |                    |               |         |       |
+ "Active now"                   | PARTIAL   | event_visits.last_seen (2-min window)| 90 days            | user/guest    | via ev  | YES   | event pages only - label accordingly
+ Time spent per visit           | PARTIAL   | last_seen - started                  | 90 days            | -             | via ev  | YES   | under-counts by up to one beat; no unload beat possible
+ Returning user                 | PARTIAL   | visitor_key (guests), user_id        | 90 days            | -             | via ev  | YES   | only event pages
+ Feature usage (wristband print,| NO        | no behavioural event stream          | -                  | -             | -       | -     | PREPARE: small named-event table (D5)
+ add-to-calendar, share, etc.)  |           |                                      |                    |               |         |       |
+ Errors / system health         | NO        | Vercel logs only                     | host-dependent     | -             | -       | -     | LATER (/platform/system)
+
+ (a) audit.ts resolves organization_id from the event at write time, so society scope
+     is present on event-scoped audit rows. A one-time backfill of older rows with a
+     null organization_id is a single UPDATE joining events (pre-check + verify SQL
+     will be provided).
+
+Questions the data can answer HONESTLY today:
+   societies, users, events, registrations, contributions (counts/amounts),
+   most-viewed pages (event_page_views), admin/business actions, event types.
+Questions it CANNOT answer accurately yet (documented, not faked):
+   - "Active users today/week/month": needs last_seen_at (D3) or event-less visits;
+     today only event-page visitors in the last 90 days.
+   - "Active now": event pages only, 2-minute window.
+   - "Time spent": approximate (no close-out beat); per-page dwell is missing when a
+     tab is closed.
+   - "Returning user": guests per browser (visitor_key), event pages only, 90 days.
+   - Feature popularity beyond page views: needs the behavioural stream (D5).
+   - Anything older than 90 days at the visit level (until F1 is fixed it is lost).
+
+
+=====================================================================
+9. MISSING DATA - WHAT WE SHOULD START CAPTURING NOW
+   (only what is justified; separated into AUDIT vs ANALYTICS)
+=====================================================================
+
+AUDIT / BUSINESS ACTIONS   (audit_log, indefinite)
+ [BUILD NOW]  Resident joined society                (new entry, society + user)
+ [BUILD NOW]  Society role changed                   (from/to, actor, target)
+ [BUILD NOW]  Society member removed                 (+ what access was revoked)
+ [BUILD NOW]  Society member added                   (by email, role)
+ [BUILD NOW]  Event proposed / resubmitted / changes requested / approved /
+              rejected / discarded / withdrawn       (entity 'event_proposal')
+ [BUILD NOW]  Event created from proposal            (links proposal -> event)
+ [EXISTS]     everything in the matrix marked YES above
+ NOT logged on purpose: ordinary reads, UI clicks, tab changes, search typing.
+
+ANALYTICS / BEHAVIOURAL  (separate from audit; never mixed into audit_log)
+ [BUILD NOW]  Stop deleting event_visits (F1) - code only, no migration.
+ [PREPARE NOW] Daily rollups design (platform_daily_rollups): counts per day per
+              society/event (visits, unique signed-in users, registrations, events
+              created, proposals) so trends survive any future raw-data retention
+              rule. Design now; table + job later, once retention is decided.
+ [PREPARE NOW] Event-less visit record (society home, login, profile, new-event), so
+              "active users" is not limited to event pages. Needs your approval (D4).
+ [PREPARE NOW] app_users.last_seen_at, updated at most once per hour on an
+              authenticated request - the one data point that can never be rebuilt
+              after the fact. Needs your approval (D3) and a migration.
+ [PREPARE NOW] Behavioural event stream (e.g. platform_events: occurred_at,
+              user_id nullable, organization_id, event_id, name, small props) for a
+              short allowlist of feature actions. Design only; no collection until D5.
+ NOT collected: IP addresses (never stored, raw or hashed), full user agents,
+              per-click paths, anything that is only "because we can".
+
+Indexes: add audit_log(organization_id, occurred_at desc) so society-scoped and
+   platform-wide audit queries stay fast as the log grows.   [BUILD NOW - migration]
+
+
+=====================================================================
+10. PRIVACY AND ACCESS BOUNDARIES
+=====================================================================
+
+ - Society roster and flats: Society Admins only; never returned to residents,
+   committee, event admins, other societies, or anonymous visitors. Decision D1
+   covers whether profile flat is shown at all.
+ - Phone numbers are NOT shown in the roster (the profile promise stays: phone
+   is private to its owner).
+ - Emails are shown only where an admin needs them (adding by email); not in lists
+   by default.
+ - Society Admin sees only their own society(ies). Never cross-society data.
+ - Event Admin who is not a Society Admin: no society pages, roster, approvals,
+   or society-wide private data (server-enforced).
+ - Pending proposals: visible only to the proposer and Society Admins.
+ - Platform analytics (future): owner-only, own authorization model; society
+   admins get nothing automatically; no raw IPs in any normal interface; data
+   minimization applied to every new field.
+ - audit_log and traffic tables keep RLS on with zero policies (browser can never
+   read them); access only through the service role in the API.
+ - Persisted client cache: none of the new admin/roster/proposal queries may be
+   added to persistedRoots.
+
+
+=====================================================================
+11. MIGRATIONS (YOU RUN ALL OF THEM MANUALLY)
+=====================================================================
+
+Rule for every migration: I prepare the SQL; I give you (1) pre-check SQL, (2) the
+migration file, (3) verification SQL, and a plain explanation; then I WAIT for you to
+run it and give me the result. Code that depends on a migration is only written after
+you confirm it. Code written before a migration degrades gracefully (reads fall
+back; writes answer "needs migration 04x") and never claims the migration is applied.
+
+ Needed:
+   042_event_proposals.sql           [BUILD NOW, Phase D, after you approve section 5]
+       - create event_proposals (+ indexes, RLS on, zero policies)
+       - create approve_event_proposal() (atomic; locks the proposal; creates
+         event draft + proposer as event admin + modules + registration settings;
+         links event_id; marks approved)
+       - pre-check: confirm create_event_draft / event_page_visibility columns
+       - verify: table, function, a dry-run call inside a rolled-back transaction
+   043_society_member_safety.sql     [BUILD NOW but LATER in order - reinforces API]
+       - trigger on organization_members: block any UPDATE/DELETE that leaves a
+         society with no admin; lock the society row first; allow whole-society
+         delete
+       - optional SQL function to remove a member atomically (credit snapshot +
+         access revoke + membership delete)
+       - pre-check (MUST run first): list every society with 0 admins, and every
+         society's admins (finding F4)
+       - verify: attempt demoting the last admin inside a rolled-back transaction
+   044_audit_scope_and_readiness.sql [BUILD NOW - small]
+       - index audit_log(organization_id, occurred_at desc)
+       - one-time backfill of audit_log.organization_id where null (join events)
+       - pre-check: count rows with null organization_id and a non-null event_id
+   045_platform_readiness.sql        [PREPARE - only if you approve D3/D4/D5]
+       - app_users.last_seen_at (D3), event-less visit table (D4), platform_events
+         (D5). Nothing here is created without your explicit go.
+
+ No migration is needed for: stopping the 90-day delete (F1), society management
+ pages, member role management, the Events & Access view, new audit entries, or
+ moving the template catalogue to shared/.
+ The existing migrations are all applied through 041 (your confirmation, 2026-10-09).
+
+
+=====================================================================
+12. IMPLEMENTATION PHASES
+=====================================================================
+
+ PHASE A - Audit (DONE in this document)                          [done]
+   Society roles, event roles, module management, proposal/event creation, audit_log,
+   traffic data collection. Results: sections 0, 3, 5, 6, 8.
+
+ PHASE B - Society Management                                    [BUILD NOW]
+   B1  Consolidate one exported requireSocietyAdmin() in authority.ts
+   B2  Stop the 90-day event_visits delete (F1) - code only
+   B3  Society admin page shell + route /society/<slug>/admin, "Manage society" link
+   B4  Overview (identity + lightweight counts; move shared event-status helper)
+   B5  Members: roster, filters, search, flat/unit per D1, role changes from roster,
+       optional add-by-email
+   B6  Last-admin API protection + audit entries (join, role change, removal)
+   B7  Member removal per section 3 (credit snapshot -> revoke access -> membership)
+   B8  Events & Access tab linking to existing event Settings
+   B9  Remove the Traffic CARD from Settings (collection and heartbeat untouched);
+       settings society card becomes a link
+   No analytics UI. No platform UI. No migration.
+
+ PHASE C - Proposal data model                                    [STOP HERE]
+   Show you section 5 (done above). Wait for your decision. No migration drafted
+   until then.
+
+ PHASE D - Proposals and approvals (after your model decision)   [BUILD NOW]
+   D1  Move template catalogue to shared/ (server can default modules)
+   D2  Prepare 042 (+ pre-check, verify SQL) for you to run; wait for your result
+   D3  Proposal form (members only), proposer status page, edit and resubmit
+   D4  Approvals tab: queue, review, approve / request changes / reject / discard
+   D5  Approved proposal -> normal Draft event via the SQL function; proposer
+       becomes event admin; continue in existing Settings/Modules
+   D6  Society home: private "Your proposals" shelf; drafts stay hidden from residents
+   D7  Audit entries for the whole lifecycle
+
+ PHASE E - Analytics / data readiness                  [PREPARE NOW / BUILD LATER]
+   E1  Prepare 044 (index + audit backfill) and, if approved, 045
+   E2  Document the platform data dictionary and the exact definitions
+       (active user, session, visit, view) so metrics are never faked
+   E3  Add ONLY the justified tracking from section 9. No platform UI.
+
+ PHASE F - Verification                                           [BUILD NOW]
+   Test matrix, each checked in the browser with mocked data and by unit tests of the
+   pure rules, and by the API type-check:
+     Society Admin; Event Admin only; Committee; Resident; user from another society;
+     anonymous; last Society Admin (cannot be removed/demoted); proposal owner;
+     rejected proposal; approved proposal (event becomes Draft, not published);
+     changes-requested and resubmit; member removal preserves history and credits.
+   CLAUDE.md updated for every changed rule. Everything committed locally on a
+   branch; nothing pushed to master without your explicit instruction.
+
+
+=====================================================================
+13. DECISIONS I NEED FROM YOU
+=====================================================================
+
+ D0  Approve section 5 (Option B, event_proposals table)?   Recommended: YES.
+     Answer: ____________________________________________
+
+ D1  Flat/unit in the Society Admin roster (finding F5).
+     Recommended: show app_users.flat to Society Admins ONLY, and change the profile
+     page wording to say "Your society's admins can see your flat" (phone stays
+     private and is never shown). The alternative is to omit flat from the roster.
+     Answer: ____________________________________________
+
+ D2  Society "Committee" members: may they still create events directly (as today,
+     without approval)?  Recommended: YES - they are already trusted organizers;
+     only residents go through proposals.
+     Answer: ____________________________________________
+
+ D3  Add app_users.last_seen_at (throttled to once an hour)?
+     Recommended: YES - it is the one metric that cannot be rebuilt later.
+     Answer: ____________________________________________
+
+ D4  Track visits outside events (society home, login, profile, new-event) with a
+     minimal event-less record?   Recommended: YES, but prepare only; build with D3.
+     Answer: ____________________________________________
+
+ D5  Start a small behavioural event stream now, or only design it?
+     Recommended: design only until the platform pages are scoped.
+     Answer: ____________________________________________
+
+ D6  Existing event admins who are society admins because of the 023 backfill
+     (finding F4): review the list I produce and tell me who should be demoted.
+     Answer: ____________________________________________
+
+ NEXT STEP: your answers to D0-D6. On approval I start Phase B (no migration), then
+ Phase D after the migration is applied by you.
