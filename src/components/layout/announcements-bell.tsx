@@ -9,6 +9,7 @@ import { activeAnnouncements, leadTimeLabel, resolveAnnouncements } from "@/lib/
 import { auctionRuntimeStatus, publishedAuctions, useAuctions } from "@/lib/auctions";
 import type { Announcement } from "@/data/announcements";
 import type { AppEvent } from "@/lib/event-data";
+import { menuGlass } from "@/lib/glass";
 
 function formatAuctionWindow(value: string) {
   const parsed = new Date(value);
@@ -60,7 +61,7 @@ export function AnnouncementsBell({ event, announcements }: { event?: AppEvent; 
         <DropdownMenu.Content
           align="end"
           sideOffset={8}
-          className="z-50 w-80 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+          className={`z-50 w-80 rounded-xl border p-2 text-popover-foreground ${menuGlass}`}
         >
           <p className="px-2 py-2 text-sm font-semibold">News &amp; Announcements</p>
           <DropdownMenu.Separator className="my-1 h-px bg-border" />

@@ -6,6 +6,7 @@ import { NavList } from "@/components/layout/nav-list";
 import { Button } from "@/components/ui/button";
 import { signOut, type AuthSession } from "@/lib/auth";
 import type { navItems } from "./nav-items";
+import { overlayGlass } from "@/lib/glass";
 
 /**
  * The mobile navigation, as a right-hand drawer behind a round button at the
@@ -78,9 +79,9 @@ export function NavDrawer({
       </DialogPrimitive.Trigger>
 
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className={`fixed inset-0 z-50 ${overlayGlass}`} />
         <DialogPrimitive.Content
-          className="fixed inset-y-0 right-0 z-50 flex w-[min(20rem,85vw)] flex-col border-l bg-card shadow-xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
+          className="fixed inset-y-0 right-0 z-50 flex w-[min(20rem,85vw)] flex-col border-l glass-panel duration-300 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
         >
           <div className="flex items-center justify-between border-b px-4 py-3">
             <DialogPrimitive.Title className="text-sm font-semibold">Menu</DialogPrimitive.Title>

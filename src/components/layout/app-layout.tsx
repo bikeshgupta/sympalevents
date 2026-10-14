@@ -20,6 +20,7 @@ import { useEventData } from "@/lib/event-data";
 import { menuHidesPage } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
 import { navItems } from "./nav-items";
+import { menuGlass } from "@/lib/glass";
 
 function pageKeyFromHref(href: string) {
   return href.split("/").filter(Boolean)[0] || "dashboard";
@@ -258,7 +259,7 @@ export function AppLayout() {
                 <DropdownMenu.Content
                   align="end"
                   sideOffset={8}
-                  className="z-50 w-64 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+                  className={`z-50 w-64 rounded-xl border p-2 text-popover-foreground ${menuGlass}`}
                 >
                   <div className="px-2 py-2">
                     <p className="truncate text-sm font-medium">{userName}</p>

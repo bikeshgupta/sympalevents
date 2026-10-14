@@ -87,6 +87,7 @@
     animation-delay: 350ms;
   }
 
+
   /*
    * Anyone who has asked their OS to reduce motion gets the finished state
    * instantly instead of the animation. Animations use `both` fill mode, so
@@ -291,6 +292,112 @@
     100% {
       transform: rotateX(0deg);
       opacity: 1;
+    }
+  }
+}
+
+@layer components {
+  /*
+   * Liquid glass.
+   *
+   * `.glass` is for tiles that sit on the page (Event Settings' section rows): a translucent
+   * white that lets the page's soft ambient colour through, blurred and saturated behind it, with a bright
+   * inner top edge and a light specular band so it reads as a sheet of glass rather than a grey box.
+   * `.glass-panel` is for things that open over the page (dialogs, sheets, the drawer, menus): the same
+   * material, more opaque, because forms and long text sit on it and must stay readable (4.5:1) over
+   * whatever is behind it.
+   *
+   * Text on either is the normal foreground. Nothing inside a glass element may be `position: fixed`:
+   * a backdrop filter makes its element the containing block for fixed descendants (see the nav drawer note).
+   */
+  .glass,
+  .glass-panel {
+    position: relative;
+    border: 1px solid hsl(0 0% 100% / 0.7);
+    -webkit-backdrop-filter: blur(18px) saturate(1.7);
+    backdrop-filter: blur(18px) saturate(1.7);
+  }
+
+  .glass {
+    background: linear-gradient(135deg, hsl(0 0% 100% / 0.8) 0%, hsl(0 0% 100% / 0.48) 100%);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.95),
+      inset 0 -1px 0 hsl(var(--foreground) / 0.05),
+      0 10px 26px -14px hsl(var(--foreground) / 0.3),
+      0 1px 2px hsl(var(--foreground) / 0.06);
+  }
+
+  .glass-panel {
+    background: linear-gradient(160deg, hsl(0 0% 100% / 0.93) 0%, hsl(0 0% 100% / 0.84) 100%);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.95),
+      0 24px 60px -20px hsl(var(--foreground) / 0.38),
+      0 2px 6px hsl(var(--foreground) / 0.08);
+  }
+
+  /* The specular band: a soft light along the top edge, under the content. */
+  .glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.5) 0%, hsl(0 0% 100% / 0) 46%);
+  }
+
+  .glass > * {
+    position: relative;
+  }
+
+  /* A glass tile that is the current choice: tinted by the event's own colour. */
+  .glass-active {
+    background-image: linear-gradient(135deg, hsl(var(--primary) / 0.16) 0%, hsl(0 0% 100% / 0.55) 100%);
+    border-color: hsl(var(--primary) / 0.35);
+  }
+
+  /* Press feedback on a glass tile: it settles into the page, then springs back. */
+  .glass-press {
+    transition:
+      transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.18s ease,
+      filter 0.18s ease;
+  }
+
+  .glass-press:active {
+    transform: scale(0.985);
+  }
+
+  @media (hover: hover) {
+    .glass-press:hover {
+      filter: brightness(1.03) saturate(1.06);
+      box-shadow:
+        inset 0 1px 0 hsl(0 0% 100% / 1),
+        inset 0 -1px 0 hsl(var(--foreground) / 0.05),
+        0 14px 30px -14px hsl(var(--foreground) / 0.34),
+        0 1px 2px hsl(var(--foreground) / 0.06);
+    }
+  }
+
+  /* Browsers without backdrop-filter get a solid surface rather than a see-through one. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background: hsl(0 0% 100% / 0.92);
+    }
+    .glass-panel {
+      background: hsl(0 0% 100%);
+    }
+  }
+
+  @media print {
+    .glass,
+    .glass-panel {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: #fff;
+      box-shadow: none;
+    }
+    .glass::before {
+      display: none;
     }
   }
 }

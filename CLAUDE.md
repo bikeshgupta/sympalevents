@@ -2262,6 +2262,29 @@ grouping**: no setting was added, no permission changed, and which pages an even
   `tests/settings-sections.test.mjs`. The Team code (requests, roster, Member Access) moved to `team-panel.tsx` /
   `team-data.ts` unchanged; Modules to `modules-card.tsx`.
 
+## Liquid glass and openable panels
+
+Anything that opens over the page, and the Event Settings section rows, share one material and one motion.
+
+- **Material** (`.glass`, `.glass-panel`, `.glass-active`, `.glass-press` in globals.css, `@layer components` so
+  Tailwind variants like `lg:glass-active` work): translucent white, `backdrop-filter` blur + saturate, bright inner top
+  edge, a light specular band (`::before`, under the content). `.glass` is for tiles on the page (Settings' rows);
+  `.glass-panel` is for things that open over it and is more opaque, because forms and long text sit on it and must stay
+  readable. It falls back to solid white without `backdrop-filter` and in print. **Nothing inside a glass element may be
+  `position: fixed`** (a backdrop filter makes its element the containing block for fixed descendants).
+- **Motion and classes** live in [src/lib/glass.ts](src/lib/glass.ts): `menuGlass` (dropdown menus and select lists:
+  fade + settle), `overlayGlass` (dimmed, lightly blurred backdrop) and `dialogGlass` (centred dialogs and the
+  entry sheet from `sm`: slide in from the left, leave to the left). The entry sheet rises from the bottom on a phone and
+  the nav drawer slides from the right. Radix keeps the closed state mounted until the exit animation ends. **Do not "fix"
+  `slide-in-from-right-[calc(-50%_-_1.5rem)]` to a `left` variant**: tailwindcss-animate negates the value for `left`,
+  `-calc(...)` is invalid CSS, and the whole transform silently drops (the dialog then starts at its top-left corner).
+  `prefers-reduced-motion` collapses all of it.
+- **Event Settings on a phone**: the open section is a `fixed` sheet under the app header that slides in from the left
+  and back out to the left; the index stays mounted underneath and keeps its scroll position. It is `invisible` +
+  `aria-hidden` while closed (visibility is transitioned with the transform so it stays visible for the whole slide out),
+  all panels stay mounted for their drafts, and from `lg` it is simply part of the page. The soft colour washes behind the
+  page exist so the glass has something to refract; keep them.
+
 ## Event details, hours, and counts-only collections
 
 **Nothing could edit an event after it was created** until `?resource=details`

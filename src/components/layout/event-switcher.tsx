@@ -11,6 +11,7 @@ import { useEventContext, type EventOption } from "@/lib/event-context";
 import { eventBasePath } from "@/lib/event-slug";
 import { useSocietyActions } from "@/lib/societies";
 import { cn } from "@/lib/utils";
+import { menuGlass } from "@/lib/glass";
 
 /**
  * The header's event picker, grouped by society.
@@ -156,7 +157,7 @@ export function EventSwitcher({ eventName, eventSubtitle }: { eventName: string;
           <DropdownMenu.Content
             align="start"
             sideOffset={8}
-            className="z-50 max-h-[70vh] w-80 overflow-y-auto rounded-lg border bg-popover p-1.5 shadow-lg"
+            className={`z-50 max-h-[70vh] w-80 overflow-y-auto rounded-xl border p-1.5 ${menuGlass}`}
           >
             {groups.length === 0 && ungrouped.length === 0 ? (
               <p className="px-3 py-4 text-sm text-muted-foreground">

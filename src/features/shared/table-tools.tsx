@@ -3,6 +3,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, ListFilter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { menuGlass } from "@/lib/glass";
 
 export type SortDirection = "asc" | "desc";
 export type ColumnFilters = Record<string, string[]>;
@@ -243,7 +244,7 @@ export function ColumnFilter<T>({
         <DropdownMenu.Content
           align="start"
           sideOffset={6}
-          className="z-50 w-56 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+          className={`z-50 w-56 rounded-xl border p-2 text-popover-foreground ${menuGlass}`}
         >
           <Input
             value={query}

@@ -2,6 +2,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { dialogGlass, overlayGlass } from "@/lib/glass";
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -13,11 +14,12 @@ export const DialogContent = React.forwardRef<
   <DialogPrimitive.Portal>
     {/* print:hidden so a printed notice (which renders inside a dialog) does
         not carry the dimmed backdrop or an extra blank page with it. */}
-    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/35 print:hidden" />
+    <DialogPrimitive.Overlay className={cn("fixed inset-0 z-50 print:hidden", overlayGlass)} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid max-h-[90vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-card p-5 shadow-lg",
+        "fixed left-1/2 top-1/2 z-50 grid max-h-[90vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-2xl border p-5",
+        dialogGlass,
         className,
       )}
       {...props}

@@ -2,6 +2,7 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { menuGlass } from "@/lib/glass";
 
 export const Select = SelectPrimitive.Root;
 export const SelectValue = SelectPrimitive.Value;
@@ -28,7 +29,7 @@ export const SelectContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Portal>
-    <SelectPrimitive.Content ref={ref} className={cn("z-50 overflow-hidden rounded-md border bg-card shadow-md", className)} {...props}>
+    <SelectPrimitive.Content ref={ref} className={cn("z-50 overflow-hidden rounded-xl border", menuGlass, className)} {...props}>
       <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>

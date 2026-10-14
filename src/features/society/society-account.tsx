@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { signOut, useSession } from "@/lib/auth";
 import type { SocietyOption } from "@/lib/event-context";
+import { menuGlass } from "@/lib/glass";
 
 /**
  * Who is looking at this society.
@@ -100,7 +101,7 @@ export function SocietyAccount({
         <DropdownMenu.Content
           align="end"
           sideOffset={6}
-          className="z-50 w-64 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
+          className={`z-50 w-64 rounded-xl border p-2 text-popover-foreground ${menuGlass}`}
         >
           <div className="px-2 py-2">
             <p className="truncate text-sm font-medium">{name}</p>

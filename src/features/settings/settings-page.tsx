@@ -61,6 +61,7 @@ import { usePageAccess, usePageVisibility, visibilityLabels } from "@/lib/page-a
 import { heroFocus } from "@/lib/hero";
 import { themeByKey } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { menuGlass } from "@/lib/glass";
 
 /**
  * Event Settings: one section at a time.
@@ -117,7 +118,10 @@ function SettingsShell() {
   const raw = params.get("section");
   const active: SectionKey | null = isPanelKey(raw) ? raw : null;
   // On a wide screen there is room for the index and a section side by side, so something is always open there.
-  const shown: SectionKey = active ?? defaultSection;
+  // The panel that slides back out keeps its content until it has gone, so it is the last one that was open.
+  const lastActive = useRef<SectionKey | null>(null);
+  if (active) lastActive.current = active;
+  const shown: SectionKey = active ?? lastActive.current ?? defaultSection;
   const dirtySections = dirtySectionKeys(dirtyIds);
 
   const event = data.event;
@@ -132,14 +136,20 @@ function SettingsShell() {
   // Opening a section starts at its heading, and moves focus there so a keyboard or screen-reader user arrives
   // where the eye does. Not on first render: a plain visit to Settings has not asked for anything yet.
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       return;
     }
-    window.scrollTo({ top: 0 });
-    if (active) headingRef.current?.focus({ preventScroll: true });
+    // On a phone the section is a sheet with its own scroll, and the index underneath keeps its place; from lg the
+    // section is part of the page.
+    if (active) {
+      sheetRef.current?.scrollTo({ top: 0 });
+      if (window.matchMedia("(min-width: 1024px)").matches) window.scrollTo({ top: 0 });
+      headingRef.current?.focus({ preventScroll: true });
+    }
   }, [active]);
 
   function openSection(key: SectionKey) {
@@ -197,35 +207,22 @@ function SettingsShell() {
     .filter(Boolean)
     .join(" · ");
 
-  const mobileIndex = active === null;
-
   return (
-    <div className="mx-auto max-w-5xl">
-      {/* Compact header: where back goes depends on whether a section is open. */}
+    <div className="relative isolate mx-auto max-w-5xl">
+      {/* Soft ambient colour behind the page. The glass rows blur and saturate whatever is behind them, and on a
+          flat off-white there is nothing to refract; these two washes, in the event's own colour, are it. */}
+      <div aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 -z-10 h-[44rem] overflow-x-clip [mask-image:linear-gradient(to_bottom,black_55%,transparent)]">
+        <div className="absolute -left-24 top-28 h-72 w-72 rounded-full bg-primary/25 blur-3xl" />
+        <div className="absolute -right-16 top-72 h-80 w-80 rounded-full bg-accent blur-3xl" />
+        <div className="absolute left-1/3 top-[26rem] h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+      </div>
+      {/* Compact header. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {selectedEventId ? (
-            active ? (
-              <Link
-                to="?"
-                onClick={(clicked) => {
-                  clicked.preventDefault();
-                  closeSection();
-                }}
-                className="-ml-1 inline-flex min-h-10 items-center gap-0.5 rounded-md pr-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                All settings
-              </Link>
-            ) : null
-          ) : null}
-          {selectedEventId ? (
             <Link
               to={path("/dashboard")}
-              className={cn(
-                "-ml-1 min-h-10 items-center gap-0.5 rounded-md pr-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                active ? "hidden lg:inline-flex" : "inline-flex",
-              )}
+              className="-ml-1 inline-flex min-h-10 items-center gap-0.5 rounded-md pr-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
               Back to event
@@ -264,7 +261,7 @@ function SettingsShell() {
       {selectedEventId && access.canEdit ? (
         <>
           {/* Compact identity: the event as a resident would meet it, from the event's own data. */}
-          <div className={cn("mt-5 items-center gap-3.5 border-y py-4", mobileIndex ? "flex" : "hidden lg:flex")}>
+          <div className="mt-5 flex items-center gap-3.5 border-y py-4">
             <EventArtwork
               eventType={event.eventType ?? "festival"}
               imageUrl={event.heroImageUrl}
@@ -287,7 +284,6 @@ function SettingsShell() {
             <ReadinessBlock
               headline={headline}
               gaps={gaps}
-              className={mobileIndex ? "block" : "hidden lg:block"}
               dashboardHref={path("/dashboard")}
               pathFor={(page) => path(`/${page}`)}
               onSection={openSection}
@@ -296,8 +292,8 @@ function SettingsShell() {
 
           <div className="mt-2 lg:mt-6 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12">
             {/* The index on a phone; the side navigation from lg. */}
-            <nav aria-label="Settings sections" className={cn(active ? "hidden lg:block" : "block")}>
-              <ul className="divide-y border-b lg:border-b-0 lg:divide-y-0">
+            <nav aria-label="Settings sections">
+              <ul className="space-y-2.5">
                 {visibleSections.map((section) => (
                   <SectionRow
                     key={section.key}
@@ -312,19 +308,42 @@ function SettingsShell() {
             </nav>
 
             {/* Every panel stays mounted so a draft survives a visit elsewhere; only the open one is shown. */}
-            <div className="min-w-0">
+            <div
+              ref={sheetRef}
+              // aria-hidden + invisible while closed, so the panels that stay mounted for their drafts cannot be
+              // tabbed into or read out. Visibility is transitioned with the transform, so it stays visible for the
+              // whole slide out and only then is taken away.
+              aria-hidden={active === null ? true : undefined}
+              className={cn(
+                "fixed inset-x-0 bottom-0 top-16 z-30 min-w-0 overflow-y-auto shadow-[12px_0_32px_-16px_hsl(var(--foreground)/0.35)] lg:shadow-none overscroll-contain bg-background px-4 pb-28 pt-3",
+                "transition-[transform,visibility] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                active ? "visible translate-x-0" : "invisible -translate-x-full",
+                // From lg the section sits beside the side navigation and is simply part of the page.
+                "lg:visible lg:static lg:z-auto lg:translate-x-0 lg:overflow-visible lg:bg-transparent lg:p-0 lg:transition-none",
+              )}
+            >
+              <Link
+                to="?"
+                onClick={(clicked) => {
+                  clicked.preventDefault();
+                  closeSection();
+                }}
+                className="-ml-1 mb-2 inline-flex min-h-10 items-center gap-0.5 rounded-md pr-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                All settings
+              </Link>
               <FlatCards>
                 {sectionDefs
                   .filter((section) => section.kind === "panel")
                   .map((section) => {
                     const open = shown === section.key;
-                    // On a phone nothing is open until a section is chosen; from lg the default section fills the page.
-                    const visibility = active === section.key ? "block" : open && active === null ? "hidden lg:block" : "hidden";
+                    const visibility = open ? "block" : "hidden";
                     return (
                       <section
                         key={section.key}
                         aria-labelledby={`settings-${section.key}`}
-                        className={cn("pt-4 lg:pt-0", visibility)}
+                        className={visibility}
                       >
                         <h2
                           id={`settings-${section.key}`}
@@ -407,19 +426,23 @@ function SectionRow({
   const Icon = sectionIcons[section.key];
   const isLink = section.kind === "link";
   return (
-    <li>
+    // A sheet of liquid glass (globals.css .glass), tinted by the event's colour when it is the open section on a
+    // wide screen. The tile is the glass; the link inside is the hit area.
+    <li className={cn("glass glass-press rounded-2xl", selected && "lg:glass-active")}>
       <Link
         to={href}
         aria-current={selected ? "true" : undefined}
-        className={cn(
-          "group relative flex min-h-[3.75rem] items-center gap-3.5 py-3 transition-colors",
-          "[@media(hover:hover)]:hover:bg-muted/40",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-          // The side navigation marks its open section with a bar and a heavier title, not a filled box.
-          selected && "lg:before:absolute lg:before:-left-3 lg:before:top-2 lg:before:bottom-2 lg:before:w-0.5 lg:before:rounded-full lg:before:bg-primary",
-        )}
+        className="flex min-h-[3.75rem] items-center gap-3.5 rounded-2xl px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        <Icon className={cn("h-5 w-5 shrink-0 text-muted-foreground", selected && "lg:text-primary")} aria-hidden="true" />
+        <span
+          aria-hidden="true"
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/60 text-muted-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.9)]",
+            selected && "lg:text-primary",
+          )}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
         <span className="min-w-0 flex-1">
           <span className={cn("block font-medium leading-snug", selected && "lg:font-semibold")}>
             {section.title}
@@ -521,7 +544,7 @@ function OverflowMenu() {
         </Button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={6} className="z-50 w-56 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-md">
+        <DropdownMenu.Content align="end" sideOffset={6} className={`z-50 w-56 rounded-xl border p-1.5 text-popover-foreground ${menuGlass}`}>
           <DropdownMenu.Item asChild>
             <Link to={path("/dashboard")} className={item}>
               Open the event page
