@@ -39,9 +39,11 @@ export function NavList({
   const entries: NavEntry<Item>[] = grouped ? groupNavItems(items) : items.map((item) => ({ type: "item", item }));
 
   const row = cn(
-    "flex w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
+    // Hover only where there is a hover: on a phone a tapped row would otherwise stay tinted like the current page.
+    "flex w-full items-center gap-3 px-3 font-medium text-muted-foreground active:bg-muted [@media(hover:hover)]:hover:bg-muted [@media(hover:hover)]:hover:text-foreground",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    variant === "drawer" ? "min-h-11 py-2" : "py-2",
+    // The drawer shares Settings' row: 15px text, 48px tall. The sidebar keeps its denser desktop size.
+    variant === "drawer" ? "min-h-12 rounded-xl py-2 text-[15px]" : "rounded-md py-2 text-sm",
   );
 
   const link = (item: Item) => (
@@ -51,7 +53,7 @@ export function NavList({
       onClick={onNavigate}
       className={({ isActive }) => cn(row, isActive && "bg-accent text-primary")}
     >
-      <item.icon className={cn("h-4 w-4", variant === "drawer" && "shrink-0")} aria-hidden="true" />
+      <item.icon className={cn(variant === "drawer" ? "h-[18px] w-[18px]" : "h-4 w-4", "shrink-0")} aria-hidden="true" />
       {item.label}
     </NavLink>
   );
@@ -77,7 +79,7 @@ export function NavList({
                     kind of thing, and a bare label looks like a heading. */}
                 {(() => {
                   const Icon = entry.items[0].icon;
-                  return <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />;
+                  return <Icon className={cn(variant === "drawer" ? "h-[18px] w-[18px]" : "h-4 w-4", "shrink-0")} aria-hidden="true" />;
                 })()}
                 {entry.label}
               </span>

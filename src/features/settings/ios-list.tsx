@@ -62,10 +62,10 @@ export function IconTile({ icon: Icon, tone, size = "md" }: { icon: LucideIcon; 
   return (
     <span
       aria-hidden="true"
-      className={cn("flex shrink-0 items-center justify-center text-white shadow-[inset_0_0.5px_0_rgba(255,255,255,0.45),0_1px_2px_rgba(0,0,0,0.12)]", size === "sm" ? "h-7 w-7 rounded-lg" : "h-8 w-8 rounded-[9px]")}
+      className={cn("flex shrink-0 items-center justify-center text-white shadow-[inset_0_0.5px_0_rgba(255,255,255,0.45),0_1px_2px_rgba(0,0,0,0.12)]", size === "sm" ? "h-7 w-7 rounded-lg" : "h-7 w-7 rounded-lg")}
       style={{ background: `linear-gradient(180deg, ${top}, ${bottom})` }}
     >
-      <Icon className={size === "sm" ? "h-4 w-4" : "h-[18px] w-[18px]"} />
+      <Icon className="h-4 w-4" />
     </span>
   );
 }
@@ -128,7 +128,7 @@ export function ListRow({
         <span
           className={cn(
             "block truncate",
-            big ? "font-display text-lg font-semibold leading-tight" : "text-[16.5px]",
+            big ? "font-display text-lg font-semibold leading-tight" : "text-[15px]",
             destructive && "text-destructive",
             selected && "lg:font-semibold",
           )}
@@ -145,7 +145,7 @@ export function ListRow({
         {sub2 ? <span className="mt-0.5 block text-[13px] text-muted-foreground">{sub2}</span> : null}
       </span>
       {value ? (
-        <span className={cn("max-w-[45%] shrink-0 truncate text-base text-muted-foreground", sideNav && "lg:hidden")}>
+        <span className={cn("max-w-[42%] shrink-0 truncate text-sm text-muted-foreground", sideNav && "lg:hidden")}>
           {value}
         </span>
       ) : null}
@@ -160,13 +160,13 @@ export function ListRow({
   );
   const cls = cn(
     "flex w-full items-center gap-3 px-4 text-left",
-    big ? "min-h-[5rem] py-3" : "min-h-[3.5rem] py-2",
+    big ? "min-h-[4.5rem] py-3" : "min-h-12 py-2",
     interactive &&
       "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-black/[0.05] [@media(hover:hover)]:hover:bg-black/[0.03]",
     disabled && "pointer-events-none opacity-50",
     selected && "lg:bg-primary/10",
   );
-  const inset: CSSProperties = { ["--ios-inset" as string]: big ? "5rem" : lead ? "4rem" : icon ? "3.75rem" : "1rem" } as CSSProperties;
+  const inset: CSSProperties = { ["--ios-inset" as string]: big ? "5rem" : lead ? "4rem" : icon ? "3.5rem" : "1rem" } as CSSProperties;
   return (
     <li style={inset}>
       {href ? (
@@ -201,8 +201,8 @@ export function FieldRow({
 }) {
   return (
     <li style={{ ["--ios-inset" as string]: "1rem" } as CSSProperties}>
-      <div className="flex min-h-[3.25rem] items-center gap-3 px-4">
-        <label htmlFor={id} className={cn("shrink-0 text-base", labelClass)}>
+      <div className="flex min-h-12 items-center gap-3 px-4">
+        <label htmlFor={id} className={cn("shrink-0 text-[15px]", labelClass)}>
           {label}
           {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
         </label>

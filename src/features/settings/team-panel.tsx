@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, UserPlus } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
@@ -226,6 +226,14 @@ export function TeamPanel() {
     (selectedRole !== storedRole || Object.keys(storedAccess).some((key) => (pageAccess[key] ?? "none") !== storedAccess[key]));
   useSettingsDirty("member-access", accessDirty);
 
+  // Whether the previous render was a person's page: if so, the list that replaces it is a step back.
+  const inPerson = viewingNew || Boolean(viewingId);
+  const wasInPerson = useRef(false);
+  const backFromPerson = wasInPerson.current && !inPerson;
+  useEffect(() => {
+    wasInPerson.current = inPerson;
+  }, [inPerson]);
+
   const teamHref = "?section=team";
   const backToTeam = (
     <Link
@@ -245,7 +253,7 @@ export function TeamPanel() {
         !needle || displayName(member.app_users).toLowerCase().includes(needle) || member.app_users.email.toLowerCase().includes(needle),
     );
     return (
-      <div className="animate-in fade-in-0 slide-in-from-left-4 duration-300">
+      <div className="animate-in fade-in-0 slide-in-from-right-6 duration-300">
         {backToTeam}
         <ListGroup>
           <BlockRow>
@@ -295,7 +303,7 @@ export function TeamPanel() {
       ...(isSocietyAdmin || selectedRole === "admin" ? [{ value: "admin" as EventRole, label: roleLabels.admin, note: "Runs the event, including who has access." }] : []),
     ];
     return (
-      <form onSubmit={grantAccess} className="animate-in fade-in-0 slide-in-from-left-4 duration-300">
+      <form onSubmit={grantAccess} className="animate-in fade-in-0 slide-in-from-right-6 duration-300">
         {backToTeam}
         {user ? (
           <div className="mb-2 mt-1 flex items-center gap-4 px-1">
@@ -388,8 +396,10 @@ export function TeamPanel() {
   }
 
   // ---- The list ----------------------------------------------------------------------------------------------
+  // Coming back from a person's page brings the list in from the left; opening Team itself does not animate here
+  // (the section's own sheet is already sliding in).
   return (
-    <div>
+    <div className={backFromPerson ? "animate-in fade-in-0 slide-in-from-left-6 duration-300" : undefined}>
       <ListGroup header="Committee requests" footer={requestMessage ?? undefined}>
         {accessRequests.length ? (
           accessRequests.map((item) => (

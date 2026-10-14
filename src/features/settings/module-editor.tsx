@@ -294,7 +294,7 @@ function ModuleRowIos({
 
   return (
     <li>
-      <div className="flex min-h-[3.5rem] items-center gap-3 px-4 py-2">
+      <div className="flex min-h-12 items-center gap-3 px-4 py-2">
         <button
           type="button"
           aria-expanded={expanded}
@@ -303,7 +303,7 @@ function ModuleRowIos({
           className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="min-w-0 flex-1">
-            <span className={cn("block truncate text-[16.5px]", off && "text-muted-foreground")}>
+            <span className={cn("block truncate text-[15px]", off && "text-muted-foreground")}>
               {shownName}
               {alwaysOn ? <span className="ml-2 text-xs font-normal text-muted-foreground">Always on</span> : null}
             </span>

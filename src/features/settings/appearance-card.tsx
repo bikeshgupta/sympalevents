@@ -177,15 +177,15 @@ export function AppearanceCard() {
             </span>
           )}
         </BlockRow>
-        <li style={{ ["--ios-inset" as string]: "3.75rem" } as React.CSSProperties}>
+        <li style={{ ["--ios-inset" as string]: "3.5rem" } as React.CSSProperties}>
           <label
             className={cn(
-              "flex min-h-[3.5rem] w-full cursor-pointer items-center gap-3 px-4 py-2 transition-colors focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring active:bg-black/[0.05]",
+              "flex min-h-12 w-full cursor-pointer items-center gap-3 px-4 py-2 transition-colors focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring active:bg-black/[0.05]",
               busy && "pointer-events-none opacity-50",
             )}
           >
             <IconTile icon={ImageUp} tone="blue" />
-            <span className="flex-1 text-[16.5px]">{heroImageUrl ? "Replace photograph" : "Upload a photograph"}</span>
+            <span className="flex-1 text-[15px]">{heroImageUrl ? "Replace photograph" : "Upload a photograph"}</span>
             <input type="file" accept="image/*" className="sr-only" onChange={chooseHero} disabled={busy} />
           </label>
         </li>

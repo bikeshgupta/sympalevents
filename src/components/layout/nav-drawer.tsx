@@ -84,7 +84,7 @@ export function NavDrawer({
           className="fixed inset-y-0 right-0 z-50 flex w-[min(20rem,85vw)] flex-col border-l glass-panel duration-300 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
         >
           <div className="flex items-center justify-between border-b px-4 py-3">
-            <DialogPrimitive.Title className="text-sm font-semibold">Menu</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="text-[15px] font-semibold">Menu</DialogPrimitive.Title>
             <DialogPrimitive.Close
               aria-label="Close menu"
               className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -112,7 +112,7 @@ export function NavDrawer({
                 </span>
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{userName}</p>
+                <p className="truncate text-[15px] font-medium">{userName}</p>
                 {session.user.email ? (
                   <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
                 ) : null}
@@ -152,9 +152,9 @@ export function NavDrawer({
                   close();
                   viewSwitch.onToggle();
                 }}
-                className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-[15px] font-medium text-muted-foreground active:bg-muted [@media(hover:hover)]:hover:bg-muted [@media(hover:hover)]:hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <Eye className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
                 {viewSwitch.isPreview ? "Exit resident view" : "View as resident"}
               </button>
             </div>

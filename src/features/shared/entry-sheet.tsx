@@ -63,9 +63,9 @@ export function EntrySheet({
           aria-describedby={undefined}
           className={cn(
             "fixed z-50 flex flex-col overflow-hidden glass-panel outline-none duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-            // Phone: rises from the bottom and sinks back. sm and up: the dialog's slide from the left.
+            // Phone: rises from the bottom and sinks back. sm and up: the dialog's slide from the right.
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-            "sm:data-[state=closed]:slide-out-to-right-[calc(-50%_-_1.5rem)] sm:data-[state=open]:slide-in-from-right-[calc(-50%_-_1.5rem)] sm:data-[state=closed]:slide-out-to-top-1/2 sm:data-[state=open]:slide-in-from-top-1/2",
+            "sm:data-[state=closed]:slide-out-to-right-[calc(-50%_+_1.5rem)] sm:data-[state=open]:slide-in-from-right-[calc(-50%_+_1.5rem)] sm:data-[state=closed]:slide-out-to-top-1/2 sm:data-[state=open]:slide-in-from-top-1/2",
             // Phone: a sheet from the bottom.
             "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-2xl border-t",
             // sm and up: the centred dialog the app has always had.

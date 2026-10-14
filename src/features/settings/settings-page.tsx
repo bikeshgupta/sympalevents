@@ -363,9 +363,9 @@ function SettingsShell() {
             className={cn(
               "fixed inset-x-0 bottom-0 top-16 z-30 min-w-0 overflow-y-auto overscroll-contain px-4 pb-28 pt-3",
               groupedBackground,
-              "shadow-[12px_0_32px_-16px_hsl(var(--foreground)/0.35)]",
+              "shadow-[-12px_0_32px_-16px_hsl(var(--foreground)/0.35)]",
               "transition-[transform,visibility] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-              active ? "visible translate-x-0" : "invisible -translate-x-full",
+              active ? "visible translate-x-0" : "invisible translate-x-full",
               // From lg the section sits beside the side navigation and is simply part of the page.
               "lg:visible lg:static lg:z-auto lg:translate-x-0 lg:overflow-visible lg:bg-transparent lg:p-0 lg:shadow-none lg:transition-none",
             )}

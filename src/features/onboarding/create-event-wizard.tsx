@@ -76,6 +76,15 @@ export function CreateEventWizard() {
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState<Step>(1);
+  // Going on brings the next page in from the right, going back brings the earlier one in from the left, like turning
+  // a page. The first page does not animate in: nobody has gone anywhere yet.
+  const [turn, setTurn] = useState<"none" | "forward" | "back">("none");
+  const turnClass =
+    turn === "none" ? "" : cn("animate-in fade-in-0 duration-300", turn === "forward" ? "slide-in-from-right-6" : "slide-in-from-left-6");
+  function goTo(next: Step) {
+    setTurn(next > step ? "forward" : "back");
+    setStep(next);
+  }
   const [templateKey, setTemplateKey] = useState("garba");
   const [modules, setModules] = useState<ModuleDraft[]>(() => toDraft(eventTemplates[0]));
   const [saving, setSaving] = useState(false);
@@ -212,7 +221,7 @@ export function CreateEventWizard() {
           </h2>
 
           {step === 1 ? (
-            <section>
+            <section className={turnClass}>
               <ListGroup
                 className="mt-2"
                 footer={
@@ -251,7 +260,7 @@ export function CreateEventWizard() {
                     />
                   </ListGroup>
                   {showCopy ? (
-                    <div className="animate-in fade-in-0 slide-in-from-left-4 duration-300">
+                    <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                       <ListGroup>
                         <FieldRow id="copy-from" label="Which event?">
                           <select
@@ -288,7 +297,7 @@ export function CreateEventWizard() {
                 <Button type="button" variant="outline" className={secondaryButton} onClick={() => navigate(-1)}>
                   Cancel
                 </Button>
-                <Button type="button" className={primaryButton} onClick={() => setStep(2)}>
+                <Button type="button" className={primaryButton} onClick={() => goTo(2)}>
                   Next
                 </Button>
               </div>
@@ -296,7 +305,7 @@ export function CreateEventWizard() {
           ) : null}
 
           {step === 2 ? (
-            <section>
+            <section className={turnClass}>
               <ListGroup
                 className="mt-2"
                 footer="An event belongs to a society. Anyone who belongs to that society will find this event in their switcher."
@@ -387,10 +396,10 @@ export function CreateEventWizard() {
               ) : null}
 
               <div className="mt-6 flex gap-3">
-                <Button type="button" variant="outline" className={secondaryButton} onClick={() => setStep(1)}>
+                <Button type="button" variant="outline" className={secondaryButton} onClick={() => goTo(1)}>
                   Back
                 </Button>
-                <Button type="button" className={primaryButton} onClick={() => setStep(3)} disabled={!detailsComplete || datesBackwards || timesBackwards}>
+                <Button type="button" className={primaryButton} onClick={() => goTo(3)} disabled={!detailsComplete || datesBackwards || timesBackwards}>
                   Next
                 </Button>
               </div>
@@ -398,7 +407,7 @@ export function CreateEventWizard() {
           ) : null}
 
           {step === 3 ? (
-            <form onSubmit={handleCreate}>
+            <form onSubmit={handleCreate} className={turnClass}>
               <ListGroup
                 className="mt-2"
                 footer={
@@ -442,7 +451,7 @@ export function CreateEventWizard() {
                 />
               </ListGroup>
               {showModules ? (
-                <div className="mt-2 animate-in fade-in-0 slide-in-from-left-4 duration-300">
+                <div className="mt-2 animate-in fade-in-0 slide-in-from-top-2 duration-300">
                   <ModuleEditor ios modules={modules} onChange={setModules} disabled={saving} />
                 </div>
               ) : null}
@@ -454,7 +463,7 @@ export function CreateEventWizard() {
                   {saving ? "Creating..." : "Create draft"}
                 </Button>
                 <div className="flex gap-3">
-                  <Button type="button" variant="outline" className={`${secondaryButton} flex-1`} onClick={() => setStep(2)} disabled={saving}>
+                  <Button type="button" variant="outline" className={`${secondaryButton} flex-1`} onClick={() => goTo(2)} disabled={saving}>
                     Back
                   </Button>
                   <Button type="button" variant="outline" className={`${secondaryButton} flex-1`} onClick={() => chooseTemplate(templateKey)} disabled={saving}>
