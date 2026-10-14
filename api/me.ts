@@ -18,7 +18,9 @@ const baseColumns = "id,firebase_uid,email,full_name,photo_url";
  * Google profile on every request; see the note there. A chosen photograph needs the same
  * protection, which is why it has its own column (041) rather than overwriting `photo_url`.
  *
- * **Flat and phone are private.** They come back to their owner and nobody else, and are only
+ * **Flat and phone are private.** They come back to their owner and nobody else - with ONE exception:
+ * a society's admins are shown a member's FLAT (never the phone) in the private member list
+ * (api/_lib/society-admin.ts), and the profile page says so. They are otherwise only
  * ever used to start a form filled in. A person who has not run 041 yet simply has no
  * profile fields: reads degrade, and a write that needs them answers 501 naming the migration.
  */

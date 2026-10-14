@@ -15,7 +15,6 @@ import { EventDetailsCard } from "@/features/settings/event-details-card";
 import { GoodToKnowCard } from "@/features/settings/good-to-know-card";
 import { DuplicateEventCard } from "@/features/settings/duplicate-event-card";
 import { ShareCard } from "@/features/settings/share-card";
-import { TrafficCard } from "@/features/settings/traffic-card";
 import { SocietyCard } from "@/features/settings/society-card";
 import { useEventData } from "@/lib/event-data";
 import { configurablePageKeys, pageLabels, usePageAccess, usePageVisibility } from "@/lib/page-access";
@@ -383,7 +382,6 @@ export function SettingsPage() {
         <ShareCard />
         <DuplicateEventCard />
         <AddressCard />
-        <TrafficCard />
         <Card>
           <CardHeader>
             <CardTitle>Create Event</CardTitle>

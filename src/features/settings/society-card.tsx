@@ -26,7 +26,7 @@ export function SocietyCard() {
   return <SocietyForm society={society} />;
 }
 
-function SocietyForm({ society }: { society: SocietyOption }) {
+export function SocietyForm({ society, inEvent = true }: { society: SocietyOption; /** False on the society's own management page, where "this event" and "below" mean nothing. */ inEvent?: boolean }) {
   const { update } = useSocietyActions();
 
   const [name, setName] = useState("");
@@ -82,8 +82,8 @@ function SocietyForm({ society }: { society: SocietyOption }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          The group that runs this event. Everyone who joins it sees every event the society runs, opened according to
-          each event&rsquo;s own visibility settings.
+          {inEvent ? "The group that runs this event. " : "The group that runs these events. "}Everyone who joins it sees every
+          event the society runs, opened according to each event&rsquo;s own visibility settings.
         </p>
 
         <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSave}>
@@ -123,8 +123,8 @@ function SocietyForm({ society }: { society: SocietyOption }) {
             </Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Anyone with this code can join the society. Joining gives them no role on any event - what they can open is
-            still decided by Modules and Member Access below.
+            Anyone with this code can join the society as a resident. Joining gives them no role on any event - what they
+            can open is still decided by each event&rsquo;s Modules and Member Access.
           </p>
         </div>
 

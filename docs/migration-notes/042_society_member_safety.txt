@@ -1,0 +1,114 @@
+MIGRATION 042 - society_member_safety  (YOU run this by hand; nothing here is automatic)
+File: supabase/migrations/042_society_member_safety.sql
+Status: PREPARED, NOT APPLIED. Society role management is not production-ready until this has been run.
+
+WHAT IT DOES (plain words)
+  Adds a database trigger so a society can never end up with zero admins - even if two
+  admins change roles at the very same moment. The API already checks this; the trigger
+  makes it impossible to get around. It changes no existing data and no existing function.
+
+REVIEW NOTES (design)
+  - Locks the society's own row first (FOR UPDATE), then counts the OTHER admins. Two
+    simultaneous demotions queue; the second is judged on the committed result and refused.
+  - Self-demotion of the only admin is refused (the "other admins" count is zero).
+  - Deleting a whole society is allowed (its row is gone, so the lock finds nothing).
+  - Deleting a user who is the last admin of a society is refused - fix the society first.
+  - Changing or removing committee members / residents is never touched by it.
+  - Existing societies that ALREADY have zero admins are not changed by this migration;
+    they just cannot lose anybody else. Fix them first (pre-check A).
+
+------------------------------------------------------------------------------------
+1. PRE-CHECKS  (run each in the Supabase SQL editor; send me the results)
+------------------------------------------------------------------------------------
+
+-- A. Societies that currently have NO admin (must be empty, or fixed by hand first).
+select o.id, o.name
+from public.organizations o
+where not exists (
+  select 1 from public.organization_members m
+  where m.organization_id = o.id and m.role = 'admin'
+)
+order by o.name;
+
+-- B. Societies with exactly ONE admin (information: these are the ones the trigger guards).
+select o.name, count(*) as admins
+from public.organizations o
+join public.organization_members m on m.organization_id = o.id and m.role = 'admin'
+group by o.id, o.name
+having count(*) = 1
+order by o.name;
+
+-- C. The trigger/function must not already exist (expect 0 rows).
+select tgname from pg_trigger
+where tgrelid = 'public.organization_members'::regclass and not tgisinternal;
+
+-- D. The table has the columns the trigger reads (expect organization_id, user_id, role).
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'organization_members'
+order by ordinal_position;
+
+------------------------------------------------------------------------------------
+2. RUN
+------------------------------------------------------------------------------------
+Paste the contents of supabase/migrations/042_society_member_safety.sql into the SQL editor
+and run it once. It is wrapped in a transaction (begin ... commit).
+
+------------------------------------------------------------------------------------
+3. VERIFICATION SQL
+------------------------------------------------------------------------------------
+
+-- V1. The trigger exists, enabled (tgenabled = 'O').
+select tgname, tgenabled
+from pg_trigger
+where tgrelid = 'public.organization_members'::regclass and not tgisinternal;
+
+-- V2. Behaviour test. Creates a throwaway society, proves the last admin cannot be
+--     demoted, proves a whole-society delete still works, and leaves nothing behind.
+--     (Needs at least one row in app_users.) Expect a NOTICE starting with OK.
+do $$
+declare
+  org uuid;
+  u1 uuid;
+  blocked boolean := false;
+begin
+  select id into u1 from public.app_users limit 1;
+  if u1 is null then raise exception 'No app_users row to test with'; end if;
+
+  insert into public.organizations (name) values ('__society_safety_test__') returning id into org;
+  insert into public.organization_members (organization_id, user_id, role) values (org, u1, 'admin');
+
+  begin
+    update public.organization_members set role = 'read_only' where organization_id = org and user_id = u1;
+  exception when others then
+    blocked := true;
+  end;
+  if not blocked then raise exception 'FAILED: the last admin was demoted'; end if;
+
+  blocked := false;
+  begin
+    delete from public.organization_members where organization_id = org and user_id = u1;
+  exception when others then
+    blocked := true;
+  end;
+  if not blocked then raise exception 'FAILED: the last admin was removed'; end if;
+
+  delete from public.organizations where id = org;   -- whole-society delete must be allowed
+  raise notice 'OK: last admin protected; whole-society delete allowed; test society removed';
+end $$;
+
+-- V3. Nothing left behind (expect 0).
+select count(*) from public.organizations where name = '__society_safety_test__';
+
+------------------------------------------------------------------------------------
+4. ROLLBACK  (removes the protection; no data is affected either way)
+------------------------------------------------------------------------------------
+begin;
+drop trigger if exists organization_members_keep_admin on public.organization_members;
+drop function if exists public.organization_members_keep_admin();
+commit;
+
+------------------------------------------------------------------------------------
+5. AFTER YOU RUN IT
+------------------------------------------------------------------------------------
+Send me the results of the pre-checks and V1-V3. Until then I treat the database protection
+as NOT applied, and I do not describe society role management as production-ready.

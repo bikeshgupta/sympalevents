@@ -175,12 +175,16 @@ function ProfileForm({
           <div className="space-y-1.5">
             <Label htmlFor="profile-flat">Flat / household</Label>
             <Input id="profile-flat" value={flat} onChange={(e) => setFlat(e.target.value)} maxLength={40} placeholder="D104" autoComplete="off" />
+            <p className="text-xs text-muted-foreground">
+              Fills in your registration and sign-up forms. The admins of a society you have joined can see it in their private
+              member list; nobody else can.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="profile-phone">Phone</Label>
             <Input id="profile-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} autoComplete="tel" />
             <p className="text-xs text-muted-foreground">
-              Private. Nobody sees your flat or phone from here - they only fill in registration and sign-up forms for you.
+              Private. Your phone only fills in forms for you - nobody else sees it, not even a society admin.
             </p>
           </div>
         </>

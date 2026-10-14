@@ -21,6 +21,10 @@ describes the state when that feature was written. The degrade paths those notes
 back, writes answer 501 naming the migration) stay in the code as safety nets for a fresh database or a
 future migration, and are no longer what production does. A migration after 041 is **not** applied until
 the owner says so.
+**042_society_member_safety is PREPARED, not applied** (the owner runs every migration by hand, from
+`supabase/migrations/` with the pre-check / verification / rollback in `docs/migration-notes/`). Society role
+management is not production-ready until 042 is applied. The planned sequence is 043 event_proposals, 044
+audit scope, 045 platform readiness (see `docs/society-platform-plan-v2.1.txt`); none exists yet.
 
 ## Commands
 
@@ -152,8 +156,10 @@ against Google's public keys and map the user into Supabase `app_users`.
 - **A person's profile is theirs** (`/profile`, [profile-page.tsx](src/features/profile/profile-page.tsx),
   reached from the account menu and the drawer; `api/me.ts`, migration 041): name, a chosen
   photograph, and a flat and phone that only **start forms filled in** (a resident's own
-  registration, a Get involved sign-up). **Flat and phone are private** - returned to their owner
-  and nobody else, never put on any list. A chosen photograph has its own column
+  registration, a Get involved sign-up). **Phone is private** - returned to its owner and nobody
+  else, never put on any list. **A flat is shown to the admins of a society the person has joined, in the private
+  Society Management member list and nowhere else** (the profile page says so); it is never on a public or
+  resident-visible list. A chosen photograph has its own column
   (`custom_photo_url`) because `photo_url` follows Google on every sign-in; `/api/me` returns the
   chosen one as `photo_url` so the session and every avatar read it. It uploads through
   `/api/uploads` with the `profiles` folder (any signed-in person, filed under their own id,
@@ -1972,9 +1978,10 @@ switch is not rendered and the sheet is always the committee copy.
 ## Traffic (Settings)
 
 Who opens this event's pages, and who has been. A collapsible **Traffic**
-panel in Settings ([traffic-card.tsx](src/features/settings/traffic-card.tsx)),
-society admin only, answering the question a committee had no way to ask: is any of
-this read?
+panel was in Settings; **the card has been removed from Settings** (the collection, the heartbeat and the
+society-admin read endpoint are all unchanged). Insights for event admins, society admins and the platform are
+three separate future scopes - see `docs/society-platform-plan-v2.1.txt`. It answered the question a committee had
+no way to ask: is any of this read?
 
 It records people's browsing, so most of what follows is a privacy decision
 rather than a storage one.
@@ -2008,8 +2015,11 @@ a page, who asked for nothing and must see nothing.
 - RLS on, **zero policies**, the same reasoning as every table since 009.
   This one is more sensitive than most, not less: it is the only place that
   says who was reading what.
-- **90-day retention**, applied in `api/_lib/traffic.ts` on the admin's own
-  read rather than by a cron this project does not have.
+- **No retention delete.** It used to delete every `event_visits` row older than 90 days, for ALL events, as a
+  side effect of an admin opening the panel; that destroyed history platform analytics will need, and a read
+  must never delete data. The 90 days is now only a **display window** (`DISPLAY_WINDOW_DAYS`). Whether raw
+  visits are ever pruned, and what is rolled up first, is a platform policy that has not been decided - do not
+  add a delete back.
 
 ### API - no new serverless function
 
@@ -2142,6 +2152,35 @@ last admin, which is a different question from who may do the removing.
 Settings hides the Admin option unless the viewer is a society admin. The
 server is still the authority; that is only so the form does not offer a
 control that would be refused.
+
+## Society Management
+
+`/society/<slug>/admin` ([src/features/society/admin/](src/features/society/admin/)), API
+[api/_lib/society-admin.ts](api/_lib/society-admin.ts) on `?resource=societies&part=overview|members|access`
+(no new serverless function). **Society admins only.** It is NOT an event-admin page: an event admin who is not a
+society admin, and a society committee member, are refused. Every part calls the single exported
+`requireSocietyAdmin()` in [authority.ts](api/_lib/authority.ts) on the server; the React page only declines to draw
+for others so they are told why.
+
+- **Overview**: identity, People (Members / Admins / Committee / Residents), Events (Total / Upcoming / Live /
+  Completed), the society details form, and - once `event_proposals` exists - a pending-proposals card. The
+  proposal count is `null` (unknown) before migration 043, never `0`. Event phase is classified by
+  `shared/event-status.ts`, the same function the screens use (`src/lib/event-status.ts` re-exports it).
+- **Members**: name, **"Flat / Unit"** (fixed wording - NOT any event's `unit_label`; a society vocabulary, if ever
+  needed, belongs on `organizations`), role, member-since. Filters All/Admins/Committee/Residents, search by name or
+  flat. Roles are changed from the roster. **No email and no phone in the roster.** "Add by email" exists only for
+  somebody who has signed in once. The stored role for a resident is `read_only`; the product word is "Resident"
+  (`shared/society-members.ts`). `organization_members.created_at` of rows made by migration 023's backfill is the
+  day 023 ran, not the day the person joined.
+- **Last-admin rule**: the API refuses to remove or demote a society's last admin, including self-demotion
+  (`wouldLeaveNoAdmin`). Two admins acting at once can both pass an API check, so **migration 042's trigger is the
+  real guard** and role management is not production-ready until it is applied.
+- **Member removal is NOT built (B7)**: it must revoke access without erasing historical credit, and the closing
+  page derives the committee credits from `event_members` (admin and committee roles only). The proposed clean
+  solution is an `event_role_history` table (see the plan); do not "fix" this by appending names to
+  `event_closing.extra_core`.
+- Role changes, additions and joins are written to `audit_log` with `organization_id` set (`society_member`).
+- Never add these queries to `persistedRoots` - the roster is private.
 
 ## Event details, hours, and counts-only collections
 

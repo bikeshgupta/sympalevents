@@ -1,0 +1,300 @@
+SYMPAL EVENTS - PLAN v2.1  (decisions applied + reports requested before B7 and 045)
+Supersedes the migration numbering in docs/society-platform-plan-v2.txt.
+Date: 2026-10-14
+Legend: [BUILT] done in code | [HELD] waiting on you | [PREPARED] file ready for you to run |
+        [DESIGN ONLY] not built, not collected
+
+
+=====================================================================
+A. YOUR DECISIONS, AS APPLIED
+=====================================================================
+
+ D0  event_proposals table (Option B)            APPLIED  - built in Phase D, after 043 is run
+ D1  Flat visible to Society Admins              [BUILT]  roster shows app_users.flat; profile wording
+                                                          updated; phone never shown; no email in the roster
+     Unit label                                  [BUILT]  "Flat / Unit" fixed text. NOT taken from any
+                                                          event's unit_label. If a society vocabulary is
+                                                          ever needed it belongs on organizations.
+ D2  Committee may still create events directly  APPLIED  - no change to create_event_draft
+ D3  app_users.last_seen_at                      [DESIGN - see section F] migration 045
+ D4  General visit/session/page model            [DESIGN - see section E] shown BEFORE 045 is finalized
+ D5  Behavioural events                          [DESIGN ONLY - see section G]
+ D6  Society Admin list from migration 023       [PREPARED] docs/migration-notes/D6_society_admins_from_023.sql
+                                                          (read-only; nobody is demoted automatically)
+ F1  Stop the 90-day delete of event_visits      [BUILT]  api/_lib/traffic.ts no longer deletes anything.
+                                                          No replacement retention policy was added.
+
+Raw-data retention and future rollups still need an explicit PLATFORM POLICY decision
+(how long raw visits are kept; what daily/weekly rollups are written first; who may
+change it). Until that is decided, nothing is deleted and nothing is rolled up.
+
+
+=====================================================================
+B. MIGRATION SEQUENCE REPORT (repository state)
+=====================================================================
+
+ Existing, in the repository and on origin/master:   001 ... 041   (041_profile.sql is the latest)
+ Number 042 had NOT been reserved or created.  So your renumbering is used unchanged:
+
+   042_society_member_safety        [PREPARED]  supabase/migrations/042_society_member_safety.sql
+                                                + docs/migration-notes/042_society_member_safety.txt
+                                                (pre-check, explanation, rollback, verification SQL)
+   043_event_proposals              [HELD]      drafted after you approve the data model (done) - Phase D
+   044_audit_scope_and_readiness    [HELD]      small: index audit_log(organization_id, occurred_at desc),
+                                                one-time backfill of audit_log.organization_id where null
+   045_platform_readiness           [HELD]      only after you approve section E (visit model) and F
+   046_event_role_history           [PROPOSED]  only if you approve section C (credit history); not in the
+                                                sequence you gave, so it is a NEW number for you to accept
+
+ Society role management is NOT considered production-ready until 042 has been run.
+ The API-level last-admin check is in place and tested; the database trigger is the part
+ that closes the two-admins-at-once race. I treat 042 as NOT APPLIED until you tell me
+ you have run it and give me the results.
+
+
+=====================================================================
+C. B7 (MEMBER REMOVAL) - CLOSING-CREDIT AUDIT  [HELD - STOP, PROPOSAL BELOW]
+=====================================================================
+
+I audited api/_lib/closing.ts (sendClosingPayload) and the closing schema (014, 020).
+B7 is NOT implemented. Below is exactly how credits are derived.
+
+ CREDIT GROUP        DERIVED FROM                                   EVENT ROLE INVOLVED
+ ------------------  ---------------------------------------------  ------------------------------------
+ Core committee      event_members WHERE role IN ('admin',          admin and committee are both put in
+ ("core")            'committee'), ordered admins-first then        this ONE list. read_only members are
+                     alphabetical, then MERGED with the hand-kept   never credited. The page does not
+                     event_closing.extra_core names, then put in    say which of the two a person was -
+                     the committee's own core_order if one exists   only the ORDER shows it.
+ Volunteers          tasks.owner_name + event_schedule.owner_name   none (free-text names, not members)
+                     (free text) + hand-kept extra_volunteers
+ Prasad sponsors     prasad_items arrangers (free text names)       none
+ Sponsors            sponsors table                                 none
+ Contributors        contributions + residents                      none
+ Auction winners     auction bids -> app_users name                 none
+ Reviewers / photos  event_feedback.user_id / gallery created_by    none
+ Shout-outs          hand-kept                                      none
+
+ What removing ACCESS does to credits:
+   - An event_members row with role admin or committee is deleted  -> the person DISAPPEARS from the
+     "core committee" credits of that event (this already happens today when an event admin removes
+     a member in Settings).
+   - A read_only member: no credit effect.
+   - Every other group is untouched - they are not role-based.
+   - Contributions, expenses, comments, registrations, gallery, reviews, tasks and the audit log
+     reference app_users(id), not event_members, so they are unaffected by deleting access rows.
+
+ Why simply appending removed people to event_closing.extra_core is NOT clean:
+   1. It FLATTENS the role: the page orders admins before committee; a name in extra_core is
+      appended at the end, so the admin/committee distinction that the order carried is lost.
+   2. It MIXES TWO MEANINGS: extra_core means "somebody who did the work but is not a member row,
+      typed in by hand". A former member would become indistinguishable from a hand-typed name, and
+      the credits editor shows hand-typed names as removable - so a later tidy-up can silently delete
+      a real organiser's credit.
+   3. It stores a NAME, not the person: no link to app_users, so a later rename or a duplicate name
+      cannot be resolved.
+   4. It needs an event_closing row to exist for EVERY event of the society - creating rows as a side
+      effect of removing a person.
+   5. It applies to events that are not finished. Should somebody removed from an event that is still
+      being planned appear in credits that do not exist yet? That is a policy question, not a
+      mechanical one.
+ Conclusion: the current closing schema cannot preserve historical attribution WITHOUT changing the
+ meaning of an existing field. Per your instruction I stopped before B7.
+
+ SMALLEST CLEAN SOLUTION (proposal, needs your approval):  046_event_role_history
+   A new, additive table written at the moment event access ENDS:
+     event_role_history(
+       id bigserial pk,
+       event_id        uuid -> events (cascade),
+       organization_id uuid -> organizations (set null),
+       user_id         uuid -> app_users (set null),
+       display_name    text not null,        -- the name as credited at the time
+       role            event_role not null,  -- admin | committee | read_only
+       ended_at        timestamptz not null default now(),
+       ended_by        uuid -> app_users (set null),
+       reason          text not null         -- 'society_member_removed' | 'event_member_removed'
+     )
+   RLS on, zero policies (project rule). Nothing existing changes meaning.
+   - Closing credits "core" = current admin/committee members  UNION  history rows with role
+     admin/committee for that event, de-duplicated by user_id, ordered admin-before-committee exactly
+     as today. extra_core keeps meaning "hand-typed". The credits editor can mark them "Former member".
+   - It fixes the SAME credit loss that already happens when an event admin removes a member in
+     Settings (that route would write the history row too).
+   - It is a role history the platform analytics will want anyway (who held which role, until when).
+   - B7 then = (1) insert history rows for the person's admin/committee event roles, (2) delete their
+     event_members + event_page_permissions rows for that society's events, (3) delete the society
+     membership, (4) audit entry - all done by ONE SQL function (atomic) once 046 exists, so a
+     failure half-way cannot leave a person with half their access.
+   Alternative (not recommended): add a revoked_at column to event_members and filter it in every
+   access check - dozens of queries would need the filter; one missed query leaves revoked access live.
+
+ Decision for you:  approve 046_event_role_history (and B7 built on it), or choose another approach.
+
+
+=====================================================================
+D. WHAT IS BUILT SO FAR (Phase B) - all local, nothing pushed to master
+=====================================================================
+
+ [BUILT]  B1  One exported requireSocietyAdmin() in authority.ts (replaces the private copy).
+                An event admin alone, and a society committee member, do NOT pass.
+ [BUILT]  B2  F1: the 90-day delete is gone from traffic.ts. The Traffic read stays (society-admin
+                only, no screen) so collection and the future reader are preserved.
+ [BUILT]  B3  /society/<slug>/admin - Overview | Members | Events & access. "Manage society" link on the
+                society page, shown to society admins. Signed-out -> login; non-admin -> a plain
+                "for society admins" message; every request is re-checked on the server.
+ [BUILT]  B4  Overview: identity, People (Members / Admins / Committee / Residents), Events (Total /
+                Upcoming / Live / Completed, drafts noted), society details form. The pending-proposals
+                card ("N event proposals - Waiting for review - Review ->") is in place and appears
+                once event_proposals exists (its count is null, not zero, before 043).
+ [BUILT]  B5  Members: name, Flat / Unit, role, member-since; filters All/Admins/Committee/Residents;
+                search by name or flat; change role from the roster (confirm for admin changes); optional
+                "Add by email" for someone who has signed in once. No email and no phone in the list.
+ [BUILT]  B6  Last-admin API protection (incl. self-demotion), conditional update so two admins editing
+                one member do not overwrite each other, audit entries (society join, member added, role
+                changed) with organization_id set. Pure rules in shared/society-members.ts (tests).
+ [HELD]   B7  Member removal - waiting on section C.
+ [BUILT]  B8  Events & access: status, "N admins - N committee - N pages", Manage -> the event's own
+                Settings. No duplicate Settings UI.
+ [BUILT]  B9  Traffic CARD removed from Settings; collection, heartbeat and the society-admin read
+                endpoint are untouched.
+ [BUILT]  Shared: event status rules moved to shared/event-status.ts so the API classifies
+                upcoming/live/completed with the same function as the screens (src/lib re-exports it).
+ [BUILT]  Profile wording: flat is visible to society admins of societies the person has joined;
+                phone stays private. api/me.ts comment updated.
+
+
+=====================================================================
+E. PROPOSED GENERAL PLATFORM VISIT / SESSION / PAGE MODEL  (for review - 045 NOT finalized)
+=====================================================================
+
+Goal: represent Society Home, event pages, profile, event creation / proposal, login and
+future surfaces - without treating Society Home as "an event visit with no event".
+
+ Today (unchanged by this proposal):
+   event_visits       one row per visit, event_id NOT NULL, page_key, page_views, coarse device/browser/geo
+   event_page_views   one row per page opened + dwell, event_id NOT NULL
+
+ PROPOSED NEW TABLES (names provisional):
+
+   platform_visits                      -- one row per browser-tab visit, ANY surface
+     id            uuid pk              (client-generated, held in sessionStorage, like event_visits)
+     visitor_key   text not null        (random, browser-held; identifies nobody; groups guests)
+     user_id       uuid null -> app_users (set null)
+     started_at    timestamptz not null default now()
+     last_seen_at  timestamptz not null default now()
+     surface       text not null        -- 'society_home' | 'event' | 'profile' | 'event_proposal'
+                                        -- | 'society_admin' | 'login' | ... (server allowlist)
+     organization_id uuid null -> organizations (set null)    -- null for e.g. login
+     event_id        uuid null -> events (set null)           -- only when surface = 'event'
+     page_views    integer not null default 1
+     device, browser, country, city   text null   (coarse, exactly as event_visits; NO IP, ever)
+
+   platform_page_views                  -- the page-level detail + dwell time
+     id            bigserial pk
+     visit_id      uuid not null        (not a FK, like event_page_views - a page view must never fail)
+     user_id       uuid null
+     surface       text not null
+     page_key      text null            -- 'dashboard', 'members', 'overview', ...
+     organization_id uuid null, event_id uuid null
+     opened_at timestamptz default now(), left_at timestamptz null, seconds integer null
+
+ Relationship with the existing tables:
+   - event_visits and event_page_views KEEP being written exactly as today for event pages.
+     Nothing about the Traffic read, the heartbeat or the history changes, and no history is lost.
+   - The new tables record every surface going forward. To avoid doubling writes on the hottest
+     route, an event-page beat is NOT written twice. A read-only VIEW (platform_visits_all) unions
+     platform_visits with event_visits (mapped to surface = 'event') so platform analytics sees one
+     stream. (If you prefer one canonical table, the alternative is a one-time INSERT...SELECT of the
+     old rows and then dual-write for a while - more moving parts, more risk. Not recommended.)
+   - Same endpoint (api/event-access.ts ?resource=traffic): `eventId` becomes optional and a `surface`
+     is accepted. It keeps importing only page-visibility and server (cold-start rule). The server
+     validates the surface against an allowlist and verifies any society/event scope the caller
+     names; scope is never trusted from the browser.
+   - Society Home is a first-class surface: organization_id set, event_id null. No event involved.
+
+ Privacy: same rules as today - no IP stored raw or hashed; coarse device/browser/city only;
+   guests stay guests; user_id only when signed in; no per-click paths. Surfaces and page_keys come
+   from a fixed list, never from free text.
+
+ Definitions that go with it (so metrics are never faked):
+   visit    = one browser tab session, one row; ends when beats stop (no unload beat is possible)
+   page view= one page_key opened within a visit
+   active   = see section F (application activity), NOT presence on a page
+   time spent is APPROXIMATE (last beat - first beat; under-counts up to one beat interval)
+
+ Decision for you: approve this shape (and the "union view, no dual write" choice) before I write 045.
+
+
+=====================================================================
+F. D3 - app_users.last_seen_at  (DEFINITION, to be created by 045)
+=====================================================================
+
+ Meaning: the last time the server saw an authenticated APPLICATION REQUEST from this user.
+ It is application activity, NOT login time, not a session length, and not "online now".
+
+ What updates it (exactly):
+   - Any request to the app's /api/* routes that carries a valid Firebase token which the server
+     verified (the requireAppUser and optionalAppUser paths), including the visibility heartbeat
+     of a signed-in visitor on a visible tab.
+ What does NOT update it:
+   - Requests with no / invalid token; link-preview crawlers (they send no token);
+     server-to-server work; the browser's own background refetches are included only because
+     they carry a token - they are rare and bounded by the same throttle.
+ Throttle: at most ONE write per user per hour, enforced in SQL so it holds across serverless
+   instances:  update app_users set last_seen_at = now()
+               where id = :user and (last_seen_at is null or last_seen_at < now() - interval '1 hour')
+   Fire-and-forget (never delays or fails the request), degrades silently if the column is absent.
+ Who can read it: nobody in the product. Platform analytics only (future). Never shown to users,
+   society admins or event admins.
+ Why now: it cannot be reconstructed after the fact, and "active users today/week/month" depends on it.
+
+
+=====================================================================
+G. D5 - BEHAVIOURAL EVENTS  (DESIGN ONLY - nothing is collected)
+=====================================================================
+
+ Principle: audit_log is for BUSINESS ACTIONS (who changed what). Behavioural/product events are a
+ separate, small, allowlisted stream. This is NOT a clickstream; page views already exist.
+
+ Proposed table (not created):
+   platform_events( id bigserial pk, occurred_at timestamptz default now(), name text not null,
+                    user_id uuid null, organization_id uuid null, event_id uuid null,
+                    surface text null, props jsonb null )
+   - `name` must be in a SERVER allowlist; anything else is rejected, not stored.
+   - props: a small fixed set of enum/integer fields per name. No free text, no names, no other
+     people's ids, max 5 keys.
+
+ Initial allowlist (candidates only - none collected until you approve):
+   pass_shared            organiser shared a pass          (props: channel = share|download)
+   wristband_printed      organiser printed wristbands     (props: count bucket)
+   calendar_added         resident added to calendar       (props: kind = single|picks)
+   event_shared           resident used Share              (props: channel)
+   registration_started   resident opened the booking form (props: none)   [completion is already a row]
+   society_invite_used    code join (already audited - listed only to avoid double counting)
+ Explicitly NOT collected: clicks, hovers, scrolls, search text, form contents, typing, mouse paths,
+   anything that identifies what a person looked at beyond the page_key already recorded.
+
+
+=====================================================================
+H. COVERAGE MATRIX - UPDATES SINCE v2
+=====================================================================
+
+ - audit_log: society join, member added and role changes are now written (organization_id set).
+ - event_visits: no longer pruned.  RETENTION is now "kept until a platform policy is decided".
+ - Still not captured (see E, F, G): visits outside event pages, last-active time, feature usage.
+ - audit.ts already fills organization_id from the event at write time, so 044 needs only the index
+   and a one-time backfill of older rows.
+
+
+=====================================================================
+I. WHAT I NEED FROM YOU NEXT
+=====================================================================
+
+ 1. Run docs/migration-notes/D6_society_admins_from_023.sql and tell me who stays Society Admin
+    (I change nobody automatically).
+ 2. Run the 042 pre-checks (docs/migration-notes/042_society_member_safety.txt), then 042, then the
+    verification SQL, and send me the results.
+ 3. Approve (or change) section C: 046_event_role_history, so I can build B7.
+ 4. Approve section E (visit/session/page model) so I can finalize 045.
+ 5. Say go for Phase D (proposals) - I will prepare 043 with its pre-check, explanation, verification
+    and rollback, and wait for your result before writing code that depends on it.

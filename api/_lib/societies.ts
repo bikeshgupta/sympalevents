@@ -1,6 +1,8 @@
 import { assertServiceSupabase, optionalAppUser, requireAppUser, sendJson } from "./server.js";
 import { SOCIETY_REGISTRATION_OPEN, societyRegistrationClosedMessage } from "../../shared/society-registration.js";
 import { audit } from "./audit.js";
+import { requireSocietyAdmin } from "./authority.js";
+import { handleSocietyAdmin } from "./society-admin.js";
 
 /**
  * Societies - the tenant an event belongs to. Served from api/events.ts on
@@ -134,24 +136,6 @@ export async function fetchMySocieties(supabase: SupabaseClient, userId: string)
     // Only an admin has any use for the code, and it is a join credential.
     inviteCode: roleById.get(society.id) === "admin" ? ((society.invite_code as string) ?? null) : null,
   }));
-}
-
-async function requireSocietyAdmin(supabase: SupabaseClient, societyId: string, userId: string) {
-  const { data, error } = await supabase
-    .from("organization_members")
-    .select("role")
-    .eq("organization_id", societyId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
-    if (isMissingSocietySchema(error)) notMigrated();
-    throw error;
-  }
-
-  if (data?.role !== "admin") {
-    throw fail("Only a society admin can do that", 403);
-  }
 }
 
 async function listSocieties(req: ApiRequest, res: ApiResponse) {
@@ -340,6 +324,15 @@ async function joinSociety(req: ApiRequest, res: ApiResponse) {
 
   if (!society) throw fail("That invite code does not match any society", 404);
 
+  // Joining twice is harmless, and only the first time is worth a record.
+  const already = await supabase
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", society.id)
+    .eq("user_id", appUser.id)
+    .maybeSingle();
+  if (already.error && !isMissingSocietySchema(already.error)) throw already.error;
+
   const { error: joinError } = await supabase
     .from("organization_members")
     .upsert(
@@ -350,6 +343,18 @@ async function joinSociety(req: ApiRequest, res: ApiResponse) {
   if (joinError) {
     if (isMissingSocietySchema(joinError)) notMigrated();
     throw joinError;
+  }
+
+  if (!already.data) {
+    audit(req as never, {
+      action: "create",
+      entityType: "society_member",
+      entityId: appUser.id,
+      organizationId: society.id,
+      actor: { id: appUser.id, email: appUser.email ?? null },
+      after: { role: "read_only", via: "invite_code" },
+      summary: "Joined the society with its invite code",
+    });
   }
 
   sendJson(res, 200, {
@@ -366,6 +371,13 @@ export async function handleSocieties(req: ApiRequest, res: ApiResponse) {
       return;
     }
     await joinSociety(req, res);
+    return;
+  }
+
+  // The private management area: `part` names the section. Every part is
+  // society-admin only (api/_lib/society-admin.ts).
+  if (["overview", "members", "access"].includes(String(req.query?.part ?? ""))) {
+    await handleSocietyAdmin(req, res);
     return;
   }
 

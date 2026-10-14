@@ -47,7 +47,9 @@ const LIVE_WINDOW_SECONDS = 120;
 /** A runaway tab cannot spin its row faster than this. */
 const MIN_BEAT_SECONDS = 20;
 
-const RETENTION_DAYS = 90;
+/** How far back the panel LOOKS. It is a display window, not a retention policy:
+ *  nothing is deleted when it is read (see the note at the end of readTraffic). */
+const DISPLAY_WINDOW_DAYS = 90;
 
 /** Enough history to compare one festival with the last one. */
 const HISTORY_LIMIT = 100;
@@ -254,7 +256,7 @@ async function readTraffic(req: ApiRequest, res: ApiResponse) {
     await requireEventAdmin(eventId, appUser.id);
   }
 
-  const since = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const since = new Date(Date.now() - DISPLAY_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await supabase
     .from("event_visits")
@@ -333,14 +335,15 @@ async function readTraffic(req: ApiRequest, res: ApiResponse) {
 
   sendJson(res, 200, { ready: true, visits, byPage, liveWindowSeconds: LIVE_WINDOW_SECONDS });
 
-  // Retention, on an already-authorised request rather than in a cron this
-  // project does not have. After the response, and failures are ignored:
-  // tidying is never worth failing a read the admin did get.
-  void supabase
-    .from("event_visits")
-    .delete()
-    .lt("last_seen_at", since)
-    .then(undefined, () => undefined);
+  // NOTE - NO RETENTION DELETE HERE, DELIBERATELY.
+  //
+  // This read used to delete every event_visits row older than 90 days, for ALL
+  // events, as a side effect of an admin opening the panel. That quietly threw
+  // away the visit history (devices, browsers, places, repeat visitors) that
+  // platform analytics will need, and a read must never destroy data. The
+  // window above only limits what this response SHOWS. Whether raw visits are
+  // ever pruned, and what is rolled up first, is a platform policy decision that
+  // has not been made - see docs/society-platform-plan-v2.1.txt.
 }
 
 /**

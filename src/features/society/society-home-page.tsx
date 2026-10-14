@@ -13,6 +13,7 @@ import {
   groupForStatus,
   type EventGroup,
 } from "@/lib/event-status";
+import { useEventContext } from "@/lib/event-context";
 import { useSocietyHome, type SocietyEvent } from "@/lib/society";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ export function SocietyHomePage() {
   // One clock for the whole page, so every card and the featured pick agree.
   const now = useMemo(() => new Date(), []);
   const [managing, setManaging] = useState(false);
+  const { societies } = useEventContext();
 
   // Drafts never reach this page, and a cancelled event only stays while its
   // date is still ahead - see residentVisibleEvents for why.
@@ -81,6 +83,8 @@ export function SocietyHomePage() {
 
   const society = data?.society;
   const hasAnything = events.length > 0;
+  // Society management is for society admins; the page itself asks the server.
+  const isSocietyAdmin = Boolean(society?.slug && societies.some((item) => item.slug === society.slug && item.role === "admin"));
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-5 sm:pt-7">
@@ -98,6 +102,11 @@ export function SocietyHomePage() {
           <Link className="text-primary" to="/new-event">
             Create event
           </Link>
+          {isSocietyAdmin ? (
+            <Link className="text-primary" to={`/society/${society?.slug}/admin`}>
+              Manage society
+            </Link>
+          ) : null}
           <button type="button" className="text-primary" onClick={() => setManaging((value) => !value)}>
             {managing ? "Hide drafts" : "Manage drafts"}
           </button>

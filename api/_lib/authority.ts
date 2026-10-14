@@ -97,6 +97,20 @@ export function clearSocietyAdminMemo() {
   societyAdminMemo.clear();
 }
 
+/**
+ * THE one check for society management: this person is an admin of THIS society.
+ *
+ * An event admin alone does not satisfy it, and neither does being a committee
+ * member of the society. Every society-management route calls this, on the
+ * server, before it reads or writes anything - hiding a button in React is
+ * never the control. Replaces the private copy that lived in societies.ts.
+ */
+export async function requireSocietyAdmin(supabase: Supabase, societyId: string, userId: string | null) {
+  if (!societyId || !userId || !(await isSocietyAdmin(supabase, societyId, userId))) {
+    throw forbid("Only a society admin can do that");
+  }
+}
+
 /** Is this person a society admin over the society that owns this event? */
 export async function isSocietyAdminForEvent(supabase: Supabase, eventId: string, userId: string | null) {
   if (!userId) return false;

@@ -23,6 +23,7 @@ import { CreateEventWizard } from "@/features/onboarding/create-event-wizard";
 import { ShareLinkPage } from "@/features/onboarding/share-link";
 import { SocietyHomePage } from "@/features/society/society-home-page";
 import { SocietyRoot } from "@/features/society/society-root";
+import { SocietyAdminPage } from "@/features/society/admin/society-admin-page";
 import { PrasadPage } from "@/features/prasad/prasad-page";
 import { ProfilePage } from "@/features/profile/profile-page";
 import { VolunteersPage } from "@/features/volunteers/volunteers-page";
@@ -90,6 +91,8 @@ export function App() {
           about yet. `/society` with no slug resolves to the viewer's own. */}
       <Route path="/society" element={<SocietyHomePage />} />
       <Route path="/society/:societySlug" element={<SocietyHomePage />} />
+      {/* Private to society admins; the server decides, this only draws. */}
+      <Route path="/society/:societySlug/admin" element={<SocietyAdminPage />} />
 
       {/* The readable address. The `society` and `events` segments are what
           make it collision-proof: a society slugged "login" or "dashboard" can
