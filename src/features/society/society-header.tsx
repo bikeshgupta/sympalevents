@@ -1,35 +1,40 @@
 import type { Society } from "@/lib/society";
 
 /**
- * The society's own name and place.
+ * The society's own name, and a line that makes the page feel like theirs.
  *
- * Deliberately two lines. The first version spent four on a logo, a name, a
- * "Community Events" line and a pinned city, which pushed the thing people
- * came for below the fold on a phone. Name, then one quiet line that carries
- * both the purpose and the place.
+ * Signed in, the society is the small line above and the person is greeted ("Good evening, Bikesh"). Signed
+ * out there is nobody to greet, so the society's name is the heading and the line above says what this is.
+ * Every word comes from the `organizations` row and the session - nothing about any particular society or
+ * person is written into this file, which is what lets a second society be onboarded without a component
+ * change. Do not reintroduce a literal.
  *
- * Every word comes from the `organizations` row - nothing about any particular
- * society is written into this file, which is what lets a second one be
- * onboarded without a component change. Do not reintroduce a literal.
+ * One `<h1>` holds both lines, so a screen reader hears the society's name and then the greeting.
  */
-export function SocietyHeader({ society }: { society: Society }) {
-  return (
-    <header className="flex items-center gap-3">
-      {society.logoUrl ? (
-        <img
-          src={society.logoUrl}
-          alt=""
-          aria-hidden
-          className="h-10 w-10 shrink-0 rounded-xl border object-cover sm:h-12 sm:w-12"
-        />
-      ) : null}
+export function SocietyHeader({
+  society,
+  greeting,
+}: {
+  society: Society;
+  /** "Good evening, Bikesh" for somebody signed in; omit for a visitor. */
+  greeting?: string | null;
+}) {
+  const eyebrow = greeting ? society.name : `Community events${society.city ? ` · ${society.city}` : ""}`;
 
-      <div className="min-w-0">
-        <h1 className="truncate text-2xl font-semibold leading-tight sm:text-3xl">{society.name}</h1>
-        <p className="truncate text-sm text-muted-foreground">
-          Community Events{society.city ? ` · ${society.city}` : ""}
-        </p>
-      </div>
+  return (
+    <header>
+      <h1>
+        <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {society.logoUrl ? (
+            <img src={society.logoUrl} alt="" aria-hidden className="h-5 w-5 shrink-0 rounded object-cover" />
+          ) : null}
+          <span className="truncate">{eyebrow}</span>
+        </span>
+        <span className="font-display mt-2 block text-[30px] font-semibold leading-[1.15] sm:text-4xl">
+          {greeting ?? society.name}
+        </span>
+      </h1>
+      <p className="mt-1.5 text-base text-muted-foreground">What&rsquo;s happening in your community</p>
     </header>
   );
 }

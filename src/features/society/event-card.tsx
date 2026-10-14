@@ -6,57 +6,57 @@ import { hasModule, type SocietyEvent } from "@/lib/society";
 import { cn } from "@/lib/utils";
 
 /**
- * One card, every kind of event.
+ * One list row, every kind of event.
  *
- * There is deliberately no SportsEventCard or FestivalEventCard. What a card
- * says is decided by three things it is given, never by the event's name:
- * `eventType`, `getEventStatus()`, and the `modules` this viewer may open -
- * then by whether the number in question is non-zero.
+ * It is an editorial row - a picture, then the date and kind, the name, one line of facts and a single
+ * invitation - separated from its neighbours by a hairline and whitespace, not boxed. The first version was a
+ * bordered, filled card, and a page made of them reads as a dashboard.
  *
- * Three rules keep a list of these scannable rather than repetitive:
+ * There is deliberately no SportsEventCard or FestivalEventCard. What a row says is decided by three things it
+ * is given, never by the event's name: `eventType`, `getEventStatus()`, and the `modules` this viewer may open
+ * - then by whether the number in question is non-zero.
  *
- *  - **The eyebrow carries the date and the kind of event, not a status
- *    badge.** Inside the Upcoming tab, "Upcoming" on every card is a word
- *    repeated for no information; "SPORTS" is what somebody is scanning for.
- *    Only cancelled - which contradicts what the tab implies - still shows a
- *    badge.
- *  - **At most two pieces of metadata.** Everything available is not worth
- *    saying; a card is an invitation, and the detail is one tap away.
- *  - **The whole card is the link.** One tappable region with a textual
- *    affordance inside it, never a button nested in a link.
+ *  - **The eyebrow carries the date and the kind of event, not a status badge.** Inside the Upcoming tab,
+ *    "Upcoming" on every row is a word repeated for no information; "SPORTS" is what somebody is scanning for.
+ *    Only cancelled - which contradicts what the tab implies - still shows a badge.
+ *  - **At most two pieces of metadata.** A row is an invitation; the detail is one tap away.
+ *  - **The whole row is the link.** One tappable region with a textual affordance inside it, never a button
+ *    nested in a link. It has no resting box, but it has a hover wash and a visible focus ring.
+ *  - **A finished event is remembered by a photograph from its album** when this viewer may open that album
+ *    (`coverPhotoUrl`), else by its own hero, else by its type's artwork.
  */
 export function EventCard({ event, to, now }: { event: SocietyEvent; to: string; now?: Date }) {
   const status = getEventStatus(event, now);
   const cancelled = status === "cancelled";
+  const remembered = status === "completed";
 
   return (
     <Link
       to={to}
       className={cn(
-        "group flex gap-3 rounded-xl border bg-card p-2.5 transition-colors sm:gap-4 sm:p-3",
-        "hover:border-primary/30 hover:bg-muted/40",
+        "group -mx-2 flex gap-4 rounded-lg px-2 py-5 transition-colors",
+        "hover:bg-muted/40",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         cancelled && "opacity-70",
       )}
     >
       <EventArtwork
         eventType={event.eventType}
-        imageUrl={event.heroImageUrl}
+        imageUrl={event.heroImageUrl ?? (remembered ? event.coverPhotoUrl : null)}
         focus={event.heroFocus}
-        dim={status === "completed" || cancelled}
-        className="h-20 w-20 shrink-0 rounded-lg sm:h-24 sm:w-24"
+        dim={remembered || cancelled}
+        className="h-28 w-24 shrink-0 rounded-lg sm:h-32 sm:w-28"
+        iconClassName="h-7 w-7"
       />
 
-      <div className="flex min-w-0 flex-1 flex-col justify-center py-0.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {eventEyebrow(event)}
-        </p>
+      <div className="flex min-w-0 flex-1 flex-col justify-center">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{eventEyebrow(event)}</p>
 
-        <h3 className="mt-0.5 text-base font-semibold leading-snug sm:text-[17px]">{event.name}</h3>
+        <h3 className="font-display mt-1 text-xl font-semibold leading-snug">{event.name}</h3>
 
         <Metadata event={event} status={status} />
 
-        <p className="mt-1.5 text-sm font-medium text-primary">
+        <p className="mt-2 text-sm font-medium text-primary">
           {callToAction(event, status)}{" "}
           <span aria-hidden className="inline-block transition-transform group-hover:translate-x-0.5">
             &rarr;

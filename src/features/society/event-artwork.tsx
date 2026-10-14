@@ -31,6 +31,7 @@ export function EventArtwork({
   className,
   iconClassName,
   dim = false,
+  artworkPosition = "center",
 }: {
   eventType: string;
   imageUrl?: string | null;
@@ -44,6 +45,9 @@ export function EventArtwork({
   iconClassName?: string;
   /** Completed events read as memories rather than as what is next. */
   dim?: boolean;
+  /** Where the generated artwork is anchored when the frame crops it. The pieces are wide with their motif
+   *  on the right, so a tall frame (the featured hero on a phone) anchors right to keep the motif in view. */
+  artworkPosition?: string;
 }) {
   const style = eventTypeStyle(eventType);
   const Icon = style.icon;
@@ -69,7 +73,7 @@ export function EventArtwork({
         style={{
           backgroundImage: heroArtworkUrl(artworkKeyFor({ templateKey, eventType })),
           backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundPosition: artworkPosition,
         }}
       />
     );

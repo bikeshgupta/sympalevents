@@ -1,0 +1,50 @@
+import { Camera, ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
+import type { CommunityEntry } from "@/features/society/community-feed";
+
+/**
+ * "From your community" - the society's life between events, as a short list of rows.
+ *
+ * Draws nothing when there is nothing to say (an empty section is worse than none), and says only what
+ * `buildCommunityFeed` could prove from data the page already holds. See that file for what is real today
+ * and what data announcements, edits and new-photo notices would need before they can appear here.
+ */
+export function CommunitySection({ entries }: { entries: CommunityEntry[] }) {
+  if (!entries.length) return null;
+
+  return (
+    <section className="mt-12" aria-labelledby="community-heading">
+      <h2 id="community-heading" className="font-display text-3xl font-semibold">
+        From your community
+      </h2>
+      <ul className="mt-3 divide-y">
+        {entries.map((entry) => (
+          <li key={entry.key}>
+            <Link
+              to={entry.to}
+              className="group -mx-2 flex items-center gap-4 rounded-lg px-2 py-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
+                {entry.imageUrl ? (
+                  <img src={entry.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <Camera className="h-5 w-5" aria-hidden="true" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="font-display block truncate text-lg font-semibold leading-snug">{entry.title}</span>
+                {entry.facts.length ? (
+                  <span className="mt-0.5 block text-sm text-muted-foreground tabular-nums">{entry.facts.join(" · ")}</span>
+                ) : null}
+              </span>
+              <ChevronRight
+                className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

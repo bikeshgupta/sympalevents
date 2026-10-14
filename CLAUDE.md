@@ -2165,6 +2165,36 @@ Settings hides the Admin option unless the viewer is a society admin. The
 server is still the authority; that is only so the form does not offer a
 control that would be refused.
 
+## Society Home (the front door)
+
+`/society/<slug>` ([society-home-page.tsx](src/features/society/society-home-page.tsx)) is **"a society's digital
+community space", not an event dashboard**: built from type, spacing, imagery and hairlines, **not boxes**. Do not put
+the page's sections back into bordered, filled, rounded containers; rounded shapes are kept only for the hero,
+thumbnails and the role badge. Headings, tab labels and the hero title use `.font-display`.
+
+- **Order:** account line -> society + greeting -> quick actions -> Your passes (if any) -> featured hero (edge to
+  edge on a phone, `-mx-4`) -> Events (Upcoming / Live / Past text tabs, editorial rows with hairlines) -> From your
+  community. Behaviour is unchanged: `getEventStatus` is the status authority, one read feeds the page, permissions
+  are `canManage` + the viewer's society role, drafts stay out of the lists.
+- **The page sits outside AppLayout**, so it has its own account line (`SocietyAccount`: avatar, name, role in THIS
+  society, My profile / Sign out; a Sign in row when signed out). The role is a label, never a permission.
+- **Greeting** (`greeting.ts`, pure): "Good morning/afternoon/evening, <first name>" from the device's hour; a visitor
+  gets the society's name as the heading. Nothing about any society or person is written into the components.
+- **Quick actions** (`SocietyActions`): plain links, shown only where the existing permissions allow; **Drafts · N**
+  appears only when there are drafts (count from the data already loaded). Create event stays the committee's and
+  society admin's; residents propose (not built, see the plan).
+- **The hero** uses the event's photograph, else the artwork its template (or, failing that, its TYPE) already has -
+  one reusable system (`EventArtwork`), anchored right (`artworkPosition`) so the motif survives a tall phone crop.
+  It carries only real facts; there is no "Music - Dance - Community" tag line because events have no such field.
+- **"From your community"** (`community-feed.ts` + `community-section.tsx`): today the ONLY real entry kind is a
+  *memory* (a finished event whose closing page the viewer may open, with a photo, rating or review). It never repeats
+  an event already on screen (not the featured one, not a row in the open tab). Announcements, "details updated",
+  "new photos" and "event published" need data the society-home payload does not carry (announcements per event, and
+  timestamps for publishing, editing and adding photographs); `futureKinds` lists them. **Never fill this from
+  `audit_log`** - it records who did what and must not reach residents. Never invent entries.
+- Counts shown in rows (photos, reviews, teams, contributors) are real and gated on the module being open to the
+  viewer, as before. Do not fabricate "42 photos".
+
 ## Society Management
 
 `/society/<slug>/admin` ([src/features/society/admin/](src/features/society/admin/)), API
