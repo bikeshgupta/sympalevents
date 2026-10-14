@@ -2228,6 +2228,39 @@ for others so they are told why.
 - Role changes, additions and joins are written to `audit_log` with `organization_id` set (`society_member`).
 - Never add these queries to `persistedRoots` - the roster is private.
 
+## Event Settings (sections)
+
+`/settings` ([settings-page.tsx](src/features/settings/settings-page.tsx)) is an **index of eight sections and the one you
+open**, not a stack of boxes: Basics, Schedule & location, Pages & access, Team & permissions, Registration, Appearance,
+Notifications, Advanced. Each row is an icon, a title and one line **derived from real data** (event, page visibility,
+roster and requests queries, the command centre's readiness) - never a fabricated count. The sections are **only a
+grouping**: no setting was added, no permission changed, and which pages an event has is still
+`event_page_visibility` (Modules). Registration and Notifications have no controls in Settings; they are link rows to
+`/registration` and `/communications`, shown only where the server's page list lets the viewer open them.
+
+- **Every card keeps its own draft, Save and route.** Nothing was switched between auto and explicit save. Event details
+  is the one card that was split: `EventDetailsCard part="basics"` (name) and `part="schedule"` (venue, dates, hours) each
+  send **only their own fields** to `PATCH events?resource=details`, which has always accepted partial bodies. Without
+  `part` it is the whole form, as before.
+- **All sections stay mounted; inactive ones are only hidden** (`hidden`, so display:none), so a half-typed change survives
+  switching sections. Cards report unsaved changes with `useSettingsDirty(id, dirty)`
+  ([settings-dirty-state.ts](src/features/settings/settings-dirty-state.ts); a no-op outside the provider, so the wizard and
+  Society Management reuse the same components untouched). The index marks a section "Unsaved"; leaving Settings by
+  closing/reloading the tab (`beforeunload`) or following a link out (capture-phase click check) asks first. The router is
+  a plain `BrowserRouter`, so there is **no `useBlocker`, and the browser Back button is not guarded**.
+- The open section is `?section=<key>`. On a phone the index is the page until one is opened (single-section focus, "All
+  settings" back); from `lg` the index becomes a side navigation and `basics` is open by default.
+- **Readiness is the command centre's checklist** (`useCommandCentre`), not a second engine. "Ready to publish" is only ever
+  said of a draft with nothing missing; gaps link to the section that holds the control (`readinessTarget`) or to the page
+  that fixes them. Details and Appearance saves invalidate `["command-centre"]`. Publish/cancel still live in
+  `EventActions` on the event page; the index only points there.
+- Panels render inside `<FlatCards>` (card.tsx): `Card`/`CardHeader`/`CardTitle`/`CardContent` become hairline-divided
+  sections with serif titles. Default (outside `FlatCards`) is the boxed card every other screen uses.
+  `ModuleEditor` has an optional `flat` prop for the same reason; the wizard keeps its box.
+- Pure logic is in [settings-sections.ts](src/features/settings/settings-sections.ts), covered by
+  `tests/settings-sections.test.mjs`. The Team code (requests, roster, Member Access) moved to `team-panel.tsx` /
+  `team-data.ts` unchanged; Modules to `modules-card.tsx`.
+
 ## Event details, hours, and counts-only collections
 
 **Nothing could edit an event after it was created** until `?resource=details`

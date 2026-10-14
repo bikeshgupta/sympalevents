@@ -38,10 +38,13 @@ export function ModuleEditor({
   modules,
   onChange,
   disabled = false,
+  flat = false,
 }: {
   modules: ModuleDraft[];
   onChange: (modules: ModuleDraft[]) => void;
   disabled?: boolean;
+  /** Hairlines instead of a box around each group. Settings uses it; the new-event wizard keeps the box. */
+  flat?: boolean;
 }) {
 
   function update(pageKey: string, patch: Partial<ModuleDraft>) {
@@ -91,7 +94,7 @@ export function ModuleEditor({
         return (
           <section key={group.title}>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h3>
-            <div className="overflow-hidden rounded-md border">
+            <div className={flat ? "border-y" : "overflow-hidden rounded-md border"}>
               <div className="divide-y">
                 {rows.map((module) => (
                   <ModuleRow

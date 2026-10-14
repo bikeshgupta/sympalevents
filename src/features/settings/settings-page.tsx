@@ -1,758 +1,563 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import {
+  AlertCircle,
+  ArrowUpRight,
+  Bell,
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  LayoutGrid,
+  MoreHorizontal,
+  Palette,
+  SlidersHorizontal,
+  Ticket,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiFetch } from "@/lib/api";
-import { useSession } from "@/lib/auth";
-import { useEventContext } from "@/lib/event-context";
-import { useEventPath } from "@/lib/event-path";
-import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
+import { FlatCards } from "@/components/ui/card";
 import { AddressCard } from "@/features/settings/address-card";
 import { AppearanceCard } from "@/features/settings/appearance-card";
+import { DuplicateEventCard } from "@/features/settings/duplicate-event-card";
 import { EventDetailsCard } from "@/features/settings/event-details-card";
 import { GoodToKnowCard } from "@/features/settings/good-to-know-card";
-import { DuplicateEventCard } from "@/features/settings/duplicate-event-card";
+import { ModulesCard } from "@/features/settings/modules-card";
+import { SettingsDirtyProvider } from "@/features/settings/settings-dirty";
+import { useDirtyIds } from "@/features/settings/settings-dirty-state";
+import {
+  dateRangeLabel,
+  defaultSection,
+  dirtySectionKeys,
+  isPanelKey,
+  plural,
+  readinessHeadline,
+  readinessTarget,
+  sectionDefs,
+  type ReadinessTarget,
+  type SectionDef,
+  type SectionKey,
+} from "@/features/settings/settings-sections";
 import { ShareCard } from "@/features/settings/share-card";
 import { SocietyCard } from "@/features/settings/society-card";
+import { TeamPanel } from "@/features/settings/team-panel";
+import { useAccessRequests, useRoster } from "@/features/settings/team-data";
+import { eventTypeLabel } from "@/features/society/event-type-style";
+import { EventArtwork } from "@/features/society/event-artwork";
+import { formatEventDate } from "@/features/dashboard/dashboard-utils";
+import { useSession } from "@/lib/auth";
+import { useCommandCentre } from "@/lib/command-centre";
+import { useEventAccess } from "@/lib/event-access";
+import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
-import { configurablePageKeys, pageLabels, usePageAccess, usePageVisibility } from "@/lib/page-access";
+import { useEventPath } from "@/lib/event-path";
+import { describeEventHours } from "@/lib/event-hours";
+import { getEventStatus, statusLabels } from "@/lib/event-status";
+import { usePageAccess, usePageVisibility, visibilityLabels } from "@/lib/page-access";
+import { heroFocus } from "@/lib/hero";
+import { themeByKey } from "@/lib/themes";
+import { cn } from "@/lib/utils";
 
-type AccessLevel = "none" | "view" | "edit";
+/**
+ * Event Settings: one section at a time.
+ *
+ * It used to be every setting an event has, stacked in one long page of boxes. It is now an index of eight
+ * sections - each with one line that is true of this event right now - and the section you open. Nothing about how
+ * a control saves has changed: every card still keeps its own draft and its own Save button, calls the same
+ * route, and says what happened in the same words. What is new is the frame around them:
+ *
+ *  - every section stays mounted and the ones you are not looking at are only hidden, so a half-typed change
+ *    survives a trip to another section (and is flagged "Unsaved" on the index until it is saved);
+ *  - leaving Settings with unsaved changes asks first (see settings-dirty.tsx);
+ *  - the address says which section is open (`?section=team`), so one can be linked to or come back to;
+ *  - the readiness line is the command centre's own checklist, not a second engine.
+ *
+ * The sections are only a grouping. Which pages an event has is still `event_page_visibility`, who may open or
+ * edit what is still decided by the server, and nothing here widens either.
+ */
 
-// Every page is grantable now. Pages used to be dropped from this list when
-// they were hardcoded as public; visibility is the admin's call per event, so
-// a page they have set back to "restricted" needs a per-member row here.
-const grantablePages = configurablePageKeys.map((key) => [key, pageLabels[key]] as const);
-
-const initialPageAccess = Object.fromEntries(grantablePages.map(([key]) => [key, "none"])) as Record<string, AccessLevel>;
-
-type AccessRequest = {
-  id: string;
-  requested_role: "committee";
-  created_at: string;
-  app_users: {
-    email: string;
-    full_name: string | null;
-  } | null;
-};
-
-type RoleFilter = "all" | "unassigned" | "read_only" | "committee" | "admin";
-type EventRole = "read_only" | "committee" | "admin";
-
-const roleLabels: Record<EventRole, string> = {
-  admin: "Admin",
-  committee: "Committee",
-  read_only: "Read-only",
-};
-
-const roleBadgeStyles: Record<EventRole, string> = {
-  admin: "bg-primary/10 text-primary",
-  committee: "bg-sky-100 text-sky-800",
-  read_only: "bg-muted text-muted-foreground",
-};
-
-/** Admins first, then committee, then read-only. */
-function roleRank(role: EventRole | null) {
-  return role === "admin" ? 0 : role === "committee" ? 1 : 2;
-}
-
-function displayName(user: MemberUser) {
-  return user.full_name?.trim() || user.email.split("@")[0];
-}
-
-function displayUser(user: MemberUser) {
-  return user.full_name ? `${user.full_name} (${user.email})` : user.email;
-}
-
-/** "Priya Rao" -> "PR", so a row without a photo still has an anchor. */
-function initials(name: string) {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? "")
-      .join("") || "?"
-  );
-}
-
-type MemberUser = {
-  id: string;
-  email: string;
-  full_name: string | null;
-  photo_url: string | null;
-};
-
-type MemberOption = {
-  role: EventRole | null;
-  created_at: string | null;
-  app_users: MemberUser;
-};
-
-type MemberDetails = {
-  member: {
-    role: EventRole | null;
-    app_users: MemberUser;
-  };
-  permissions: Array<{
-    page_key: string;
-    access_level: AccessLevel;
-  }>;
+const sectionIcons: Record<SectionKey, LucideIcon> = {
+  basics: Info,
+  schedule: CalendarDays,
+  pages: LayoutGrid,
+  team: Users,
+  registration: Ticket,
+  appearance: Palette,
+  notifications: Bell,
+  advanced: SlidersHorizontal,
 };
 
 export function SettingsPage() {
+  return (
+    <SettingsDirtyProvider>
+      <SettingsShell />
+    </SettingsDirtyProvider>
+  );
+}
+
+function SettingsShell() {
   const { data } = useEventData();
   const { data: session } = useSession();
   const access = usePageAccess("settings");
   const { selectedEventId, selectedEvent, societies } = useEventContext();
-  const queryClient = useQueryClient();
-  const [accessMessage, setAccessMessage] = useState<string | null>(null);
-  const [requestMessage, setRequestMessage] = useState<string | null>(null);
-  const [rosterMessage, setRosterMessage] = useState<string | null>(null);
-  const [pageAccess, setPageAccess] = useState<Record<string, AccessLevel>>(initialPageAccess);
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
-  // A society admin outranks an event admin and is the only one who may grant
-  // or revoke event admin. The server is the authority; this is read only so
-  // the form does not offer what would be refused.
-  const isSocietyAdmin = societies.some(
-    (society) => society.id === selectedEvent?.societyId && society.role === "admin",
+  const path = useEventPath();
+  const [params, setParams] = useSearchParams();
+  const dirtyIds = useDirtyIds();
+
+  const { data: eventAccess } = useEventAccess();
+  const command = useCommandCentre(access.canEdit ? selectedEventId : undefined);
+  const { query: visibilityQuery } = usePageVisibility();
+  const { data: requests } = useAccessRequests();
+  const { data: roster } = useRoster();
+
+  const raw = params.get("section");
+  const active: SectionKey | null = isPanelKey(raw) ? raw : null;
+  // On a wide screen there is room for the index and a section side by side, so something is always open there.
+  const shown: SectionKey = active ?? defaultSection;
+  const dirtySections = dirtySectionKeys(dirtyIds);
+
+  const event = data.event;
+  const status = getEventStatus(event);
+  const isDraft = event.statusOverride === "draft";
+  const isSocietyAdmin = societies.some((society) => society.id === selectedEvent?.societyId && society.role === "admin");
+  const modules = visibilityQuery.data?.modules;
+  const readiness = command.data?.readiness.items;
+  const headline = readinessHeadline(readiness, isDraft);
+  const gaps = (readiness ?? []).filter((item) => item.status === "missing");
+
+  // Opening a section starts at its heading, and moves focus there so a keyboard or screen-reader user arrives
+  // where the eye does. Not on first render: a plain visit to Settings has not asked for anything yet.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0 });
+    if (active) headingRef.current?.focus({ preventScroll: true });
+  }, [active]);
+
+  function openSection(key: SectionKey) {
+    setParams({ section: key });
+  }
+  function closeSection() {
+    setParams({});
+  }
+
+  // ---- one line per section, from data this page already has --------------------------------------------------
+  const enabledModules = modules?.filter((module) => module.isEnabled) ?? [];
+  const publicModules = enabledModules.filter((module) => module.visibility === "public");
+  const registrationItem = readiness?.find((item) => item.key === "registration");
+  const summaries: Record<SectionKey, string> = {
+    basics: [event.name, eventTypeLabel(event.eventType ?? "festival")].filter(Boolean).join(" · "),
+    schedule: [
+      dateRangeLabel(event.startDate, event.endDate, formatEventDate),
+      event.location?.trim() || "No venue yet",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    pages: modules
+      ? `${plural(enabledModules.length, "page")} on · ${publicModules.length} open to anyone with the link`
+      : "Which pages this event has, and who can open them",
+    team:
+      roster || requests
+        ? [
+            roster ? plural(roster.length, "person", "people") : null,
+            requests && requests.length > 0 ? `${plural(requests.length, "request")} waiting` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : "Committee, roles and what each person can edit",
+    registration: registrationItem
+      ? registrationItem.status === "complete"
+        ? "Registration is on"
+        : (registrationItem.detail ?? "Registration needs setting up")
+      : "Booking, payment and entry",
+    appearance: `${themeByKey(event.theme).name} colour · ${event.heroImageUrl ? "your own photograph" : "standard hero"}`,
+    notifications: "Messages and announcements for residents",
+    advanced: isSocietyAdmin ? "Run this event again, start another, society details" : "Run this event again, start another",
+  };
+
+  // A link section is another page of the event; it is offered only where the server says this viewer may open it.
+  const visibleSections = sectionDefs.filter(
+    (section) => section.kind === "panel" || eventAccess?.pages.some((page) => page.pageKey === section.page && page.canView),
   );
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [selectedRole, setSelectedRole] = useState<EventRole>("read_only");
 
-  const { data: accessRequests = [] } = useQuery({
-    queryKey: ["access-requests", selectedEventId],
-    enabled: Boolean(access.canEdit && selectedEventId),
-    queryFn: async () => {
-      const data = await apiFetch<{ requests: AccessRequest[] }>(`/api/access-requests?eventId=${selectedEventId}`);
-      return data.requests;
-    },
-  });
+  const dashboardVisibility = modules?.find((module) => module.pageKey === "dashboard");
+  const hours = describeEventHours(event);
+  const identityLine = [
+    dateRangeLabel(event.startDate, event.endDate, formatEventDate),
+    hours,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
-  const { data: memberOptions = [] } = useQuery({
-    queryKey: ["event-members", selectedEventId, roleFilter],
-    enabled: Boolean(access.canEdit && selectedEventId),
-    queryFn: async () => {
-      const data = await apiFetch<{ members: MemberOption[] }>(
-        `/api/event-members?eventId=${selectedEventId}&role=${roleFilter}`,
-      );
-      return data.members;
-    },
-  });
-
-  // Everybody who actually holds a role on this event, as opposed to the
-  // dropdown below, which lists every person who has ever signed in.
-  const { data: roster = [], isLoading: isRosterLoading } = useQuery({
-    queryKey: ["event-members", selectedEventId, "assigned"],
-    enabled: Boolean(access.canEdit && selectedEventId),
-    queryFn: async () => {
-      const data = await apiFetch<{ members: MemberOption[] }>(
-        `/api/event-members?eventId=${selectedEventId}&role=assigned`,
-      );
-      return [...data.members].sort(
-        (left, right) =>
-          roleRank(left.role) - roleRank(right.role) ||
-          displayName(left.app_users).localeCompare(displayName(right.app_users)),
-      );
-    },
-  });
-
-  const { data: selectedMember } = useQuery({
-    queryKey: ["event-member", selectedEventId, selectedUserId],
-    enabled: Boolean(access.canEdit && selectedEventId && selectedUserId),
-    queryFn: () => apiFetch<MemberDetails>(`/api/event-members?eventId=${selectedEventId}&userId=${selectedUserId}`),
-  });
-
-  useEffect(() => {
-    if (!selectedMember) return;
-
-    setSelectedRole(selectedMember.member.role ?? "read_only");
-    setPageAccess({
-      ...initialPageAccess,
-      ...Object.fromEntries(
-        selectedMember.permissions.map((permission) => [permission.page_key, permission.access_level]),
-      ),
-    });
-  }, [selectedMember]);
-
-  useEffect(() => {
-    if (!selectedUserId && memberOptions.length) {
-      setSelectedUserId(memberOptions[0].app_users.id);
-    }
-  }, [memberOptions, selectedUserId]);
-
-  function setPageAccessLevel(pageKey: string, accessLevel: AccessLevel) {
-    setPageAccess((current) => ({
-      ...current,
-      [pageKey]: accessLevel,
-    }));
-  }
-
-
-  /**
-   * Take somebody off this event.
-   *
-   * Deletes their `event_members` row and every per-page grant with it, which
-   * is what "no longer on the committee" has to mean - leaving the grants
-   * behind would hand a removed member view access to pages an admin had
-   * opened up for them. Nothing they recorded is touched: their
-   * contributions, expenses, tasks and comments are the event's history, not
-   * their membership.
-   *
-   * The server refuses to remove the last remaining admin, whatever this
-   * button does.
-   */
-  async function removeMember(member: MemberOption) {
-    const name = displayName(member.app_users);
-    const role = member.role ? roleLabels[member.role].toLowerCase() : "member";
-    if (
-      !window.confirm(
-        `Remove ${name} from this event? They lose their ${role} role and every page grant with it, and go back to being an ordinary signed-in visitor. Anything they recorded stays.`,
-      )
-    ) {
-      return;
-    }
-
-    setRosterMessage(`Removing ${name}...`);
-    try {
-      await apiFetch("/api/event-members", {
-        method: "DELETE",
-        body: { eventId: selectedEventId, userId: member.app_users.id },
-      });
-
-      await queryClient.invalidateQueries({ queryKey: ["event-members"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-member"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-access"] });
-      await queryClient.invalidateQueries({ queryKey: ["page-access"] });
-      setRosterMessage(`${name} removed.`);
-    } catch (error) {
-      setRosterMessage(error instanceof Error ? error.message : "Unable to remove this member");
-    }
-  }
-
-  /**
-   * Correct somebody's name.
-   *
-   * Names on this event go out over the committee's name - the credits on the
-   * closing page, the duty roster, the prasad list - and Google's idea of
-   * somebody's name is often an initial or the wrong order. The person can
-   * always set it back themselves from the header menu.
-   */
-  async function renameMember(member: MemberOption) {
-    const current = displayName(member.app_users);
-    const next = window.prompt(`Name for ${member.app_users.email}`, current);
-    if (next === null) return;
-    const trimmed = next.replace(/\s+/g, " ").trim();
-    if (!trimmed || trimmed === current) return;
-
-    setRosterMessage(`Renaming ${current}...`);
-    try {
-      await apiFetch("/api/event-members", {
-        method: "PATCH",
-        body: { eventId: selectedEventId, userId: member.app_users.id, fullName: trimmed },
-      });
-      await queryClient.invalidateQueries({ queryKey: ["event-members"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-member"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-closing"] });
-      await queryClient.invalidateQueries({ queryKey: ["session"] });
-      setRosterMessage(`Now shown as ${trimmed}.`);
-    } catch (error) {
-      setRosterMessage(error instanceof Error ? error.message : "Unable to rename this member");
-    }
-  }
-
-  /** Load somebody into the Member Access form below, role and grants and all. */
-  function manageMember(member: MemberOption) {
-    setRoleFilter("all");
-    setSelectedUserId(member.app_users.id);
-    setRosterMessage(null);
-    document.getElementById("member-access")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  async function reviewAccessRequest(requestId: string, action: "approve" | "reject") {
-    setRequestMessage(action === "approve" ? "Approving request..." : "Rejecting request...");
-
-    try {
-      await apiFetch("/api/access-requests", {
-        method: "PATCH",
-        body: { requestId, action },
-      });
-
-      await queryClient.invalidateQueries({ queryKey: ["access-requests"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-access"] });
-      await queryClient.invalidateQueries({ queryKey: ["page-access"] });
-      setRequestMessage(action === "approve" ? "Request approved." : "Request rejected.");
-    } catch (error) {
-      setRequestMessage(error instanceof Error ? error.message : "Unable to update request");
-    }
-  }
-
-
-  async function grantAccess(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedEventId || !selectedUserId) return;
-    setAccessMessage("Saving access...");
-
-    try {
-      await apiFetch("/api/event-members", {
-        method: "POST",
-        body: {
-          eventId: selectedEventId,
-          userId: selectedUserId,
-          role: selectedRole,
-          permissions: Object.entries(pageAccess).map(([pageKey, accessLevel]) => ({
-            pageKey,
-            accessLevel,
-          })),
-        },
-      });
-
-      await queryClient.invalidateQueries({ queryKey: ["page-access"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-access"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-members"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-member"] });
-      setAccessMessage("Access saved.");
-    } catch (error) {
-      setAccessMessage(error instanceof Error ? error.message : "Unable to save access");
-      return;
-    }
-  }
-
-  async function revokeAccess() {
-    if (!selectedEventId || !selectedUserId) return;
-    const name = selectedMember ? displayName(selectedMember.member.app_users) : "this member";
-    if (!window.confirm(`Remove ${name} from this event? Their role and every page grant go with it.`)) return;
-    setAccessMessage("Removing...");
-
-    try {
-      await apiFetch("/api/event-members", {
-        method: "DELETE",
-        body: {
-          eventId: selectedEventId,
-          userId: selectedUserId,
-        },
-      });
-
-      await queryClient.invalidateQueries({ queryKey: ["page-access"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-access"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-members"] });
-      await queryClient.invalidateQueries({ queryKey: ["event-member"] });
-      setSelectedRole("read_only");
-      setPageAccess(initialPageAccess);
-      setAccessMessage(`${name} removed from this event.`);
-    } catch (error) {
-      setAccessMessage(error instanceof Error ? error.message : "Unable to remove this member");
-    }
-  }
+  const mobileIndex = active === null;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Settings</h2>
-          <p className="text-sm text-muted-foreground">Create events and manage member access for the active event.</p>
+    <div className="mx-auto max-w-5xl">
+      {/* Compact header: where back goes depends on whether a section is open. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {selectedEventId ? (
+            active ? (
+              <Link
+                to="?"
+                onClick={(clicked) => {
+                  clicked.preventDefault();
+                  closeSection();
+                }}
+                className="-ml-1 inline-flex min-h-10 items-center gap-0.5 rounded-md pr-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                All settings
+              </Link>
+            ) : null
+          ) : null}
+          {selectedEventId ? (
+            <Link
+              to={path("/dashboard")}
+              className={cn(
+                "-ml-1 min-h-10 items-center gap-0.5 rounded-md pr-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                active ? "hidden lg:inline-flex" : "inline-flex",
+              )}
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              Back to event
+            </Link>
+          ) : null}
+          <h1 className="font-display text-3xl leading-tight sm:text-4xl">Event settings</h1>
+          {selectedEventId ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              <span
+                className={cn(
+                  "mr-2 inline-block h-2 w-2 rounded-full align-middle",
+                  status === "live" ? "bg-emerald-600" : status === "draft" || status === "cancelled" ? "bg-amber-600" : "bg-primary",
+                )}
+                aria-hidden="true"
+              />
+              {statusLabels[status]}
+              {isDraft ? " · not visible to residents yet" : ""}
+            </p>
+          ) : null}
         </div>
-        <DataSourceBadge source={data.source} reason={data.fallbackReason} />
+        <div className="flex shrink-0 items-center gap-2 pt-1">
+          <DataSourceBadge source={data.source} reason={data.fallbackReason} />
+          {selectedEventId && access.canEdit ? <OverflowMenu /> : null}
+        </div>
       </div>
 
       {!session ? (
-        <Card>
-          <CardContent className="p-5 text-sm text-muted-foreground">Sign in with Google to create events and manage access.</CardContent>
-        </Card>
+        <p className="mt-6 text-sm text-muted-foreground">Sign in with Google to create events and manage access.</p>
       ) : null}
-
       {session && !access.canEdit ? (
-        <Card>
-          <CardContent className="p-5 text-sm text-muted-foreground">
-            You are signed in, but only an event admin can create events or manage member access.
-          </CardContent>
-        </Card>
+        <p className="mt-6 text-sm text-muted-foreground">
+          You are signed in, but only an event admin can create events or manage member access.
+        </p>
       ) : null}
 
-      {/* grid-cols-1, not the implicit auto column: an auto track grows to its
-          widest card's min-content, so one card with a long unbreakable string
-          pushed every card past the screen edge on a phone. */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <SocietyCard />
-        <EventDetailsCard />
-        <AppearanceCard />
-        <GoodToKnowCard />
-        <ShareCard />
-        <DuplicateEventCard />
-        <AddressCard />
-        <Card>
-          <CardHeader>
-            <CardTitle>Create Event</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* The five-field form that used to sit here created an event with
-                no modules at all, so nobody could tell what it had until they
-                scrolled down to this page's own Modules card. Creating an
-                event now starts from a template and ends on those switches. */}
-            <p className="text-sm text-muted-foreground">
-              Start from a festival, a sports meet, a cultural night or a blank slate, then turn modules on and off
-              before anybody sees it.
-            </p>
-            <Button asChild disabled={!session}>
-              <Link to="/new-event">New event</Link>
-            </Button>
-            {!session ? <p className="text-sm text-muted-foreground">Sign in to create an event.</p> : null}
-          </CardContent>
-        </Card>
-
-        {access.canEdit ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Committee Requests</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {accessRequests.length ? (
-                accessRequests.map((item) => (
-                  <div key={item.id} className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{item.app_users?.full_name ?? item.app_users?.email ?? "Member"}</p>
-                      <p className="truncate text-xs text-muted-foreground">{item.app_users?.email}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => void reviewAccessRequest(item.id, "approve")}>
-                        Approve
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => void reviewAccessRequest(item.id, "reject")}>
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">No pending committee requests.</p>
-              )}
-              {requestMessage ? <p className="text-sm text-muted-foreground">{requestMessage}</p> : null}
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Committee &amp; members</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Everyone with a role on this event. Approving a request adds somebody here; removing them here is how
-              they come off it.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {roster.length ? (
-              <ul className="overflow-hidden rounded-md border">
-                {roster.map((member) => {
-                  const name = displayName(member.app_users);
-                  const isYou = member.app_users.id === session?.user.appUserId;
-                  return (
-                    <li
-                      key={member.app_users.id}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-2.5 last:border-b-0"
-                    >
-                      {member.app_users.photo_url ? (
-                        <img
-                          src={member.app_users.photo_url}
-                          alt=""
-                          className="h-9 w-9 shrink-0 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
-                          aria-hidden="true"
-                        >
-                          {initials(name)}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">
-                          {name}
-                          {isYou ? <span className="ml-1.5 text-xs text-muted-foreground">(you)</span> : null}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">{member.app_users.email}</p>
-                      </div>
-                      {member.role ? (
-                        <span
-                          className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
-                            roleBadgeStyles[member.role]
-                          }`}
-                        >
-                          {roleLabels[member.role]}
-                        </span>
-                      ) : null}
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={!access.canEdit}
-                          onClick={() => void renameMember(member)}
-                        >
-                          Rename
-                        </Button>
-                        <Button type="button" variant="outline" size="sm" onClick={() => manageMember(member)}>
-                          Manage
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={!access.canEdit}
-                          onClick={() => void removeMember(member)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
+      {selectedEventId && access.canEdit ? (
+        <>
+          {/* Compact identity: the event as a resident would meet it, from the event's own data. */}
+          <div className={cn("mt-5 items-center gap-3.5 border-y py-4", mobileIndex ? "flex" : "hidden lg:flex")}>
+            <EventArtwork
+              eventType={event.eventType ?? "festival"}
+              imageUrl={event.heroImageUrl}
+              templateKey={event.templateKey}
+              focus={heroFocus(event.heroOptions)}
+              className="h-14 w-14 shrink-0 rounded-lg"
+              iconClassName="h-6 w-6"
+            />
+            <div className="min-w-0">
+              <p className="truncate font-display text-xl leading-tight">{event.name}</p>
+              {identityLine ? <p className="truncate text-sm text-muted-foreground">{identityLine}</p> : null}
               <p className="text-sm text-muted-foreground">
-                {isRosterLoading ? "Loading members..." : "Nobody has a role on this event yet."}
+                {event.location?.trim() || "No venue yet"}
+                {dashboardVisibility ? ` · Event page: ${visibilityLabels[dashboardVisibility.visibility].toLowerCase()}` : ""}
               </p>
-            )}
-            {rosterMessage ? <p className="text-sm text-muted-foreground">{rosterMessage}</p> : null}
-            <p className="text-xs text-muted-foreground">
-              Names start from the person's Google account and can be corrected here - they can also change their own
-              from the account menu in the header. Removing somebody takes their role and every page grant with it.
-              Anything they recorded stays. The event's last admin cannot be removed - make somebody else an admin
-              first.
-            </p>
-          </CardContent>
-        </Card>
+            </div>
+          </div>
 
-        <Card id="member-access">
-          <CardHeader>
-            <CardTitle>Member Access</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Add somebody to the event, change their role, and grant them individual pages.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={grantAccess}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="roleFilter">Filter</label>
-                  <select
-                    id="roleFilter"
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={roleFilter}
-                    onChange={(item) => {
-                      setRoleFilter(item.target.value as RoleFilter);
-                      setSelectedUserId("");
-                    }}
-                  >
-                    <option value="all">All users</option>
-                    <option value="unassigned">Unassigned</option>
-                    <option value="read_only">Read-only</option>
-                    <option value="committee">Committee</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="memberUser">User</label>
-                  <select
-                    id="memberUser"
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={selectedUserId}
-                    onChange={(item) => setSelectedUserId(item.target.value)}
-                    required
-                  >
-                    {memberOptions.length ? (
-                      memberOptions.map((member) => (
-                        <option key={member.app_users.id} value={member.app_users.id}>
-                          {displayUser(member.app_users)}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">No users found</option>
-                    )}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium" htmlFor="role">Role</label>
-                  <select
-                    id="role"
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={selectedRole}
-                    onChange={(item) => setSelectedRole(item.target.value as EventRole)}
-                  >
-                    <option value="read_only">Read-only</option>
-                    <option value="committee">Committee</option>
-                    {/* Granting event admin is the society's call - see
-                        api/_lib/authority.ts. The server refuses it either
-                        way; this only avoids offering a control that would
-                        just 403. */}
-                    {isSocietyAdmin ? <option value="admin">Admin</option> : null}
-                  </select>
-                  {isSocietyAdmin ? null : (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Only a society admin can make somebody an event admin.
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="overflow-hidden rounded-md border">
-                <div className="grid grid-cols-[1fr_6rem_7rem] border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-                  <span>Page</span>
-                  <span>Read</span>
-                  <span>Read/write</span>
-                </div>
-                <div className="divide-y">
-                  {grantablePages.map(([key, label]) => (
-                    <div key={key} className="grid grid-cols-[1fr_6rem_7rem] items-center gap-3 px-3 py-2">
-                      <span className="min-w-0 truncate text-sm">{label}</span>
-                      <div className="flex items-center">
-                        <input
-                          aria-label={`${label} read access`}
-                          className="h-4 w-4"
-                          type="checkbox"
-                          checked={pageAccess[key] === "view" || pageAccess[key] === "edit"}
-                          onChange={(item) => setPageAccessLevel(key, item.target.checked ? "view" : "none")}
-                        />
-                      </div>
-                      <div className="flex items-center">
-                        <input
-                          aria-label={`${label} read/write access`}
-                          className="h-4 w-4"
-                          type="checkbox"
-                          checked={pageAccess[key] === "edit"}
-                          onChange={(item) => setPageAccessLevel(key, item.target.checked ? "edit" : "view")}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {accessMessage ? <p className="text-sm text-muted-foreground">{accessMessage}</p> : null}
-              <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={!access.canEdit || !selectedEventId || !selectedUserId}>
-                  Save Access
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!access.canEdit || !selectedEventId || !selectedUserId || !selectedMember?.member.role}
-                  onClick={() => void revokeAccess()}
-                >
-                  Remove from event
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+          {headline.tone !== "none" ? (
+            <ReadinessBlock
+              headline={headline}
+              gaps={gaps}
+              className={mobileIndex ? "block" : "hidden lg:block"}
+              dashboardHref={path("/dashboard")}
+              pathFor={(page) => path(`/${page}`)}
+              onSection={openSection}
+            />
+          ) : null}
 
-        {access.canEdit ? <ModulesCard /> : null}
-      </div>
+          <div className="mt-2 lg:mt-6 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12">
+            {/* The index on a phone; the side navigation from lg. */}
+            <nav aria-label="Settings sections" className={cn(active ? "hidden lg:block" : "block")}>
+              <ul className="divide-y border-b lg:border-b-0 lg:divide-y-0">
+                {visibleSections.map((section) => (
+                  <SectionRow
+                    key={section.key}
+                    section={section}
+                    summary={summaries[section.key]}
+                    selected={section.kind === "panel" && shown === section.key}
+                    unsaved={dirtySections.has(section.key)}
+                    href={section.kind === "link" && section.page ? path(`/${section.page}`) : `?section=${section.key}`}
+                  />
+                ))}
+              </ul>
+            </nav>
+
+            {/* Every panel stays mounted so a draft survives a visit elsewhere; only the open one is shown. */}
+            <div className="min-w-0">
+              <FlatCards>
+                {sectionDefs
+                  .filter((section) => section.kind === "panel")
+                  .map((section) => {
+                    const open = shown === section.key;
+                    // On a phone nothing is open until a section is chosen; from lg the default section fills the page.
+                    const visibility = active === section.key ? "block" : open && active === null ? "hidden lg:block" : "hidden";
+                    return (
+                      <section
+                        key={section.key}
+                        aria-labelledby={`settings-${section.key}`}
+                        className={cn("pt-4 lg:pt-0", visibility)}
+                      >
+                        <h2
+                          id={`settings-${section.key}`}
+                          ref={open ? headingRef : undefined}
+                          tabIndex={-1}
+                          className="font-display text-2xl leading-tight outline-none sm:text-3xl"
+                        >
+                          {section.title}
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">{summaries[section.key]}</p>
+                        <div className="mt-5">{panels(section.key, isSocietyAdmin)}</div>
+                      </section>
+                    );
+                  })}
+              </FlatCards>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* No event open: the only thing Settings can still do is start one. */}
+      {!selectedEventId ? (
+        <div className="mt-8">
+          <CreateEventBlock signedIn={Boolean(session)} />
+        </div>
+      ) : null}
     </div>
   );
 }
 
-/**
- * What this event has, what it calls each thing, and who can open it.
- *
- * This is the Page Visibility card grown up. It sits in the same place and
- * still answers the same question for every module, plus the two migration 024
- * added: whether this event has the module at all, and what the committee
- * calls it. A sports meet has no Prasad - that is not "Prasad, restricted",
- * it is a module nobody turned on, and it should not appear in the nav or in
- * Member Access either.
- *
- * The editor itself is shared with the create-event wizard, so the switches
- * somebody saw when they made the event are the switches they come back to.
- */
-function ModulesCard() {
-  const { selectedEventId } = useEventContext();
-  const eventPath = useEventPath();
-  const { query, saveModules } = usePageVisibility();
-  const [draft, setDraft] = useState<ModuleDraft[] | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const stored = query.data?.modules;
-  // The server's list is the baseline; the draft only exists once the admin
-  // has actually changed something, so a refetch never stomps on typing.
-  const current: ModuleDraft[] | null =
-    draft ??
-    (stored
-      ? stored.map((module) => ({
-          pageKey: module.pageKey,
-          isEnabled: module.isEnabled,
-          visibility: module.visibility,
-          labelOverride: module.labelOverride,
-        }))
-      : null);
-
-  const offCount = current?.filter((module) => !module.isEnabled).length ?? 0;
-
-  async function handleSave() {
-    if (!current || !selectedEventId) return;
-    setMessage("Saving modules...");
-    try {
-      await saveModules.mutateAsync(current);
-      setDraft(null);
-      setMessage("Modules saved.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to save modules");
-    }
+function panels(key: SectionKey, isSocietyAdmin: boolean): ReactNode {
+  switch (key) {
+    case "basics":
+      return <EventDetailsCard part="basics" />;
+    case "schedule":
+      return (
+        <>
+          <EventDetailsCard part="schedule" />
+          <GoodToKnowCard />
+        </>
+      );
+    case "pages":
+      return (
+        <>
+          <ModulesCard />
+          <ShareCard />
+          <AddressCard />
+        </>
+      );
+    case "team":
+      return <TeamPanel />;
+    case "appearance":
+      return <AppearanceCard />;
+    case "advanced":
+      return (
+        <>
+          <DuplicateEventCard />
+          <CreateEventBlock signedIn />
+          {isSocietyAdmin ? <SocietyCard /> : null}
+        </>
+      );
+    default:
+      return null;
   }
+}
 
+function SectionRow({
+  section,
+  summary,
+  selected,
+  unsaved,
+  href,
+}: {
+  section: SectionDef;
+  summary: string;
+  selected: boolean;
+  unsaved: boolean;
+  href: string;
+}) {
+  const Icon = sectionIcons[section.key];
+  const isLink = section.kind === "link";
   return (
-    <Card className="xl:col-span-2">
-      <CardHeader>
-        <CardTitle>Modules</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Turn a module off and it leaves the nav, Member Access and the address bar for this event. Rename one to what
-          your committee actually calls it. Editing is never widened here - it still comes from the role and the
-          per-member grants in Member Access.
-        </p>
-
-        {query.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading modules...</p>
-        ) : !current ? (
-          <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            Modules could not be loaded. Check that migration 015_event_page_visibility.sql has been run.
-          </p>
-        ) : (
-          <>
-            <ModuleEditor modules={current} onChange={setDraft} disabled={saveModules.isPending} />
-
-            <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-              <p>
-                <span className="font-medium text-foreground">Settings</span> is always admin-only and cannot be opened
-                up - it is the screen that controls all the others.
-              </p>
-              <p>
-                A page set to <span className="font-medium text-foreground">Anyone with the link</span> is genuinely
-                public. Keep contact details and payment references off those pages.
-              </p>
-              {offCount ? (
-                <p>
-                  {offCount} module{offCount === 1 ? " is" : "s are"} off. Nothing they hold is deleted - turning one
-                  back on brings its records with it.
-                </p>
-              ) : null}
-            </div>
-
-            {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={() => void handleSave()} disabled={!draft || saveModules.isPending}>
-                {saveModules.isPending ? "Saving..." : "Save Modules"}
-              </Button>
-              <Button type="button" variant="outline" asChild>
-                <Link to={eventPath("/customise-dashboard")}>Arrange the dashboard</Link>
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setDraft(null)} disabled={!draft}>
-                Reset
-              </Button>
-            </div>
-          </>
+    <li>
+      <Link
+        to={href}
+        aria-current={selected ? "true" : undefined}
+        className={cn(
+          "group relative flex min-h-[3.75rem] items-center gap-3.5 py-3 transition-colors",
+          "[@media(hover:hover)]:hover:bg-muted/40",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+          // The side navigation marks its open section with a bar and a heavier title, not a filled box.
+          selected && "lg:before:absolute lg:before:-left-3 lg:before:top-2 lg:before:bottom-2 lg:before:w-0.5 lg:before:rounded-full lg:before:bg-primary",
         )}
-      </CardContent>
-    </Card>
+      >
+        <Icon className={cn("h-5 w-5 shrink-0 text-muted-foreground", selected && "lg:text-primary")} aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className={cn("block font-medium leading-snug", selected && "lg:font-semibold")}>
+            {section.title}
+            {unsaved ? (
+              <span className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-medium text-amber-800">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-600" aria-hidden="true" />
+                Unsaved
+              </span>
+            ) : null}
+          </span>
+          <span className="block truncate text-sm text-muted-foreground lg:hidden">{summary}</span>
+        </span>
+        {isLink ? (
+          <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground lg:hidden" aria-hidden="true" />
+        )}
+      </Link>
+    </li>
+  );
+}
+
+function ReadinessBlock({
+  headline,
+  gaps,
+  className,
+  dashboardHref,
+  pathFor,
+  onSection,
+}: {
+  headline: { tone: "ready" | "attention" | "none"; text: string };
+  gaps: { key: string; label: string; detail?: string; page?: string; status: "complete" | "missing" | "optional" }[];
+  className?: string;
+  dashboardHref: string;
+  pathFor: (page: string) => string;
+  onSection: (section: SectionKey) => void;
+}) {
+  const attention = headline.tone === "attention";
+  const rowClass =
+    "flex min-h-11 w-full items-center gap-3 py-2 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+  return (
+    <div className={cn("border-b py-3", className)} role="status">
+      <p className={cn("flex items-center gap-2 text-sm font-medium", attention ? "text-amber-900" : "text-emerald-800")}>
+        {attention ? <AlertCircle className="h-4 w-4" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+        {headline.text}
+      </p>
+      {attention ? (
+        <ul className="mt-1 divide-y">
+          {gaps.map((gap) => {
+            const target: ReadinessTarget | null = readinessTarget(gap);
+            const body = (
+              <>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm">{gap.label}</span>
+                  {gap.detail ? <span className="block text-xs text-muted-foreground">{gap.detail}</span> : null}
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </>
+            );
+            return (
+              <li key={gap.key}>
+                {target?.kind === "section" ? (
+                  <button type="button" className={rowClass} onClick={() => onSection(target.section)}>
+                    {body}
+                  </button>
+                ) : target?.kind === "page" ? (
+                  <Link to={pathFor(target.page)} className={rowClass}>
+                    {body}
+                  </Link>
+                ) : (
+                  <div className={rowClass}>{body}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="mt-1 text-sm text-muted-foreground">
+          Every check passes.{" "}
+          <Link to={dashboardHref} className="font-medium text-primary underline-offset-4 hover:underline">
+            Publish from the event page
+          </Link>
+          .
+        </p>
+      )}
+    </div>
+  );
+}
+
+function OverflowMenu() {
+  const path = useEventPath();
+  const item =
+    "flex w-full items-center gap-2 rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted focus:bg-muted";
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="More actions">
+          <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+        </Button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" sideOffset={6} className="z-50 w-56 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-md">
+          <DropdownMenu.Item asChild>
+            <Link to={path("/dashboard")} className={item}>
+              Open the event page
+            </Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild>
+            <Link to={path("/command")} className={item}>
+              Command centre
+            </Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild>
+            <Link to={path("/customise-dashboard")} className={item}>
+              Arrange the dashboard
+            </Link>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** Creating an event is not a setting of this one; it is only here so it is not lost. Same link as before. */
+function CreateEventBlock({ signedIn }: { signedIn: boolean }) {
+  return (
+    <div className="border-t py-7 first:border-t-0 first:pt-1">
+      <h3 className="font-display text-xl leading-tight">Start another event</h3>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Start from a festival, a sports meet, a cultural night or a blank slate, then turn modules on and off before
+        anybody sees it.
+      </p>
+      <div className="mt-4">
+        <Button asChild disabled={!signedIn}>
+          <Link to="/new-event">New event</Link>
+        </Button>
+      </div>
+      {!signedIn ? <p className="mt-2 text-sm text-muted-foreground">Sign in to create an event.</p> : null}
+    </div>
   );
 }

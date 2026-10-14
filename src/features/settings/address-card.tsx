@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
+import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
@@ -63,12 +64,15 @@ export function AddressCard() {
     onSuccess: refresh,
   });
 
-  if (!selectedEventId || access.role !== "admin") return null;
-
   const currentSociety = data.event.societySlug ?? "";
   const currentEvent = data.event.slug ?? "";
   const societyValue = societyDraft ?? currentSociety;
   const eventValue = eventDraft ?? currentEvent;
+  const dirty = societyValue !== currentSociety || eventValue !== currentEvent;
+  useSettingsDirty("address", dirty);
+
+  if (!selectedEventId || access.role !== "admin") return null;
+
   const ready = Boolean(currentSociety || currentEvent);
   const busy = saveEvent.isPending || saveSociety.isPending;
 
@@ -87,8 +91,6 @@ export function AddressCard() {
       setMessage(error instanceof Error ? error.message : "Could not change the address");
     }
   }
-
-  const dirty = societyValue !== currentSociety || eventValue !== currentEvent;
 
   return (
     <Card>

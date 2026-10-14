@@ -43,7 +43,10 @@ export function AppearanceCard() {
         method: "PATCH",
         body: { eventId: selectedEventId, ...input },
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["event-data"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["command-centre"] });
+      return queryClient.invalidateQueries({ queryKey: ["event-data"] });
+    },
   });
 
   if (!selectedEventId || !access.canEdit) return null;

@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
+import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 
 /**
  * What the event is: its name, venue, and when it starts and ends.
@@ -35,7 +36,26 @@ type Draft = {
 
 type SaveResult = { ok: true; changed: boolean; scheduleOutsideRange: number };
 
-export function EventDetailsCard() {
+/**
+ * Which fields this instance owns. The Settings sections show the name on its own (Basics) and the venue, dates and
+ * hours together (Schedule & location); each sends only its own fields, which the details route has always accepted
+ * (every field is optional there). Without a `part` the card is the whole form, exactly as before.
+ */
+export type DetailsPart = "all" | "basics" | "schedule";
+
+const partKeys: Record<DetailsPart, (keyof Draft)[]> = {
+  all: ["name", "location", "startDate", "startTime", "endDate", "endTime"],
+  basics: ["name"],
+  schedule: ["location", "startDate", "startTime", "endDate", "endTime"],
+};
+
+const partTitles: Record<DetailsPart, string> = {
+  all: "Event details",
+  basics: "Event name",
+  schedule: "Venue, dates and hours",
+};
+
+export function EventDetailsCard({ part = "all" }: { part?: DetailsPart }) {
   const { data } = useEventData({ includeTasks: false });
   const { selectedEventId } = useEventContext();
   const access = usePageAccess("settings");
@@ -44,28 +64,30 @@ export function EventDetailsCard() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "warn" | "error"; text: string } | null>(null);
 
+  const owns = (key: keyof Draft) => partKeys[part].includes(key);
+
   const save = useMutation({
     mutationFn: (input: Draft) =>
       apiFetch<SaveResult>("/api/events?resource=details", {
         method: "PATCH",
         body: {
           eventId: selectedEventId,
-          name: input.name,
-          location: input.location,
-          startDate: input.startDate,
-          endDate: input.endDate,
-          startTime: input.startTime || null,
-          endTime: input.endTime || null,
+          ...(owns("name") ? { name: input.name } : {}),
+          ...(owns("location") ? { location: input.location } : {}),
+          ...(owns("startDate") ? { startDate: input.startDate } : {}),
+          ...(owns("endDate") ? { endDate: input.endDate } : {}),
+          ...(owns("startTime") ? { startTime: input.startTime || null } : {}),
+          ...(owns("endTime") ? { endTime: input.endTime || null } : {}),
         },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["event-data"] });
       queryClient.invalidateQueries({ queryKey: ["my-events"] });
       queryClient.invalidateQueries({ queryKey: ["society-home"] });
+      // The readiness line on the Settings index reads the command centre's checklist, which this may have settled.
+      queryClient.invalidateQueries({ queryKey: ["command-centre"] });
     },
   });
-
-  if (!selectedEventId || !access.canEdit) return null;
 
   const event = data.event;
   const timesReady = Boolean(event.detailsReady);
@@ -78,13 +100,17 @@ export function EventDetailsCard() {
     endTime: event.endTime ?? "",
   };
   const value = draft ?? stored;
-  const dirty = (Object.keys(stored) as (keyof Draft)[]).some((key) => value[key] !== stored[key]);
+  const dirty = partKeys[part].some((key) => value[key] !== stored[key]);
+  useSettingsDirty(`details:${part}`, dirty);
+
+  if (!selectedEventId || !access.canEdit) return null;
 
   // The same rules the server enforces, so the button explains itself instead
   // of the save failing. A blank start is the start of the day and a blank end
   // is the end of it.
   let problem: string | null = null;
-  if (!value.name.trim()) problem = "An event needs a name.";
+  if (owns("name") && !value.name.trim()) problem = "An event needs a name.";
+  else if (!owns("startDate")) problem = null;
   else if (!value.startDate || !value.endDate) problem = "Pick both dates.";
   else if (value.endDate < value.startDate) problem = "The event cannot end before it starts.";
   else if (value.endDate === value.startDate && (value.endTime || "23:59") <= (value.startTime || "00:00")) {
@@ -121,17 +147,18 @@ export function EventDetailsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Event details</CardTitle>
+        <CardTitle>{partTitles[part]}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4">
-          {!timesReady ? (
+          {!timesReady && owns("startTime") ? (
             <p className="rounded-md bg-amber-100 p-3 text-sm text-amber-900">
               Start and end times need <code className="break-all font-mono">supabase/migrations/031_event_details.sql</code>.
               Until it is run, name, venue and dates still save.
             </p>
           ) : null}
 
+          {owns("name") ? (
           <div className="space-y-1.5">
             <label className="block text-sm font-medium" htmlFor="event-name">
               Name
@@ -144,7 +171,9 @@ export function EventDetailsCard() {
               autoComplete="off"
             />
           </div>
+          ) : null}
 
+          {owns("location") ? (
           <div className="space-y-1.5">
             <label className="block text-sm font-medium" htmlFor="event-venue">
               Venue
@@ -157,7 +186,10 @@ export function EventDetailsCard() {
               autoComplete="off"
             />
           </div>
+          ) : null}
 
+          {owns("startDate") ? (
+            <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="min-w-0 space-y-1.5">
               <label className="block text-sm font-medium" htmlFor="event-start-date">
@@ -216,6 +248,8 @@ export function EventDetailsCard() {
             Times are India time. Leave a time blank for the whole day &mdash; the event then starts at the
             beginning of its first day and ends at the close of its last.
           </p>
+            </>
+          ) : null}
 
           {dirty && problem ? (
             <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">

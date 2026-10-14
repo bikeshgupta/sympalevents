@@ -81,7 +81,7 @@ export function ShareCard() {
         </p>
 
         {link ? (
-          <div className="rounded-md border bg-muted/40 p-3">
+          <div>
             <div className="flex flex-wrap items-center gap-2">
               <code className="min-w-0 flex-1 truncate rounded-md border bg-card px-3 py-2 font-mono text-sm">
                 {link}

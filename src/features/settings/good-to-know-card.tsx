@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
+import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { MAX_ITEMS, MAX_TEXT, MAX_TITLE, suggestedTitles, type GoodToKnow } from "@/lib/good-to-know";
@@ -47,6 +48,10 @@ function GoodToKnowEditor({ saved }: { saved: GoodToKnow | null }) {
       apiFetch("/api/events?resource=appearance", { method: "PATCH", body: { eventId: selectedEventId, goodToKnow: value } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["event-data"] }),
   });
+
+  const dirty =
+    directionsUrl !== (saved?.directionsUrl ?? "") || JSON.stringify(items) !== JSON.stringify(saved?.items ?? []);
+  useSettingsDirty("good-to-know", dirty);
 
   if (!selectedEventId || !access.canEdit) return null;
 
@@ -93,9 +98,9 @@ function GoodToKnowEditor({ saved }: { saved: GoodToKnow | null }) {
           </p>
         </div>
 
-        <ul className="space-y-3">
+        <ul className="divide-y border-y">
           {items.map((item, index) => (
-            <li key={index} className="space-y-2 rounded-md border p-3">
+            <li key={index} className="space-y-2 py-3">
               <div className="flex items-center gap-2">
                 <Input
                   aria-label={`Heading ${index + 1}`}

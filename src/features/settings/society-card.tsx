@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useEventContext, type SocietyOption } from "@/lib/event-context";
 import { useSocietyActions } from "@/lib/societies";
+import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 
 /**
  * The society this event belongs to: its name, and the code that lets a
@@ -23,7 +24,11 @@ export function SocietyCard() {
   // may change any of this. The guard lives out here so the form below can
   // take a society that is definitely there.
   if (!society || society.role !== "admin") return null;
-  return <SocietyForm society={society} />;
+  return (
+    <div className="border-t pt-7">
+      <SocietyForm society={society} variant="page" />
+    </div>
+  );
 }
 
 export function SocietyForm({
@@ -51,6 +56,7 @@ export function SocietyForm({
   const currentName = name || society.name;
   const currentCity = city || society.city;
   const dirty = currentName !== society.name || currentCity !== society.city;
+  useSettingsDirty("society", dirty);
 
   async function handleSave(event: FormEvent) {
     event.preventDefault();

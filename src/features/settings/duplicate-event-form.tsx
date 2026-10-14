@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
+import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 import { useEventContext } from "@/lib/event-context";
 
 /**
@@ -24,6 +25,7 @@ export function DuplicateEventForm({ eventId, defaultName }: { eventId: string; 
   const [startDate, setStartDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useSettingsDirty("duplicate", !busy && (startDate !== "" || name !== defaultName));
 
   async function submit(event: FormEvent) {
     event.preventDefault();

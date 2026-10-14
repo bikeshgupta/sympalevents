@@ -2,6 +2,7 @@ import { MouseEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 import { heroFocus, MAX_SUBTITLE, type HeroOptions } from "@/lib/hero";
 
 /**
@@ -54,6 +55,7 @@ export function HeroOptionsForm({
   }
 
   const dirty = JSON.stringify(current()) !== JSON.stringify(options ?? null);
+  useSettingsDirty("hero-options", dirty);
   const point = focus ?? { x: 50, y: 50 };
 
   return (
