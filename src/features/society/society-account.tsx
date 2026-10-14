@@ -1,5 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, FilePenLine, LogOut, Plus, Settings2, UserPen } from "lucide-react";
+import { FilePenLine, LogOut, Plus, Settings2, UserPen } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { signOut, useSession } from "@/lib/auth";
@@ -12,8 +12,8 @@ import type { SocietyOption } from "@/lib/event-context";
  * outside the only header in the app that carries the account menu: a signed-in committee member saw no
  * sign of who they were, and a signed-out visitor had no way to sign in from here at all.
  *
- * It is a light line at the top of the page - avatar, name, the person's role in THIS society, a chevron -
- * with no box around it, so it reads as part of the page rather than as a widget on it. The role is a
+ * It is a light line at the top RIGHT of the page - the avatar in the corner (as in the event pages' header),
+ * the name and the person's role in THIS society to its left - with no box around it, so it reads as part of the page rather than as a widget on it. The role is a
  * label, never a permission: what each action does is still decided by the server.
  *
  * **The person's actions live in this menu**, not on the page: Create event, Manage society and Drafts only
@@ -50,7 +50,7 @@ export function SocietyAccount({
   const location = useLocation();
 
   // Never flash "Sign in" at somebody who is signed in while the session is still being read.
-  if (isLoading) return <div className="h-10 w-48 animate-pulse rounded-full bg-muted/60" aria-hidden="true" />;
+  if (isLoading) return <div className="ml-auto h-10 w-40 animate-pulse rounded-full bg-muted/60" aria-hidden="true" />;
 
   if (!session) {
     return (
@@ -71,44 +71,47 @@ export function SocietyAccount({
 
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          className="-ml-1 flex min-w-0 max-w-full items-center gap-3 rounded-full py-0.5 pl-0.5 pr-2 text-left data-[state=open]:bg-muted/60 [@media(hover:hover)]:hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="relative shrink-0">
-          {session.user.avatarUrl ? (
-            <img
-              src={session.user.avatarUrl}
-              alt=""
-              className="h-10 w-10 shrink-0 rounded-full border object-cover"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-semibold"
-            >
-              {(name[0] ?? "U").toUpperCase()}
+      {/* Top right, where the event pages keep it: the avatar sits in the corner and the name and role read
+          to its left. */}
+      <div className="flex justify-end">
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            className="-mr-0.5 flex min-w-0 max-w-full items-center gap-2.5 rounded-full py-0.5 pl-3 pr-0.5 text-right data-[state=open]:bg-muted/60 [@media(hover:hover)]:hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="flex min-w-0 flex-col items-end">
+              <span className="max-w-full truncate text-[15px] font-semibold leading-tight">{name}</span>
+              {role ? (
+                <span className="mt-0.5 whitespace-nowrap rounded-full bg-primary/10 px-2 py-px text-xs font-medium text-primary">{roleLabels[role]}</span>
+              ) : null}
             </span>
-          )}
-          {hasDrafts ? (
-            <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
-          ) : null}
-          </span>
-          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="truncate text-[15px] font-semibold">{name}</span>
-            {role ? (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">{roleLabels[role]}</span>
-            ) : null}
-          </span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="sr-only">Account menu</span>
-        </button>
-      </DropdownMenu.Trigger>
+            <span className="relative shrink-0">
+              {session.user.avatarUrl ? (
+                <img
+                  src={session.user.avatarUrl}
+                  alt=""
+                  className="h-10 w-10 rounded-full border object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border bg-muted text-sm font-semibold"
+                >
+                  {(name[0] ?? "U").toUpperCase()}
+                </span>
+              )}
+              {hasDrafts ? (
+                <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
+              ) : null}
+            </span>
+            <span className="sr-only">Account menu</span>
+          </button>
+        </DropdownMenu.Trigger>
+      </div>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
-          align="start"
+          align="end"
           sideOffset={6}
           className="z-50 w-64 rounded-md border bg-popover p-2 text-popover-foreground shadow-md"
         >

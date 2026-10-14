@@ -4,6 +4,7 @@ import { Link, Navigate, useLocation, useParams, useSearchParams } from "react-r
 import { EventsAccessTab } from "@/features/society/admin/events-access-tab";
 import { MembersTab } from "@/features/society/admin/members-tab";
 import { OverviewTab } from "@/features/society/admin/overview-tab";
+import { SocietyAccount } from "@/features/society/society-account";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 import { cn } from "@/lib/utils";
@@ -92,13 +93,20 @@ export function SocietyAdminPage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 pb-16 pt-5 sm:pt-7">
-      <Link
-        to={`/society/${society.slug}`}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        {society.name}
-      </Link>
+      {/* Back on the left, the account in the top right corner - the same place it is on Society Home and in
+          the event pages. Only a society admin reaches this page, so the role is known. */}
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          to={`/society/${society.slug}`}
+          className="inline-flex min-w-0 shrink items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="truncate">{society.name}</span>
+        </Link>
+        <div className="min-w-0 max-w-[66%]">
+          <SocietyAccount role="admin" canManage={false} isSocietyAdmin={false} societySlug={society.slug} draftCount={0} onShowDrafts={() => undefined} />
+        </div>
+      </div>
 
       <header className="mt-3 flex items-center gap-3">
         {society.logoUrl ? (
