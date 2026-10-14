@@ -1,0 +1,251 @@
+SYMPAL EVENTS - SOCIETY ADMIN, APPROVALS AND ANALYTICS
+Implementation plan (draft for review)
+Status: PLAN ONLY - no code has been changed for any of this.
+Drafted: 2026-10-14
+
+
+=====================================================================
+1. WHAT YOU ASKED FOR
+=====================================================================
+
+ a. A new Analytics area that holds all traffic information and other details.
+ b. Remove the Traffic section from Settings.
+ c. A proper Society page showing the society's details, its members and
+    their accesses.
+ d. From that page, the society admin approves new event drafts proposed by
+    any society resident (a signed-in user).
+ e. From that page, the society admin can add and remove society admins.
+ f. A society admin has full access. Nobody who is only an event admin (not a
+    society admin) can see these society details.
+ g. Every society must always have at least one admin, and the app must
+    refuse any change that would leave it with none.
+
+
+=====================================================================
+2. HOW THE APP WORKS TODAY (relevant facts)
+=====================================================================
+
+ - A society is the "organizations" table plus "organization_members".
+   Roles: admin, committee, read_only.
+ - A resident joins a society with its invite code and becomes read_only.
+ - There is NO screen to manage society members. Adding a society admin is a
+   manual database row today.
+ - There is a "last admin" protection for EVENTS (assertAdminRemains) but none
+   for SOCIETIES.
+ - create_event_draft (database function) refuses anyone who is not already
+   society admin or committee, so a resident cannot propose an event today.
+ - An event admin can publish an event. There is no approval step.
+ - Traffic is a card in Settings. Its data (event_visits, event_page_views,
+   audit_log) is already being collected. The audit log has no screen at all.
+ - Society admins already count as admins on every event of their society.
+ - The Vercel plan allows 12 serverless functions and the project is at that
+   cap, so nothing new may be added under api/. New handlers must fold into an
+   existing route (the "societies" resource on api/events.ts).
+
+
+=====================================================================
+3. SCOPE AND SEQUENCE
+=====================================================================
+
+PHASE 1 - no database migration, safe to ship first
+---------------------------------------------------
+
+1.1  Society admin page
+     Route: /society/<slug>/admin, reached from a "Manage society" button on
+     the society header (shown to society admins only).
+     Tabs:
+       - Overview        details, invite code, edit name/city
+                         (replaces the society card in Settings)
+       - Members         roster: name, role, joined date; add by email (the
+                         person must have signed in once), change role, remove
+       - Events & access read-only grid: each event of the society, who holds
+                         which role on it, link to that event's Settings
+
+1.2  Access rule
+     Every part is society-admin only, through one new helper
+     requireSocietyAdmin() in api/_lib/authority.ts. An event admin who is not
+     a society admin cannot open the page and is never sent the data.
+
+1.3  Last-admin check (API level)
+     Refuse to demote or remove the last admin of a society. Refuse a
+     self-demotion that would leave none. Answer with a clear sentence.
+
+1.4  Analytics area (society admin only)
+     Society-wide, with an event filter and a 7 / 30 / 90 day window:
+       - Traffic: here-now, visits, repeat visitors, device/browser/city,
+         across all the society's events (moved out of Settings)
+       - Top pages and time spent (from event_page_views)
+       - Per-event activity: registrations, money collected
+       - Activity log: who changed what (from audit_log)
+     Charts are drawn as plain markup bars (no chart library) to keep the
+     bundle small.
+
+1.5  Remove the Traffic card from Settings
+     Only the READ side moves. The visit-recording heartbeat stays on
+     api/event-access.ts because it is the hottest route in the app.
+
+
+PHASE 2 - migration 042 (you run it by hand, as with every migration)
+---------------------------------------------------------------------
+
+2.1  Last-admin trigger on organization_members
+     - Blocks any UPDATE or DELETE that would leave a society with no admin.
+     - Locks the society row first, so two admins cannot demote each other at
+       the same moment.
+     - Allows the delete when the whole society is being deleted.
+     - The same rule is then enforced in the database as well as in the API.
+
+2.2  Event draft approval
+     - New columns on events: approval_status (pending / approved / rejected,
+       default 'approved' so every existing event is untouched), proposed_by,
+       approval_reviewed_by, approval_reviewed_at, approval_note.
+     - create_event_draft accepts read_only members of the society and files
+       their draft as 'pending'. Admin and committee drafts stay auto-approved
+       (same behaviour as today).
+     - set_event_publication refuses to publish unless the event is approved.
+     - The publish route also answers "waiting for society approval", because
+       the proposer is the event admin of their own draft.
+
+2.3  Approvals tab on the society page
+     - Queue of pending drafts: proposer, dates, venue, type, readiness check.
+     - Approve, or reject with a note.
+     - The proposer sees the status and the note in their event list and can
+       edit and resubmit.
+
+2.4  Before migration 042 is run
+     The new parts answer "needs migration 042" and everything else keeps
+     working (the same safety-net pattern used by earlier migrations).
+
+
+PHASE 3 - verification and rollout
+----------------------------------
+
+ - Unit tests for the role rules and the last-admin rule.
+ - API type-check (the documented api/ command).
+ - Browser checks with mocked data: admin, event-admin-only, resident.
+ - Update CLAUDE.md for every changed rule.
+ - Each phase is its own local commit. Nothing is pushed until you say so.
+
+
+=====================================================================
+4. TECHNICAL DESIGN
+=====================================================================
+
+4.1  API (no new serverless function)
+     All under /api/events?resource=societies, with a "part" parameter:
+
+       GET    part=overview     society details + invite code + counts
+       GET    part=members      roster with roles
+       POST   part=members      add by email, with role
+       PATCH  part=members      change a member's role
+       DELETE part=members      remove a member
+       GET    part=access       events x roles grid
+       GET    part=proposals    pending drafts            (Phase 2)
+       PATCH  part=proposals    approve / reject + note   (Phase 2)
+       GET    part=analytics    traffic, pages, activity
+
+     Handlers live in api/_lib/ (new files such as society-admin.ts and
+     society-analytics.ts) and are dispatched from api/events.ts.
+     The traffic report code is extracted from api/_lib/traffic.ts into a
+     function the analytics handler imports. The heartbeat POST is untouched.
+
+4.2  Client
+     src/features/society/admin/
+       society-admin-page.tsx    shell + tabs
+       overview-tab.tsx
+       members-tab.tsx
+       access-tab.tsx
+       approvals-tab.tsx         (Phase 2)
+       analytics-tab.tsx
+     src/lib/society-admin.ts    query and mutation hooks
+     Route added outside AppLayout, like the society home page.
+     None of these queries may be added to the persisted cache.
+
+4.3  Rules (pure, shared by client and server, unit tested)
+     shared/society-members.ts
+       - canChangeSocietyRole(actor, target, nextRole)
+       - wouldLeaveNoAdmin(members, change)
+     The proposal states (pending -> approved | rejected -> resubmitted) are a
+     small pure state machine with the same tests.
+
+4.4  Privacy
+     - Member emails are shown only to society admins.
+     - Analytics shows names for signed-in visitors only and never an IP
+       address, exactly as the current Traffic panel does.
+
+4.5  Audit
+     Member add / remove / role change and approve / reject are written to the
+     existing audit log. TO VERIFY: that audit_log accepts an entry that
+     belongs to a society rather than an event. If not, the entry is keyed by
+     society id in entity_id.
+
+4.6  Settings clean-up
+     - TrafficCard removed from Settings and its import dropped.
+     - The society card in Settings is kept for now with a link to the new
+       page, then removed once the new page is confirmed.
+
+
+=====================================================================
+5. RISKS AND THINGS TO CHECK FIRST
+=====================================================================
+
+ - EXISTING SOCIETIES WITH NO ADMIN: before migration 042 is run, a short SQL
+   check will list any society that already has zero admins, so the trigger
+   does not surprise anyone. Fix those rows first.
+ - DELETING A USER: if the last admin of a society has their app_users row
+   deleted, the cascade would be blocked by the trigger. That is intentional.
+ - EVENT ADMIN WHO PROPOSED A DRAFT: they own the draft but cannot publish
+   until approved. The block is in BOTH the publish route and the database
+   function.
+ - NO NOTIFICATIONS: the app has no email or push channel. The proposer sees
+   the result in the app; the society admin sees a count on the society page.
+ - FUNCTION CAP: nothing is added under api/. Re-count api/ before the final
+   commit.
+ - TRAFFIC FOR OLD EVENTS WITH NO SOCIETY: after this change, traffic is only
+   viewable by society admins, so an event with no society would have no
+   viewer. Check whether any such event exists.
+ - SOCIETY REGISTRATION STAYS CLOSED: this plan does not change
+   SOCIETY_REGISTRATION_OPEN.
+
+
+=====================================================================
+6. DECISIONS NEEDED FROM YOU
+=====================================================================
+
+Please answer next to each question.
+
+ 1. "Another app to analytics"
+    I read this as a new Analytics AREA inside this same app (one login, no new
+    hosting, and the 12-function cap). A separately deployed app would need its
+    own login and hosting. Is the in-app area what you meant?
+    Answer: ______________________________________________
+
+    What should Analytics show besides traffic? (my suggestion: top pages and
+    time spent, registrations, money collected, activity log)
+    Answer: ______________________________________________
+
+ 2. Who can propose an event?
+    Recommended: only people who have JOINED the society (through the invite
+    code). The alternative is any signed-in user.
+    Answer: ______________________________________________
+
+ 3. When a draft is approved:
+    Recommended: it stays a draft until an admin publishes it.
+    Alternative: approval publishes it immediately.
+    Answer: ______________________________________________
+
+ 4. Removing a member from the society:
+    Should it also remove their roles on that society's events?
+    Recommended: no (event history stays; an admin can remove them from an
+    event separately).
+    Answer: ______________________________________________
+
+
+=====================================================================
+7. RECOMMENDED START
+=====================================================================
+
+Start with PHASE 1. It needs no migration and gives you the society page, the
+member and admin management, the Analytics area and the Traffic removal quickly.
+Phase 2 (approvals and the database-level last-admin rule) follows once you have
+run the pre-check and confirmed the decisions above.
