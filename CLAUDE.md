@@ -2174,7 +2174,7 @@ thumbnails and the role badge. Headings, tab labels and the hero title use `.fon
 
 - **The featured event is also listed in its own tab** (Upcoming/Live/Past). Hiding it there once left an Upcoming tab
   saying "nothing planned" under an upcoming event. The event page's hero title uses the same `.font-display` serif.
-- **Order:** account line -> society + greeting -> Your passes (if any) -> featured hero (compact, 16:10, edge to
+- **Order:** society + greeting (the avatar in the top right corner beside them, no row of its own) -> Your passes (if any) -> featured hero (compact, 16:10, edge to
   edge on a phone, `-mx-4`) -> Events (Upcoming / Live / Past text tabs, editorial rows with hairlines) -> From your
   community. Behaviour is unchanged: `getEventStatus` is the status authority, one read feeds the page, permissions
   are `canManage` + the viewer's society role, drafts stay out of the lists.

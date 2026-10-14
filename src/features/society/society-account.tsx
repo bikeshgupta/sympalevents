@@ -12,8 +12,8 @@ import type { SocietyOption } from "@/lib/event-context";
  * outside the only header in the app that carries the account menu: a signed-in committee member saw no
  * sign of who they were, and a signed-out visitor had no way to sign in from here at all.
  *
- * It is a light line at the top RIGHT of the page - the avatar in the corner (as in the event pages' header),
- * the name and the person's role in THIS society to its left - with no box around it, so it reads as part of the page rather than as a widget on it. The role is a
+ * Just the avatar, in the top RIGHT corner like the event pages' header, so it costs the page no row of its own.
+ * Who they are and their role in THIS society are the first thing in the menu it opens. No box around it, so it reads as part of the page rather than as a widget on it. The role is a
  * label, never a permission: what each action does is still decided by the server.
  *
  * **The person's actions live in this menu**, not on the page: Create event, Manage society and Drafts only
@@ -50,18 +50,15 @@ export function SocietyAccount({
   const location = useLocation();
 
   // Never flash "Sign in" at somebody who is signed in while the session is still being read.
-  if (isLoading) return <div className="ml-auto h-10 w-40 animate-pulse rounded-full bg-muted/60" aria-hidden="true" />;
+  if (isLoading) return <div className="h-10 w-10 animate-pulse rounded-full bg-muted/60" aria-hidden="true" />;
 
   if (!session) {
     return (
-      <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">Sign in to register, see your passes and take part.</p>
-        <Button asChild size="sm" className="h-10 shrink-0">
-          <Link to="/login" state={{ from: location.pathname }}>
-            Sign in
-          </Link>
-        </Button>
-      </div>
+      <Button asChild size="sm" className="h-10 shrink-0">
+        <Link to="/login" state={{ from: location.pathname }}>
+          Sign in
+        </Link>
+      </Button>
     );
   }
 
@@ -73,42 +70,32 @@ export function SocietyAccount({
     <DropdownMenu.Root>
       {/* Top right, where the event pages keep it: the avatar sits in the corner and the name and role read
           to its left. */}
-      <div className="flex justify-end">
-        <DropdownMenu.Trigger asChild>
-          <button
-            type="button"
-            className="-mr-0.5 flex min-w-0 max-w-full items-center gap-2.5 rounded-full py-0.5 pl-3 pr-0.5 text-right data-[state=open]:bg-muted/60 [@media(hover:hover)]:hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span className="flex min-w-0 flex-col items-end">
-              <span className="max-w-full truncate text-[15px] font-semibold leading-tight">{name}</span>
-              {role ? (
-                <span className="mt-0.5 whitespace-nowrap rounded-full bg-primary/10 px-2 py-px text-xs font-medium text-primary">{roleLabels[role]}</span>
-              ) : null}
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`Account menu for ${name}`}
+          className="relative block shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          {session.user.avatarUrl ? (
+            <img
+              src={session.user.avatarUrl}
+              alt=""
+              className="h-10 w-10 rounded-full border object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex h-10 w-10 items-center justify-center rounded-full border bg-muted text-sm font-semibold"
+            >
+              {(name[0] ?? "U").toUpperCase()}
             </span>
-            <span className="relative shrink-0">
-              {session.user.avatarUrl ? (
-                <img
-                  src={session.user.avatarUrl}
-                  alt=""
-                  className="h-10 w-10 rounded-full border object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="flex h-10 w-10 items-center justify-center rounded-full border bg-muted text-sm font-semibold"
-                >
-                  {(name[0] ?? "U").toUpperCase()}
-                </span>
-              )}
-              {hasDrafts ? (
-                <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
-              ) : null}
-            </span>
-            <span className="sr-only">Account menu</span>
-          </button>
-        </DropdownMenu.Trigger>
-      </div>
+          )}
+          {hasDrafts ? (
+            <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
+          ) : null}
+        </button>
+      </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           align="end"
@@ -117,7 +104,12 @@ export function SocietyAccount({
         >
           <div className="px-2 py-2">
             <p className="truncate text-sm font-medium">{name}</p>
-            {session.user.email ? <p className="mt-1 truncate text-xs text-muted-foreground">{session.user.email}</p> : null}
+            {session.user.email ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{session.user.email}</p> : null}
+            {role ? (
+              <span className="mt-1.5 inline-block whitespace-nowrap rounded-full bg-primary/10 px-2 py-px text-xs font-medium text-primary">
+                {roleLabels[role]}
+              </span>
+            ) : null}
           </div>
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
           {canManage ? (

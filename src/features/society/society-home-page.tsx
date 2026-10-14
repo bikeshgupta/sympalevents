@@ -111,20 +111,19 @@ export function SocietyHomePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
-      <SocietyAccount
-        role={memberRole}
-        canManage={canManage}
-        isSocietyAdmin={isSocietyAdmin}
-        societySlug={society?.slug}
-        draftCount={drafts.length}
-        onShowDrafts={() => setManaging(true)}
-      />
-
-      {society ? (
-        <div className="mt-4">
-          <SocietyHeader society={society} greeting={greeting} />
-        </div>
-      ) : null}
+      {/* The three lines start at the top, with the avatar in the corner beside them - the account has no row
+          of its own, which is what this saves. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">{society ? <SocietyHeader society={society} greeting={greeting} /> : null}</div>
+        <SocietyAccount
+          role={memberRole}
+          canManage={canManage}
+          isSocietyAdmin={isSocietyAdmin}
+          societySlug={society?.slug}
+          draftCount={drafts.length}
+          onShowDrafts={() => setManaging(true)}
+        />
+      </div>
 
       {data?.ready === false ? (
         <p className="mt-4 flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
@@ -296,13 +295,14 @@ function EmptySociety({ canCreate }: { canCreate: boolean }) {
 function SocietyHomeSkeleton() {
   return (
     <main className="mx-auto w-full max-w-3xl animate-pulse px-4 pb-12 pt-4 sm:pt-6" aria-hidden>
-      <div className="flex items-center gap-3">
-        <div className="h-11 w-11 rounded-full bg-muted" />
-        <div className="h-4 w-40 rounded bg-muted" />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="h-3 w-44 rounded bg-muted" />
+          <div className="mt-2 h-7 w-64 rounded-md bg-muted" />
+          <div className="mt-2 h-4 w-52 rounded bg-muted" />
+        </div>
+        <div className="h-10 w-10 rounded-full bg-muted" />
       </div>
-      <div className="mt-4 h-3 w-44 rounded bg-muted" />
-      <div className="mt-2 h-7 w-64 rounded-md bg-muted" />
-      <div className="mt-2 h-4 w-52 rounded bg-muted" />
       <div className="-mx-4 mt-4 aspect-[16/10] bg-muted sm:mx-0 sm:aspect-[16/6] sm:rounded-2xl" />
       <div className="mt-7 h-7 w-28 rounded bg-muted" />
       <div className="mt-4 space-y-4">

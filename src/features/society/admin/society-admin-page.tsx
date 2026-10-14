@@ -103,7 +103,7 @@ export function SocietyAdminPage() {
           <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="truncate">{society.name}</span>
         </Link>
-        <div className="min-w-0 max-w-[66%]">
+        <div className="shrink-0">
           <SocietyAccount role="admin" canManage={false} isSocietyAdmin={false} societySlug={society.slug} draftCount={0} onShowDrafts={() => undefined} />
         </div>
       </div>
