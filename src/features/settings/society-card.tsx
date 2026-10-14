@@ -191,46 +191,48 @@ export function SocietyForm({
         </section>
         )}
 
-        <section aria-labelledby="invite-heading" className="mt-8 border-t pt-6">
-          <h2 id="invite-heading" className="font-display text-2xl font-semibold">
-            Invite residents
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Share this code with residents to let them join your society.</p>
+        {readOnlyDetails ? null : (
+          <section aria-labelledby="invite-heading" className="mt-8 border-t pt-6">
+            <h2 id="invite-heading" className="font-display text-2xl font-semibold">
+              Invite residents
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">Share this code with residents to let them join your society.</p>
 
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <code className="rounded-md border border-border px-3.5 py-2 font-mono text-lg font-medium tracking-[0.3em]">
-              {society.inviteCode ?? "Not set"}
-            </code>
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <code className="rounded-md border border-border px-3.5 py-2 font-mono text-lg font-medium tracking-[0.3em]">
+                {society.inviteCode ?? "Not set"}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyCode()}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Copy className="h-4 w-4" aria-hidden="true" />
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={() => void copyCode()}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => void handleRotate()}
+              disabled={update.isPending}
+              className="mt-1 inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
             >
-              <Copy className="h-4 w-4" aria-hidden="true" />
-              {copied ? "Copied" : "Copy"}
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Generate new code
             </button>
-          </div>
 
-          <button
-            type="button"
-            onClick={() => void handleRotate()}
-            disabled={update.isPending}
-            className="mt-1 inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            Generate new code
-          </button>
-
-          <p className="mt-3 max-w-md text-sm text-muted-foreground">
-            Anyone with this code can join the society as a resident. Joining the society does not grant access to individual
-            events - what they can open is still decided by each event&rsquo;s Modules and Member Access.
-          </p>
-          {note?.scope === "invite" ? (
-            <p role="status" aria-live="polite" className="mt-2 text-sm text-muted-foreground">
-              {note.text}
+            <p className="mt-3 max-w-md text-sm text-muted-foreground">
+              Anyone with this code can join the society as a resident. Joining the society does not grant access to individual
+              events - what they can open is still decided by each event&rsquo;s Modules and Member Access.
             </p>
-          ) : null}
-        </section>
+            {note?.scope === "invite" ? (
+              <p role="status" aria-live="polite" className="mt-2 text-sm text-muted-foreground">
+                {note.text}
+              </p>
+            ) : null}
+          </section>
+        )}
       </div>
     );
   }

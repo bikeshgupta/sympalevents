@@ -2248,7 +2248,7 @@ grouping**: no setting was added, no permission changed, and which pages an even
   Society Management reuse the same components untouched). The index marks a section "Unsaved"; leaving Settings by
   closing/reloading the tab (`beforeunload`) or following a link out (capture-phase click check) asks first. The router is
   a plain `BrowserRouter`, so there is **no `useBlocker`, and the browser Back button is not guarded**.
-- **The society in Advanced is read-only** (`SocietyForm readOnlyDetails`: a disabled dropdown of the societies the person belongs to, this event's selected, with a link to Manage society). Renaming a society moves every event it runs, so it is edited only in Society Management; choosing a society happens in the new-event form. The invite code stays.
+- **The society in Advanced is read-only** (`SocietyForm readOnlyDetails`: a disabled dropdown of the societies the person belongs to, this event's selected, with a link to Manage society). Renaming a society moves every event it runs, so it is edited only in Society Management; choosing a society happens in the new-event form. The invite code is not shown in Settings at all; it is a society credential and lives in Society Management.
 - The open section is `?section=<key>`. On a phone the index is the page until one is opened (single-section focus, "All
   settings" back); from `lg` the index becomes a side navigation and `basics` is open by default.
 - **Readiness is the command centre's checklist** (`useCommandCentre`), not a second engine. "Ready to publish" is only ever
