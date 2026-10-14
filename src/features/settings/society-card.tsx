@@ -1,5 +1,6 @@
 import { Copy, RefreshCw } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 export function SocietyCard() {
   const { societies, selectedEvent } = useEventContext();
   const society = societies.find((item) => item.id === selectedEvent?.societyId) ?? null;
+  const own = societies.filter((item) => item.role === "admin" || item.role === "committee");
 
   // Only an admin gets the invite code back from the server, and only an admin
   // may change any of this. The guard lives out here so the form below can
@@ -26,7 +28,7 @@ export function SocietyCard() {
   if (!society || society.role !== "admin") return null;
   return (
     <div className="border-t pt-7">
-      <SocietyForm society={society} variant="page" />
+      <SocietyForm society={society} variant="page" readOnlyDetails societies={own} />
     </div>
   );
 }
@@ -35,6 +37,8 @@ export function SocietyForm({
   society,
   inEvent = true,
   variant = "card",
+  readOnlyDetails = false,
+  societies = [],
 }: {
   society: SocietyOption;
   /** False on the society's own management page, where "this event" and "below" mean nothing. */
@@ -42,6 +46,11 @@ export function SocietyForm({
   /** "card" is Settings' boxed card, unchanged. "page" is Society Management's Overview: no outer box, two plain
    *  sections (details, invite) separated by a hairline. Same state, same handlers, same server calls. */
   variant?: "card" | "page";
+  /** Event Settings: the society is shown, not edited. Renaming it is Society Management's job, and it moves
+   *  every event the society runs, so it is not offered from inside one event. */
+  readOnlyDetails?: boolean;
+  /** The societies this person belongs to, listed in the read-only dropdown with this one selected. */
+  societies?: SocietyOption[];
 }) {
   const { update } = useSocietyActions();
 
@@ -100,6 +109,40 @@ export function SocietyForm({
       "border-border bg-transparent placeholder:text-muted-foreground/60 focus-visible:bg-background";
     return (
       <div>
+        {readOnlyDetails ? (
+          <section aria-labelledby="society-details-heading">
+            <h2 id="society-details-heading" className="font-display text-2xl font-semibold">
+              Society
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">The society this event belongs to.</p>
+            <div className="mt-5 max-w-md space-y-1.5">
+              <Label htmlFor="society-readonly">Society</Label>
+              <select
+                id="society-readonly"
+                disabled
+                value={society.id}
+                className="h-10 w-full rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground opacity-100"
+              >
+                {(societies.some((item) => item.id === society.id) ? societies : [society, ...societies]).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Read only here. To change the society&rsquo;s name or city, use{" "}
+                {society.slug ? (
+                  <Link to={`/society/${society.slug}/admin`} className="font-medium text-primary underline-offset-4 hover:underline">
+                    Manage society
+                  </Link>
+                ) : (
+                  "Manage society"
+                )}
+                . Choose a different society when you start a new event.
+              </p>
+            </div>
+          </section>
+        ) : (
         <section aria-labelledby="society-details-heading">
           <h2 id="society-details-heading" className="font-display text-2xl font-semibold">
             Society details
@@ -146,6 +189,7 @@ export function SocietyForm({
             </div>
           </form>
         </section>
+        )}
 
         <section aria-labelledby="invite-heading" className="mt-8 border-t pt-6">
           <h2 id="invite-heading" className="font-display text-2xl font-semibold">

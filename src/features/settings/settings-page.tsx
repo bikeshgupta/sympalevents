@@ -180,7 +180,7 @@ function SettingsShell() {
       : "Booking, payment and entry",
     appearance: `${themeByKey(event.theme).name} colour · ${event.heroImageUrl ? "your own photograph" : "standard hero"}`,
     notifications: "Messages and announcements for residents",
-    advanced: isSocietyAdmin ? "Run this event again, start another, society details" : "Run this event again, start another",
+    advanced: isSocietyAdmin ? "Run this event again, start another, society" : "Run this event again, start another",
   };
 
   // A link section is another page of the event; it is offered only where the server says this viewer may open it.
