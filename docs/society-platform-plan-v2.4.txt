@@ -1,0 +1,192 @@
+SYMPAL EVENTS - SOCIETY / APPROVALS / PLATFORM  -  PLAN v2.4
+Drafted: 2026-10-14.   Applies your answers to v2.3 (043, 046, P1-P4, last_seen_at) and adds the
+app_users.updated_at investigation. This is the LAST IMPACT CHECK for 045.
+Status: NO MIGRATION IS APPLIED. 045 is NOT written. No application code was changed for this round.
+
+
+=====================================================================
+0. DECISIONS RECORDED
+=====================================================================
+
+ 043  Approved. One per-organiser event limit (40), centralised; at the limit approval leaves the proposal
+      "submitted" with no side effects (tested).
+ 046  Approved. Current Admin/Committee -> current role. Ended -> last relevant role. No "former" marker.
+      Historical recovery stays inspect-first: nothing runs until you have seen the look-first output.
+ P1   Keep event_visits and event_page_views. Their generalised meaning is documented (3.1), not renamed.
+ P2   A: organization_id ON DELETE SET NULL. No dangling organisation foreign keys.
+ P3   New visit when the analytical scope changes (3.2).
+ P4   Surfaces: event, society, society_admin, profile, event_create, proposal. Login is NOT tracked. A new
+      surface is added deliberately (a code change to the allowlist), never by tracking every route.
+ last_seen_at  Approved. In-memory throttle is only an optimisation; the database write is conditional
+      (3.4), so cold and parallel Vercel instances keep the one-hour semantics.
+
+
+=====================================================================
+1. app_users.updated_at - INVESTIGATION (nothing changed)
+=====================================================================
+
+ 1.1 Why requireAppUser() rewrites it on every request
+   api/_lib/server.ts:90-103 builds a "profile" {firebase_uid, email, photo_url, updated_at: now} and
+   UPSERTS it (onConflict firebase_uid) on EVERY authenticated request. git history: it has been there since
+   the Firebase bridge was added (a1298e3, 2026-08-30) and never changed. The upsert does three jobs:
+     (a) CREATES the app_users row on a person's first request (there is no separate sign-up step);
+     (b) keeps email and Google photo_url following the Google account (the comment above it says so);
+     (c) bumps updated_at - which was simply part of the payload. Nothing in the history, comments or docs
+         gives updated_at a purpose there; it reads as "touch the row", not as an activity signal.
+   Note on the name: full_name was deliberately removed from that payload earlier (a corrected name was being
+   overwritten every request). updated_at was not removed at the time.
+
+ 1.2 What it costs today
+   - A database WRITE on every authenticated request: 36 API files use requireAppUser/optionalAppUser, and
+     the visibility heartbeat of every signed-in visible tab (about one a minute) goes through it.
+   - Removing updated_at from the payload would NOT remove the write. I checked on a scratch PostgreSQL:
+     an INSERT ... ON CONFLICT DO UPDATE whose values are identical still writes a new row version (xmin
+     changed; it is a HOT update, so cheap on indexes, but still a dead tuple and WAL each time).
+   - Its meaning is polluted: it currently means "last authenticated request, unthrottled", and ALSO moves
+     on real profile edits (PATCH /api/me, an admin renaming a member). It cannot represent either.
+
+ 1.3 What depends on it (checked)
+   In the application: NOTHING READS IT. Searched every api/ and src/ file: no select includes app_users
+   .updated_at, nothing orders or filters by it, no response or type carries it, no test mentions it
+   (audit.ts treats updated_at as a noise key on every table). The only WRITERS are:
+       api/_lib/server.ts:94   the per-request upsert                        (the one in question)
+       api/me.ts:106           PATCH /api/me - a person edits their own profile   (meaningful, keep)
+       api/event-members.ts    an admin corrects a member's display name          (meaningful, keep)
+   In the database: no trigger, view, function, policy, index or publication in migrations 001-046 refers
+   to it (verified on the scratch database built from all of them; the column default is now(), declared in
+   003). I cannot see your live project's dashboard, ad-hoc SQL, saved reports or any webhooks, so one
+   thing remains for you: docs/migration-notes/app_users_updated_at_dependencies.sql (read-only) lists any
+   database-side dependency and shows what the column holds today. Expect 0 rows from queries 1-6.
+
+ 1.4 Can it be removed or restricted?   YES - safely, as its own small change, and NOT as part of 045.
+   Recommended meaning going forward: updated_at = "the stored user record was modified": display name,
+   chosen photo, flat, phone, or the Google email/photo changed. Never "the person used the app" - that is
+   last_seen_at.
+   Recommended change to requireAppUser (a separate commit, after you have read the SQL output above):
+     1. Fast path: SELECT the row by firebase_uid (the same round trip the upsert is today).
+        If it exists and its email and photo_url already equal the token's, use it. NO WRITE.
+     2. Otherwise (first request, or Google changed the email/photo): run today's upsert, with updated_at
+        in the payload (a real modification of the record).
+     3. The existing 23505 (email clash) and blank-name seeding branches stay exactly as they are.
+     Result: the common request goes from one write to one read, and no longer dirties the row; a first
+     sign-in race falls through to the unchanged upsert, so nothing new can fail there.
+   Risk and mitigation: it is the authentication path of the whole API, so it must be verified on its own
+   (first sign-in, returning user, email change, photo change, two concurrent first requests) and shipped
+   alone, away from 045 so that a problem is attributable. It needs no schema change and no new column,
+   and it is independent of 045 in either order.
+   If you would rather not touch that path at all: leave it, and last_seen_at works regardless. The only
+   cost of leaving it is the write per request that exists today and the unusable updated_at.
+
+ 1.5 Seeding last_seen_at from it (an option for 045)
+   Because updated_at has been bumped on every request since 2026-08-30, it is the best available
+   approximation of "last seen" up to now. 045 could run, once:
+       update app_users set last_seen_at = updated_at where last_seen_at is null;
+   so that "active this month" is not empty on day one. It is approximate (a profile edit also moves
+   updated_at) and the 045 notes would say so. DECISION Q1 below. After the requireAppUser change above,
+   updated_at stops moving, so this seed would have to happen BEFORE that change ships (or be skipped).
+   Order if you want it: 045 (with the seed) -> then the requireAppUser change.
+
+
+=====================================================================
+2. THE 045 SHAPE, FINAL (still not SQL)
+=====================================================================
+
+ 2.1 The two existing tables, generalised (P1: names kept)
+   event_visits and event_page_views keep their names. Their table comments will say: "Holds every tracked
+   surface, not only events. event_id is set only for the event surface." Code uses neutral names internally
+   (recordVisit, surface). If the names ever mislead enough to matter, the three-step rename in v2.3 3.2
+   remains available as its own change.
+   Each table gets:
+     surface           text not null default 'event'     allowlisted server-side; existing rows = 'event'
+     organization_id   uuid null -> organizations(id) ON DELETE SET NULL     (P2 = A; no dangling FK)
+                       existing rows filled once from events.organization_id
+     event_id          NOT NULL dropped; foreign key replaced: ON DELETE CASCADE -> ON DELETE SET NULL
+                       (ADD ... NOT VALID then VALIDATE, so writers are not blocked while it checks)
+     indexes           (organization_id, <started_at | opened_at> desc), (surface, <started_at | opened_at> desc)
+   app_users gets last_seen_at timestamptz null (and, if you say yes to Q1, the one-time seed).
+   Organisation deletion: events cascade as today, event traffic now survives with event_id and
+   organization_id both null; it stays in platform-wide totals and is no longer attributable to the deleted
+   society. Companion rule (documented, not enforced): deleting a society is a manual act; roll up or export
+   its figures first. User deletion is already SET NULL.
+
+ 2.2 Allowlist and who may send a beat for each (P4)
+   All checks are made ON THE SERVER; the browser sends only a surface name and an identifier to resolve.
+     event          unchanged: resolvePageAccess for that event and page (today's rule)
+     society        the society (by slug) must exist. Open to guests, because Society Home is public for
+                    signed-out visitors (it shows them only public events)
+     society_admin  signed-in AND a society admin of that society (requireSocietyAdmin's rule)
+     proposal       signed-in AND a member of the society (any role)
+     event_create   signed-in AND an admin or committee member of at least one society (the New-event
+                    wizard's own precondition)
+     profile        signed-in
+   Any other surface value is rejected (answered { ok: true }, nothing stored, as beats always are).
+   Login is NOT an allowed surface: no heartbeat is mounted there. Page keys per surface are a fixed list
+   (e.g. society: home; society_admin: overview, members, events; proposal: form, mine; event_create: wizard;
+   profile: profile) - never free text.
+   Beats keep answering { ok: true } whatever happened and keep the 20-second same-page throttle; a move to
+   another page always counts.
+
+ 2.3 Scope, and when a new visit begins (P3)
+   A visit is one continuous stay in one SCOPE, in one browser tab. The scope is:
+       event surface                          -> the EVENT                 (event_id; organization derived)
+       society, society_admin, proposal       -> the SOCIETY               (organization_id; event_id null)
+       event_create                           -> the wizard                (no organisation yet)
+       profile                                -> the profile area
+   The client computes a scope key (event:<id> | society:<id> | event_create | profile) and starts a NEW
+   visit id whenever it changes. Consequences, as you asked:
+       Society -> Event A -> Event B        three visits (society, event A, event B)
+       Event A: dashboard -> budget -> tasks    ONE visit; the three pages are event_page_views
+       Event A -> Society -> Event A        three visits (each stay in a scope is a visit; we do not resume)
+       Society home -> Society management   ONE visit (same society scope); the two page views carry their
+                                            own surfaces (society, society_admin)
+       /e/<id> and /society/<s>/events/<e> are the same event, so the same scope
+   The visit row stores the scope (organization_id, event_id) and the surface of the page it began on; every
+   page view stores its own surface, organization_id, event_id and page_key. So "visits to an event" and
+   "pages read within it" are both exact, and a visit never straddles two events (today's quirk, where a tab
+   moving between events keeps the first event on the visit row, goes away).
+   The client keeps the current scope key and visit id in sessionStorage (as the visit id already is) and
+   wraps both in the existing try/catch: storage that throws simply means that visit goes uncounted.
+
+ 2.4 Heartbeat mounting
+   Today only AppLayout mounts it. 045's code change mounts the same hook, with its surface, on: Society Home,
+   Society Management, Profile, New-event wizard and the proposal screens. Not on Login. No new endpoint and
+   no new request pattern: still POST /api/event-access?resource=traffic, which keeps importing only
+   page-visibility, server and traffic (cold-start rule).
+
+ 2.5 last_seen_at - final write rule (your point)
+   Definition (stays exactly this): "most recent qualifying authenticated Sympal application activity,
+   written at most once per hour." It is not last login and is never labelled that way.
+   The DATABASE is the authority. The statement, issued from requireAppUser after a verified token:
+       update app_users set last_seen_at = now()
+       where id = :id and (last_seen_at is null or last_seen_at < now() - interval '1 hour')
+   - Conditional in SQL, so any number of cold or parallel instances produce at most one effective write per
+     person per hour; a statement that matches no row changes nothing.
+   - The in-memory per-instance map ("I wrote this user at T") only avoids sending that no-op statement on
+     most requests. It is an optimisation; correctness never depends on it, and an empty map (cold start)
+     merely costs one harmless statement.
+   - Fire-and-forget: never awaited on the request path, never fails or delays a request.
+   - last_seen_at is deliberately NOT added to requireAppUser's select list. Before 045 is run the column
+     does not exist, and selecting it would fail every authenticated request. If the update reports the
+     column missing, the code remembers for ten minutes and stops trying.
+   - Qualifying: a request with a token the server verified (including a signed-in visible-tab heartbeat).
+     Not qualifying: no/invalid token, link crawlers, server jobs.
+   - Readable by nobody in the product; platform analytics only, later.
+
+ 2.6 Not changing
+   Privacy model (no IP in any form, coarse device/browser/city, names only for signed-in visitors, no
+   per-click paths); no retention deletion; behavioural events remain design only.
+
+
+=====================================================================
+3. WHAT I NEED BEFORE WRITING 045
+=====================================================================
+
+ Q1. Seed last_seen_at once from updated_at (approximate, 1.5)? Yes / No.
+ Q2. Do you want the requireAppUser read-first change (1.4) done - as its own later change - or left alone?
+ Q3. Run docs/migration-notes/app_users_updated_at_dependencies.sql and send me the output.
+ Q4. Confirm the scope definition in 2.3, in particular that Society home and Society management are one
+     visit (same society scope) while each event is its own.
+ Q5. Row counts of event_visits and event_page_views:
+       select (select count(*) from event_visits) as visits, (select count(*) from event_page_views) as page_views;
+ Once you answer, I write 045 (SQL, pre-checks, verification, rollback - tested on the scratch database) and
+ the code behind it with its degrade path. Nothing is applied until you run it and send me the result.
