@@ -42,11 +42,18 @@ const since = (iso: string | null) =>
     ? new Intl.DateTimeFormat("en-IN", { month: "short", year: "numeric", timeZone: "Asia/Kolkata" }).format(new Date(iso))
     : "—";
 
-export function MembersTab({ societyId }: { societyId: string }) {
+export function MembersTab({
+  societyId,
+  filter,
+  onFilter,
+}: {
+  societyId: string;
+  filter: MemberFilter;
+  onFilter: (next: MemberFilter) => void;
+}) {
   const { data, isLoading, error } = useSocietyMembers(societyId);
   const { changeRole, addByEmail } = useSocietyMemberActions(societyId);
 
-  const [filter, setFilter] = useState<MemberFilter>("all");
   const [term, setTerm] = useState("");
   const [shown, setShown] = useState(PAGE);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -184,7 +191,7 @@ export function MembersTab({ societyId }: { societyId: string }) {
             type="button"
             aria-pressed={filter === item.key}
             onClick={() => {
-              setFilter(item.key);
+              onFilter(item.key);
               setShown(PAGE);
             }}
             className={cn(

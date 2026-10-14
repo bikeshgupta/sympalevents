@@ -5,6 +5,7 @@ import { eventBasePath } from "@/lib/event-slug";
 import { useSocietyEventAccess } from "@/lib/society-admin";
 import { cn } from "@/lib/utils";
 import { statusLabels, type EventStatus } from "../../../../shared/event-status";
+import type { EventFilter } from "../../../../shared/society-members";
 
 /**
  * Every event of the society, and who runs it. Not a second Settings: each row
@@ -22,7 +23,24 @@ const tone: Record<EventStatus, string> = {
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
-export function EventsAccessTab({ societyId }: { societyId: string }) {
+const eventFilters: { key: EventFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "live", label: "Live" },
+  { key: "completed", label: "Completed" },
+  { key: "draft", label: "Drafts" },
+  { key: "cancelled", label: "Cancelled" },
+];
+
+export function EventsAccessTab({
+  societyId,
+  filter,
+  onFilter,
+}: {
+  societyId: string;
+  filter: EventFilter;
+  onFilter: (next: EventFilter) => void;
+}) {
   const { data, isLoading, error } = useSocietyEventAccess(societyId);
 
   if (error) {
@@ -43,13 +61,37 @@ export function EventsAccessTab({ societyId }: { societyId: string }) {
     );
   }
 
+  const counts = (key: EventFilter) => (key === "all" ? events.length : events.filter((event) => event.status === key).length);
+  // Drafts and Cancelled only get a chip when there is something behind it.
+  const chips = eventFilters.filter((item) => item.key === filter || item.key === "all" || counts(item.key) > 0 || ["upcoming", "live", "completed"].includes(item.key));
+  const visible = filter === "all" ? events : events.filter((event) => event.status === filter);
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
         Society admins are admins of every event below. These counts are the people given a role on each event.
       </p>
-      <ul className="divide-y rounded-lg border bg-card">
-        {events.map((event) => {
+      <div role="group" aria-label="Filter events" className="flex flex-wrap gap-1.5">
+        {chips.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            aria-pressed={filter === item.key}
+            onClick={() => onFilter(item.key)}
+            className={cn(
+              "min-h-10 rounded-full border px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              filter === item.key ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {item.label} <span className="tabular-nums opacity-80">{counts(item.key)}</span>
+          </button>
+        ))}
+      </div>
+      {!visible.length ? (
+        <p className="rounded-md border border-dashed p-5 text-sm text-muted-foreground">No events match this filter.</p>
+      ) : null}
+      <ul className={cn("divide-y rounded-lg border bg-card", !visible.length && "hidden")}>
+        {visible.map((event) => {
           const to = `${eventBasePath({ id: event.id, slug: event.slug, societySlug: data?.societySlug })}/settings`;
           return (
             <li key={event.id}>

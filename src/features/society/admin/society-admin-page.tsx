@@ -7,6 +7,7 @@ import { OverviewTab } from "@/features/society/admin/overview-tab";
 import { useSession } from "@/lib/auth";
 import { useEventContext } from "@/lib/event-context";
 import { cn } from "@/lib/utils";
+import { isEventFilter, type EventFilter, type MemberFilter } from "../../../../shared/society-members";
 
 /**
  * Society Management - `/society/<slug>/admin`.
@@ -28,6 +29,8 @@ const tabs = [
 ] as const;
 
 type TabKey = (typeof tabs)[number]["key"];
+
+const memberFilters: MemberFilter[] = ["all", "admin", "committee", "resident"];
 
 export function SocietyAdminPage() {
   const { societySlug } = useParams();
@@ -62,8 +65,20 @@ export function SocietyAdminPage() {
     );
   }
 
+  // The Overview tiles open a tab already narrowed (`?tab=members&filter=admin`).
+  // The filter lives in the address so it survives a refresh and the back button,
+  // and a tab opened by hand starts unfiltered.
+  const memberFilter: MemberFilter = memberFilters.includes(params.get("filter") as MemberFilter)
+    ? (params.get("filter") as MemberFilter)
+    : "all";
+  const eventFilter: EventFilter = isEventFilter(params.get("filter")) ? (params.get("filter") as EventFilter) : "all";
+
   function choose(next: TabKey) {
     setParams(next === "overview" ? {} : { tab: next }, { replace: true });
+  }
+
+  function setFilter(next: string) {
+    setParams(next === "all" ? { tab } : { tab, filter: next }, { replace: true });
   }
 
   // Arrow keys move between tabs, as the tablist role promises.
@@ -125,9 +140,9 @@ export function SocietyAdminPage() {
       </div>
 
       <div id="society-panel" role="tabpanel" aria-labelledby={`society-tab-${tab}`} className="mt-5">
-        {tab === "overview" ? <OverviewTab society={society} onGoTo={choose} /> : null}
-        {tab === "members" ? <MembersTab societyId={society.id} /> : null}
-        {tab === "events" ? <EventsAccessTab societyId={society.id} /> : null}
+        {tab === "overview" ? <OverviewTab society={society} /> : null}
+        {tab === "members" ? <MembersTab societyId={society.id} filter={memberFilter} onFilter={setFilter} /> : null}
+        {tab === "events" ? <EventsAccessTab societyId={society.id} filter={eventFilter} onFilter={setFilter} /> : null}
       </div>
     </main>
   );

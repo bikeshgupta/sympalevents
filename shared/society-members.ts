@@ -62,3 +62,10 @@ export function matchesSearch(member: { name: string; flat: string | null }, ter
   const squash = (value: string) => value.toLowerCase().replace(/[\s-]+/g, "");
   return Boolean(member.flat && squash(member.flat).includes(squash(query)));
 }
+
+/** The Events & access tab's filter: every status, or one. Lives here so the address (`?filter=live`) and the tab agree. */
+export type EventFilter = "all" | "draft" | "upcoming" | "live" | "completed" | "cancelled";
+
+const eventFilterKeys: readonly string[] = ["all", "draft", "upcoming", "live", "completed", "cancelled"];
+
+export const isEventFilter = (value: string | null): value is EventFilter => value !== null && eventFilterKeys.includes(value);

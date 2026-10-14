@@ -1,4 +1,6 @@
 import { CalendarCheck, CalendarClock, CalendarDays, ChevronRight, Radio, ShieldCheck, UserCog, UserRound, Users } from "lucide-react";
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { StatCard, StatGrid } from "@/components/shared/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
 import { SocietyForm } from "@/features/settings/society-card";
@@ -10,7 +12,7 @@ import { useSocietyOverview } from "@/lib/society-admin";
  * waiting. Deliberately lightweight - this is management information, not the
  * analytics product, and it counts only this society's own members and events.
  */
-export function OverviewTab({ society, onGoTo }: { society: SocietyOption; onGoTo: (tab: "members" | "events") => void }) {
+export function OverviewTab({ society }: { society: SocietyOption }) {
   const { data, isLoading, error } = useSocietyOverview(society.id);
 
   if (error) {
@@ -52,15 +54,15 @@ export function OverviewTab({ society, onGoTo }: { society: SocietyOption; onGoT
           <h2 id="people-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             People
           </h2>
-          <button type="button" onClick={() => onGoTo("members")} className="min-h-10 text-sm font-medium text-primary">
+          <Link to="?tab=members" className="inline-flex min-h-10 items-center text-sm font-medium text-primary">
             Manage members
-          </button>
+          </Link>
         </div>
         <StatGrid>
-          <StatCard title="Members" value={show(members?.total)} icon={Users} isLoading={isLoading} />
-          <StatCard title="Society admins" shortTitle="Admins" value={show(members?.admins)} icon={ShieldCheck} isLoading={isLoading} />
-          <StatCard title="Committee" value={show(members?.committee)} icon={UserCog} isLoading={isLoading} />
-          <StatCard title="Residents" value={show(members?.residents)} icon={UserRound} isLoading={isLoading} />
+          <Tile to="?tab=members" label="Show all members"><StatCard title="Members" value={show(members?.total)} icon={Users} isLoading={isLoading} /></Tile>
+          <Tile to="?tab=members&filter=admin" label="Show society admins"><StatCard title="Society admins" shortTitle="Admins" value={show(members?.admins)} icon={ShieldCheck} isLoading={isLoading} /></Tile>
+          <Tile to="?tab=members&filter=committee" label="Show committee members"><StatCard title="Committee" shortTitle="Team" value={show(members?.committee)} icon={UserCog} isLoading={isLoading} /></Tile>
+          <Tile to="?tab=members&filter=resident" label="Show residents"><StatCard title="Residents" value={show(members?.residents)} icon={UserRound} isLoading={isLoading} /></Tile>
         </StatGrid>
       </section>
 
@@ -69,15 +71,15 @@ export function OverviewTab({ society, onGoTo }: { society: SocietyOption; onGoT
           <h2 id="events-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Events
           </h2>
-          <button type="button" onClick={() => onGoTo("events")} className="min-h-10 text-sm font-medium text-primary">
+          <Link to="?tab=events" className="inline-flex min-h-10 items-center text-sm font-medium text-primary">
             Events &amp; access
-          </button>
+          </Link>
         </div>
         <StatGrid>
-          <StatCard title="Total events" shortTitle="Total" value={show(events?.total)} icon={CalendarDays} isLoading={isLoading} />
-          <StatCard title="Upcoming" value={show(events?.upcoming)} icon={CalendarClock} isLoading={isLoading} />
-          <StatCard title="Live" value={show(events?.live)} icon={Radio} isLoading={isLoading} />
-          <StatCard title="Completed" value={show(events?.completed)} icon={CalendarCheck} isLoading={isLoading} />
+          <Tile to="?tab=events" label="Show all events"><StatCard title="Total events" shortTitle="Total" value={show(events?.total)} icon={CalendarDays} isLoading={isLoading} /></Tile>
+          <Tile to="?tab=events&filter=upcoming" label="Show upcoming events"><StatCard title="Upcoming" value={show(events?.upcoming)} icon={CalendarClock} isLoading={isLoading} /></Tile>
+          <Tile to="?tab=events&filter=live" label="Show live events"><StatCard title="Live" value={show(events?.live)} icon={Radio} isLoading={isLoading} /></Tile>
+          <Tile to="?tab=events&filter=completed" label="Show completed events"><StatCard title="Completed" shortTitle="Past" value={show(events?.completed)} icon={CalendarCheck} isLoading={isLoading} /></Tile>
         </StatGrid>
         {events && events.draft > 0 ? (
           <p className="text-xs text-muted-foreground">
@@ -90,5 +92,18 @@ export function OverviewTab({ society, onGoTo }: { society: SocietyOption; onGoT
         <SocietyForm society={society} inEvent={false} />
       </section>
     </div>
+  );
+}
+
+/** A tile that opens the list it counts. The card keeps its own look; the link only adds the way in. */
+function Tile({ to, label, children }: { to: string; label: string; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      title={label}
+      className="block min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {children}
+    </Link>
   );
 }
