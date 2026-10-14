@@ -2300,6 +2300,11 @@ exactly as before.**
   page.
 - **Budget has a phone layout now** (one row per item with Estimated / Actual / Variance, same edit and delete); from
   `lg` it is the table. Contributions' phone list is one grouped card with hairlines, not a card per resident.
+- **No sideways scrolling on a phone.** Sponsors and Events (event-plan) also have a phone list now (`ul.ios-list
+  lg:hidden`, same actions as the table); every wide table sits in `hidden overflow-x-auto lg:block`. Tab/chip rows
+  (prasad days, the dashboard schedule's day chips) wrap instead of scrolling. Scanned at 360/390 in demo mode across
+  the working pages, Settings sections and the wizard: no page-level or container overflow. Keep it that way - a new
+  table needs its phone list (UI rules §5).
 - **The wizard** ([create-event-wizard.tsx](src/features/onboarding/create-event-wizard.tsx)) is a grouped list per step
   (kinds of event as rows with a coloured icon and a tick; details as label/value rows; a review list), a frosted bar
   with a back pill, and three progress bars. State, validation and the create call are unchanged. It reuses

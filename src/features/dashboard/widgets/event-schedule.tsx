@@ -109,10 +109,10 @@ export function EventSchedule({
             the "basic" variant wants what is on now and what is next, not a
             way to browse the whole week. */}
         {variant === "detailed" ? (
-          /* Horizontal scroll rather than wrapping: a five-day event should not
-             push the timeline below the fold on a phone. */
+          /* Wraps onto more rows rather than scrolling sideways, so nothing on the page ever needs a horizontal
+             swipe; the chips are compact enough that a week still takes two rows on a phone. */
           <div
-            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+            className="flex flex-wrap gap-2"
             role="tablist"
             aria-label="Event days"
           >
@@ -131,7 +131,7 @@ export function EventSchedule({
                 aria-label={`${day.label}, ${formatEventDate(day.date)}, ${day.count} ${day.count === 1 ? "event" : "events"}${day.isToday ? ", today" : day.isPast ? ", finished" : ""}`}
                 tabIndex={active ? 0 : -1}
                 onKeyDown={(keyEvent) => onTabKeyDown(keyEvent, index)}
-                className={`min-w-[6rem] flex-1 shrink-0 rounded-md border px-2 py-2 text-center text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                className={`min-w-[4.6rem] flex-1 rounded-md border px-2 py-2 text-center text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
                   active ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
                 } ${!active && day.isPast ? "opacity-70" : ""}`}
                 onClick={() => onSelectDay(day.key)}

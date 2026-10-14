@@ -116,8 +116,48 @@ export function EventPlanPage() {
       {canPrint ? (
         <ScheduleNoticeDialog open={noticeOpen} onOpenChange={setNoticeOpen} event={data.event} rows={planRows} />
       ) : null}
-      <Card className="overflow-x-auto">
+      <Card className="overflow-hidden">
         <TableToolbar resultCount={planTable.rows.length} totalCount={planRows.length} />
+        {/* A phone gets one row per programme item (UI rules 5); from lg it is the table. */}
+        <ul className="ios-list border-t lg:hidden" style={{ ["--ios-inset" as string]: "1rem" } as React.CSSProperties}>
+          {planTable.rows.map((plan) => {
+            const agenda = parseAgenda(plan.subEvents);
+            const when = [plan.day, plan.date, [plan.startTime, plan.endTime].filter((part) => part && part !== "-").join(" - ")]
+              .filter((part) => part && part !== "-")
+              .join(" · ");
+            const who = [plan.location, plan.owner ? `Owner: ${plan.owner}` : null, plan.attendance ? `${plan.attendance} expected` : null]
+              .filter((part) => part && part !== "-")
+              .join(" · ");
+            return (
+              <li key={plan.id ?? `${plan.date}-${plan.activity}`} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold leading-snug">{plan.activity}</p>
+                    {when ? <p className="text-xs text-muted-foreground">{when}</p> : null}
+                  </div>
+                  <StatusBadge status={plan.status} />
+                </div>
+                {who ? <p className="mt-1 text-sm text-muted-foreground">{who}</p> : null}
+                {agenda.length ? (
+                  <ul className="mt-2 space-y-1">
+                    {agenda.map((subEvent, index) => (
+                      <li key={`${plan.id ?? plan.activity}-agenda-${index}`} className="flex gap-2 text-sm">
+                        <span aria-hidden="true" className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
+                        <span>{subEvent}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {plan.id && access.canEdit ? (
+                  <div className="mt-2 flex justify-end">
+                    <EventPlanActions plan={plan} />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="hidden overflow-x-auto lg:block">
         <table className="min-w-[1240px] w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
@@ -157,6 +197,7 @@ export function EventPlanPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

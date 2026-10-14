@@ -100,25 +100,43 @@ export function SponsorsPage() {
           </CrudDialog> : <span className="text-sm text-muted-foreground">View-only access</span>
         }
       />
-      <Card className="overflow-x-auto">
+      <Card className="overflow-hidden">
         <TableToolbar
           resultCount={sponsorTable.rows.length}
           totalCount={sponsorRows.length}
         />
-        <div className="hidden">
+        {/* A phone gets one row per sponsor (UI rules 5); from lg it is the table. */}
+        <ul className="ios-list border-t lg:hidden" style={{ ["--ios-inset" as string]: "1rem" } as React.CSSProperties}>
           {sponsorTable.rows.map((row) => (
-            <div key={row.name} className="rounded-md border p-4">
-              <div className="flex justify-between gap-3">
-                <div>
-                  <p className="font-medium">{row.name}</p>
-                  <p className="text-sm text-muted-foreground">{row.category}{row.inKind ? " · In-kind" : ""}</p>
+            <li key={row.id ?? row.name} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold leading-snug">{row.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {[row.flat, row.category, row.item, row.inKind ? "In-kind" : null].filter((part) => part && part !== "-").join(" · ")}
+                  </p>
                 </div>
                 <StatusBadge status={row.status} />
               </div>
-              <p className="mt-3 text-sm">Committed {formatCurrency(row.committed)} · Received {formatCurrency(row.received)}</p>
-            </div>
+              <dl className="mt-2 grid grid-cols-2 gap-2 tabular-nums">
+                <div>
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Committed</dt>
+                  <dd className="text-sm font-medium">{formatCurrency(row.committed)}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Received</dt>
+                  <dd className="text-sm font-medium">{formatCurrency(row.received)}</dd>
+                </div>
+              </dl>
+              {row.id && access.canEdit ? (
+                <div className="mt-2 flex justify-end">
+                  <SponsorActions sponsor={row} />
+                </div>
+              ) : null}
+            </li>
           ))}
-        </div>
+        </ul>
+        <div className="hidden overflow-x-auto lg:block">
         <table className="min-w-[1080px] w-full text-sm">
           <thead className="bg-muted text-left text-muted-foreground">
             <tr>
@@ -160,6 +178,7 @@ export function SponsorsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );

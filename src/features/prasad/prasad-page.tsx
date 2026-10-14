@@ -242,8 +242,9 @@ export function PrasadPage() {
       ) : null}
 
       {dayTabs.length > 1 ? (
-        <div className="overflow-x-auto">
-          <div role="tablist" aria-label="Filter by day" className="inline-flex min-w-full rounded-md border p-0.5 sm:min-w-0">
+        <div>
+          {/* Wraps onto a second row on a phone rather than scrolling sideways. */}
+          <div role="tablist" aria-label="Filter by day" className="flex flex-wrap gap-1 rounded-md border p-0.5">
             {[{ date: "all", label: "All days", sub: "" }, ...dayTabs].map((tab) => (
               <button
                 key={tab.date}
