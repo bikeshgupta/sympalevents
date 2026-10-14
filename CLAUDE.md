@@ -15,6 +15,12 @@ committee members are using today. See "Working agreement" below.
 
 ## Migration status
 
+**Check before relying on it:** running 045 on the live project failed with `relation "public.event_page_views"
+does not exist`, i.e. **migration 030 (audit_log + event_page_views) appears NOT to be applied** even though
+001-041 were reported applied. Until the owner confirms (`docs/MIGRATION_CHECKLIST.md`, check 030), assume
+`audit_log` and `event_page_views` do not exist in production: audit rows are silently not being written and
+no per-page traffic is recorded. 045 now checks its prerequisites and says so.
+
 **Migrations 001-041 have all been applied to the live Supabase project** (confirmed by the owner on
 2026-10-09). Every "not run yet" / "has not been run" note further down this file is **history**: it
 describes the state when that feature was written. The degrade paths those notes describe (reads fall

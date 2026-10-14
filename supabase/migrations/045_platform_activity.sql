@@ -63,6 +63,21 @@
 -- ---------------------------------------------------------------------------
 begin;
 
+-- Prerequisites, checked first so a missing earlier migration fails with a clear sentence instead of an
+-- obscure "relation does not exist" half-way down. Nothing has been changed when this raises.
+do $$
+begin
+  if to_regclass('public.event_visits') is null then
+    raise exception '045 needs migration 028 (event_visits). Apply 028 first, then run 045 again.';
+  end if;
+  if to_regclass('public.event_page_views') is null then
+    raise exception '045 needs migration 030 (audit_log and event_page_views). Apply 030 first, then run 045 again.';
+  end if;
+  if to_regclass('public.organizations') is null or to_regclass('public.events') is null or to_regclass('public.app_users') is null then
+    raise exception '045 needs the base tables (organizations, events, app_users).';
+  end if;
+end $$;
+
 -- event_visits ----------------------------------------------------------------
 alter table public.event_visits
   add column if not exists surface text not null default 'event',

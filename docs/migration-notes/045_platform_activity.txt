@@ -53,9 +53,21 @@ DELETION AND RETENTION (confirmed)
   No cascade deletes traffic history anywhere. No retention or pruning is added; nothing deletes raw rows.
   Behavioural events are not created or collected.
 
+PREREQUISITES: 045 needs migration 028 (event_visits) AND migration 030 (audit_log + event_page_views) to be
+applied first. The first real run failed with 'relation "public.event_page_views" does not exist': that table
+comes from 030, and 030 had not been applied to the live project. The migration now checks this first and
+stops with a plain sentence before changing anything. (A failed run changes nothing: Part 1 is one
+transaction and never reaches "commit". Verified on a scratch database with 030 left out.)
+
 ------------------------------------------------------------------------------------
 1. PRE-CHECKS  (run each in the Supabase SQL editor; send me ALL results)
 ------------------------------------------------------------------------------------
+
+-- 0. PREREQUISITES. Expect all four true. Any false = apply that migration first (028 / 030).
+select to_regclass('public.event_visits')     is not null as m028_event_visits,
+       to_regclass('public.event_page_views') is not null as m030_event_page_views,
+       to_regclass('public.audit_log')         is not null as m030_audit_log,
+       to_regclass('public.organizations')     is not null as base_organizations;
 
 -- A. The new columns must not exist yet (expect 0 rows).
 select table_name, column_name from information_schema.columns
