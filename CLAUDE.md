@@ -2172,6 +2172,8 @@ community space", not an event dashboard**: built from type, spacing, imagery an
 the page's sections back into bordered, filled, rounded containers; rounded shapes are kept only for the hero,
 thumbnails and the role badge. Headings, tab labels and the hero title use `.font-display`.
 
+- **The featured event is also listed in its own tab** (Upcoming/Live/Past). Hiding it there once left an Upcoming tab
+  saying "nothing planned" under an upcoming event. The event page's hero title uses the same `.font-display` serif.
 - **Order:** account line -> society + greeting -> Your passes (if any) -> featured hero (compact, 16:10, edge to
   edge on a phone, `-mx-4`) -> Events (Upcoming / Live / Past text tabs, editorial rows with hairlines) -> From your
   community. Behaviour is unchanged: `getEventStatus` is the status authority, one read feeds the page, permissions

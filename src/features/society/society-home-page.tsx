@@ -58,17 +58,15 @@ export function SocietyHomePage() {
   const grouped = useMemo(() => {
     const groups: Record<EventGroup, SocietyEvent[]> = { ongoing: [], upcoming: [], past: [] };
     for (const event of events) {
-      // The featured event is already the loudest thing here. Listing it again
-      // a few hundred pixels below, with the same call to action, is the
-      // duplicate-CTA problem - so it appears once, at the top.
-      if (event.id === featured?.id) continue;
+      // The featured event is listed here too, in the tab it belongs to. Hiding it left an Upcoming tab that
+      // said "nothing planned" directly under an upcoming event.
       groups[groupForStatus(getEventStatus(event, now), event, now)].push(event);
     }
     groups.upcoming.sort((a, b) => eventStartInstant(a.startDate, a.startTime) - eventStartInstant(b.startDate, b.startTime));
     groups.ongoing.sort((a, b) => eventEndInstant(a.endDate, a.endTime) - eventEndInstant(b.endDate, b.endTime));
     groups.past.sort((a, b) => eventEndInstant(b.endDate, b.endTime) - eventEndInstant(a.endDate, a.endTime));
     return groups;
-  }, [events, featured?.id, now]);
+  }, [events, now]);
 
   // Open on a tab that has something in it rather than on an empty one.
   const firstPopulated = tabs.find((tab) => grouped[tab.key].length)?.key ?? "upcoming";

@@ -118,12 +118,14 @@ export function EventHero({
             </div>
 
             {/* Hidden when the photograph already carries the name - but kept
-                for screen readers, because the page needs its heading. */}
+                for screen readers, because the page needs its heading. The name is set in the same serif
+                (`.font-display`) as the society's front door, so an event reads as the same place you
+                just came from. */}
             <h1
               className={
                 hideTitle
                   ? "sr-only"
-                  : "mt-3 text-3xl font-semibold leading-[1.1] tracking-tight [text-shadow:0_2px_4px_rgba(0,0,0,0.9),0_6px_24px_rgba(0,0,0,0.85)] sm:text-4xl lg:text-5xl"
+                  : "font-display mt-3 text-3xl font-semibold leading-[1.1] [text-shadow:0_2px_4px_rgba(0,0,0,0.9),0_6px_24px_rgba(0,0,0,0.85)] sm:text-4xl lg:text-5xl"
               }
             >
               {event.name}
