@@ -1,10 +1,12 @@
-import { AlertTriangle, CalendarDays } from "lucide-react";
+import { AlertTriangle, CalendarDays, FilePenLine, Plus, Settings2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { EventCard } from "@/features/society/event-card";
 import { groupByMonth, pickFeaturedEvent, residentVisibleEvents } from "@/features/society/event-presentation";
 import { FeaturedEvent } from "@/features/society/featured-event";
 import { MemoriesShelf, PassesShelf } from "@/features/society/society-shelves";
+import { SocietyAccount } from "@/features/society/society-account";
 import { SocietyHeader } from "@/features/society/society-header";
 import {
   eventEndInstant,
@@ -42,7 +44,7 @@ export function SocietyHomePage() {
   // One clock for the whole page, so every card and the featured pick agree.
   const now = useMemo(() => new Date(), []);
   const [managing, setManaging] = useState(false);
-  const { societies } = useEventContext();
+  const { societies, isLoading: contextLoading } = useEventContext();
 
   // Drafts never reach this page, and a cancelled event only stays while its
   // date is still ahead - see residentVisibleEvents for why.
@@ -84,33 +86,57 @@ export function SocietyHomePage() {
   const society = data?.society;
   const hasAnything = events.length > 0;
   // Society management is for society admins; the page itself asks the server.
-  const isSocietyAdmin = Boolean(society?.slug && societies.some((item) => item.slug === society.slug && item.role === "admin"));
+  const memberRole = contextLoading ? null : (societies.find((item) => item.slug === society?.slug)?.role ?? null);
+  const isSocietyAdmin = memberRole === "admin";
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-5 sm:pt-7">
-      {society ? <SocietyHeader society={society} /> : null}
+      {/* Who is looking, in which role, and what that role can do here. It used to be three bare links
+          under the heading with no sign of who was signed in - this page sits outside AppLayout, so it
+          had no account menu either. */}
+      <SocietyAccount role={memberRole}>
+        {data?.canManage ? (
+          <>
+            <Button asChild variant="outline" size="sm" className="h-10 gap-1.5">
+              <Link to="/new-event">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Create event
+              </Link>
+            </Button>
+            {isSocietyAdmin ? (
+              <Button asChild variant="outline" size="sm" className="h-10 gap-1.5">
+                <Link to={`/society/${society?.slug}/admin`}>
+                  <Settings2 className="h-4 w-4" aria-hidden="true" />
+                  Manage society
+                </Link>
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10 gap-1.5"
+              aria-expanded={managing}
+              onClick={() => setManaging((value) => !value)}
+            >
+              <FilePenLine className="h-4 w-4" aria-hidden="true" />
+              {managing ? "Hide drafts" : "Manage drafts"}
+            </Button>
+          </>
+        ) : null}
+      </SocietyAccount>
+
+      {society ? (
+        <div className="mt-5">
+          <SocietyHeader society={society} />
+        </div>
+      ) : null}
 
       {data?.ready === false ? (
         <p className="mt-4 flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>Society events are being set up. Please check back shortly.</span>
         </p>
-      ) : null}
-
-      {data?.canManage ? (
-        <div className="mt-4 flex flex-wrap gap-4 text-sm font-medium">
-          <Link className="text-primary" to="/new-event">
-            Create event
-          </Link>
-          {isSocietyAdmin ? (
-            <Link className="text-primary" to={`/society/${society?.slug}/admin`}>
-              Manage society
-            </Link>
-          ) : null}
-          <button type="button" className="text-primary" onClick={() => setManaging((value) => !value)}>
-            {managing ? "Hide drafts" : "Manage drafts"}
-          </button>
-        </div>
       ) : null}
 
       {managing && data?.canManage ? (
