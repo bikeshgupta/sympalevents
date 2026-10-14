@@ -34,7 +34,7 @@ export function EventCard({ event, to, now }: { event: SocietyEvent; to: string;
     <Link
       to={to}
       className={cn(
-        "group -mx-2 flex gap-4 rounded-lg px-2 py-5 transition-colors",
+        "group -mx-2 flex gap-3.5 rounded-lg px-2 py-3.5 transition-colors",
         "hover:bg-muted/40",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         cancelled && "opacity-70",
@@ -45,18 +45,18 @@ export function EventCard({ event, to, now }: { event: SocietyEvent; to: string;
         imageUrl={event.heroImageUrl ?? (remembered ? event.coverPhotoUrl : null)}
         focus={event.heroFocus}
         dim={remembered || cancelled}
-        className="h-28 w-24 shrink-0 rounded-lg sm:h-32 sm:w-28"
+        className="h-24 w-[84px] shrink-0 rounded-lg sm:h-28 sm:w-24"
         iconClassName="h-7 w-7"
       />
 
       <div className="flex min-w-0 flex-1 flex-col justify-center">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{eventEyebrow(event)}</p>
 
-        <h3 className="font-display mt-1 text-xl font-semibold leading-snug">{event.name}</h3>
+        <h3 className="font-display mt-0.5 text-lg font-semibold leading-snug">{event.name}</h3>
 
         <Metadata event={event} status={status} />
 
-        <p className="mt-2 text-sm font-medium text-primary">
+        <p className="mt-1 text-sm font-medium text-primary">
           {callToAction(event, status)}{" "}
           <span aria-hidden className="inline-block transition-transform group-hover:translate-x-0.5">
             &rarr;

@@ -13,18 +13,18 @@ export function CommunitySection({ entries }: { entries: CommunityEntry[] }) {
   if (!entries.length) return null;
 
   return (
-    <section className="mt-12" aria-labelledby="community-heading">
-      <h2 id="community-heading" className="font-display text-3xl font-semibold">
+    <section className="mt-8" aria-labelledby="community-heading">
+      <h2 id="community-heading" className="font-display text-2xl font-semibold">
         From your community
       </h2>
-      <ul className="mt-3 divide-y">
+      <ul className="mt-1 divide-y">
         {entries.map((entry) => (
           <li key={entry.key}>
             <Link
               to={entry.to}
-              className="group -mx-2 flex items-center gap-4 rounded-lg px-2 py-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="group -mx-2 flex items-center gap-4 rounded-lg px-2 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
                 {entry.imageUrl ? (
                   <img src={entry.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
                 ) : (
@@ -32,7 +32,7 @@ export function CommunitySection({ entries }: { entries: CommunityEntry[] }) {
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="font-display block truncate text-lg font-semibold leading-snug">{entry.title}</span>
+                <span className="font-display block truncate text-base font-semibold leading-snug">{entry.title}</span>
                 {entry.facts.length ? (
                   <span className="mt-0.5 block text-sm text-muted-foreground tabular-nums">{entry.facts.join(" · ")}</span>
                 ) : null}

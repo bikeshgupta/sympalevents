@@ -30,11 +30,11 @@ export function SocietyHeader({
           ) : null}
           <span className="truncate">{eyebrow}</span>
         </span>
-        <span className="font-display mt-2 block text-[30px] font-semibold leading-[1.15] sm:text-4xl">
+        <span className="font-display mt-1.5 block text-[28px] font-semibold leading-[1.15] sm:text-4xl">
           {greeting ?? society.name}
         </span>
       </h1>
-      <p className="mt-1.5 text-base text-muted-foreground">What&rsquo;s happening in your community</p>
+      <p className="mt-1 text-[15px] text-muted-foreground">What&rsquo;s happening in your community</p>
     </header>
   );
 }

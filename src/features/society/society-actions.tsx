@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  */
 
 const action =
-  "inline-flex min-h-10 items-center gap-2 rounded-md text-sm font-medium text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm font-medium text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function SocietyActions({
   canManage,
@@ -32,7 +32,7 @@ export function SocietyActions({
   if (!canManage) return null;
 
   return (
-    <nav aria-label="Society actions" className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-1">
+    <nav aria-label="Society actions" className="mt-2 flex flex-wrap items-center gap-x-5">
       <Link to="/new-event" className={action}>
         <Plus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         Create event

@@ -35,18 +35,18 @@ export function PassesShelf({
   if (!rows.length) return null;
 
   return (
-    <section className="mt-8" aria-labelledby="passes-heading">
-      <h2 id="passes-heading" className="font-display text-2xl font-semibold">
+    <section className="mt-5" aria-labelledby="passes-heading">
+      <h2 id="passes-heading" className="font-display text-xl font-semibold">
         Your passes
       </h2>
-      <ul className="mt-2 divide-y">
+      <ul className="mt-0.5 divide-y">
         {rows.map(({ pass, event }) => {
           const owes = !["verified", "free"].includes(pass.paymentStatus);
           return (
             <li key={event.id}>
               <Link
                 to={`/e/${event.id}/pass`}
-                className="-mx-2 flex min-h-14 items-center gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="-mx-2 flex min-h-12 items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <QrCode className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                 <span className="min-w-0 flex-1">

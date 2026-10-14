@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * The strongest thing on the page: what is on now, or what is next.
  *
  * An editorial hero rather than a card - on a phone it runs edge to edge (the page's own gutters are pulled
- * back with `-mx-4`) and is tall, with the event written across the foot of the picture. From `sm` up it is
+ * back with `-mx-4`) and landscape, with the event written across the foot of the picture. From `sm` up it is
  * a wide, gently rounded frame so it does not swallow a desktop viewport.
  *
  * ## What it draws, and where it comes from
@@ -37,8 +37,8 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       )}
     >
-      {/* Tall on a phone, capped so a large phone is not all picture; wide from `sm`. */}
-      <div className="relative aspect-[4/5] max-h-[640px] w-full sm:aspect-[16/9]">
+      
+      <div className="relative aspect-[6/5] w-full bg-primary/90 sm:aspect-[16/8]">
         <EventArtwork
           eventType={event.eventType}
           imageUrl={event.heroImageUrl}
@@ -46,6 +46,7 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
           focus={event.heroFocus}
           dim={status === "completed"}
           artworkPosition="80% center"
+          eager
           className="absolute inset-0 h-full w-full transition-transform duration-500 group-hover:scale-[1.02]"
         />
 
@@ -54,7 +55,7 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
         <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
 
         {status === "live" ? (
-          <span className="absolute left-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-emerald-800 shadow-sm">
+          <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-emerald-800 shadow-sm">
             <span aria-hidden className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-600" />
@@ -63,15 +64,15 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
           </span>
         ) : null}
 
-        <div className="absolute inset-x-0 bottom-0 p-5 sm:p-7">
+        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/90">{eventEyebrow(event)}</p>
 
-          <h2 className="font-display mt-2 text-[34px] font-semibold leading-[1.1] text-white drop-shadow-sm sm:text-5xl">
+          <h2 className="font-display mt-1.5 text-[28px] font-semibold leading-[1.12] text-white drop-shadow-sm sm:text-4xl">
             {event.name}
           </h2>
 
           {event.location || metric ? (
-            <ul className="mt-3 space-y-1 text-[15px] text-white/90">
+            <ul className="mt-2 space-y-0.5 text-sm text-white/90">
               {event.location ? (
                 <li className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -89,7 +90,7 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
 
           <span
             className={cn(
-              "mt-5 inline-flex h-11 items-center rounded-lg bg-white px-5 text-[15px] font-semibold text-foreground",
+              "mt-3 inline-flex h-10 items-center rounded-lg bg-white px-4 text-sm font-semibold text-foreground",
               "shadow-sm transition-transform group-hover:translate-x-0.5",
             )}
           >

@@ -113,11 +113,11 @@ export function SocietyHomePage() {
   const greeting = session && firstName ? `${greetingFor(new Date().getHours())}, ${firstName}` : null;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-20 pt-5 sm:pt-7">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
       <SocietyAccount role={memberRole} />
 
       {society ? (
-        <div className="mt-7">
+        <div className="mt-4">
           <SocietyHeader society={society} greeting={greeting} />
         </div>
       ) : null}
@@ -139,7 +139,7 @@ export function SocietyHomePage() {
       ) : null}
 
       {managing && canManage && drafts.length ? (
-        <section className="mt-4" aria-label="Draft events">
+        <section className="mt-2" aria-label="Draft events">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Draft events</h2>
           <ul className="mt-1 divide-y">
             {drafts.map((event) => (
@@ -161,19 +161,19 @@ export function SocietyHomePage() {
 
       {featured ? (
         // Edge to edge on a phone: the main column's own 16px gutters are pulled back.
-        <section className="-mx-4 mt-8 sm:mx-0" aria-label="Featured event">
+        <section className="-mx-4 mt-4 sm:mx-0" aria-label="Featured event">
           <FeaturedEvent event={featured} to={eventPath(featured)} now={now} />
         </section>
       ) : null}
 
       {hasAnything ? (
         <>
-          <h2 className="font-display mt-12 text-3xl font-semibold">Events</h2>
+          <h2 className="font-display mt-7 text-2xl font-semibold">Events</h2>
 
           {/* Text tabs, equal thirds, with an underline under the chosen one: filled pills competed with
               the hero for weight, and a dimmed tab read as disabled. A tab with nothing in it looks like
               every other - it is as selectable as any - and says so when chosen. */}
-          <div role="tablist" aria-label="Events by when they happen" className="mt-3 grid grid-cols-3 border-b">
+          <div role="tablist" aria-label="Events by when they happen" className="mt-1 grid grid-cols-3 border-b">
             {tabs.map((tab) => {
               const count = grouped[tab.key].length;
               const selected = tab.key === current;
@@ -187,7 +187,7 @@ export function SocietyHomePage() {
                   id={`tab-${tab.key}`}
                   onClick={() => setChosen(tab.key)}
                   className={cn(
-                    "font-display relative min-h-12 px-2 text-lg font-medium transition-colors",
+                    "font-display relative min-h-11 px-2 text-base font-medium transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                     selected ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                   )}
@@ -206,7 +206,7 @@ export function SocietyHomePage() {
               groupByMonth(grouped[current], now).map((group) => (
                 <div key={group.key || "all"}>
                   {group.heading ? (
-                    <h3 className="pt-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <h3 className="pt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {group.heading}
                     </h3>
                   ) : null}
@@ -253,7 +253,7 @@ function EmptyGroup({ group, canCreate }: { group: EventGroup; canCreate: boolea
     past: "No events have finished yet.",
   };
   return (
-    <div className="py-8">
+    <div className="py-5">
       <p className="text-[15px] text-muted-foreground">{copy[group]}</p>
       {group === "upcoming" && canCreate ? (
         <Link
@@ -269,7 +269,7 @@ function EmptyGroup({ group, canCreate }: { group: EventGroup; canCreate: boolea
 
 function EmptySociety({ canCreate }: { canCreate: boolean }) {
   return (
-    <div className="mt-12 flex flex-col items-center gap-2 py-6 text-center">
+    <div className="mt-8 flex flex-col items-center gap-2 py-4 text-center">
       <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />
       <p className="font-display text-2xl font-semibold">No events yet</p>
       <p className="max-w-sm text-[15px] text-muted-foreground">
@@ -291,20 +291,20 @@ function EmptySociety({ canCreate }: { canCreate: boolean }) {
  *  "unknown" is a lie, and this page is made almost entirely of counts. */
 function SocietyHomeSkeleton() {
   return (
-    <main className="mx-auto w-full max-w-3xl animate-pulse px-4 pb-16 pt-5 sm:pt-7" aria-hidden>
+    <main className="mx-auto w-full max-w-3xl animate-pulse px-4 pb-12 pt-4 sm:pt-6" aria-hidden>
       <div className="flex items-center gap-3">
         <div className="h-11 w-11 rounded-full bg-muted" />
         <div className="h-4 w-40 rounded bg-muted" />
       </div>
-      <div className="mt-7 h-3 w-44 rounded bg-muted" />
-      <div className="mt-3 h-8 w-64 rounded-md bg-muted" />
+      <div className="mt-4 h-3 w-44 rounded bg-muted" />
+      <div className="mt-2 h-7 w-64 rounded-md bg-muted" />
       <div className="mt-2 h-4 w-52 rounded bg-muted" />
-      <div className="-mx-4 mt-8 aspect-[4/5] max-h-[640px] bg-muted sm:mx-0 sm:aspect-[16/9] sm:rounded-2xl" />
-      <div className="mt-12 h-7 w-28 rounded bg-muted" />
-      <div className="mt-6 space-y-6">
+      <div className="-mx-4 mt-4 aspect-[6/5] bg-muted sm:mx-0 sm:aspect-[16/8] sm:rounded-2xl" />
+      <div className="mt-7 h-7 w-28 rounded bg-muted" />
+      <div className="mt-4 space-y-4">
         {[0, 1].map((key) => (
           <div key={key} className="flex gap-4">
-            <div className="h-28 w-24 shrink-0 rounded-lg bg-muted" />
+            <div className="h-24 w-[84px] shrink-0 rounded-lg bg-muted" />
             <div className="flex-1 space-y-2 pt-2">
               <div className="h-3 w-28 rounded bg-muted" />
               <div className="h-5 w-48 rounded bg-muted" />

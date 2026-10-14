@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { eventTypeStyle } from "@/features/society/event-type-style";
 import { focusObjectPosition } from "@/lib/hero";
 import { artworkKeyFor, heroArtworkUrl } from "@/lib/hero-artwork";
@@ -32,6 +33,7 @@ export function EventArtwork({
   iconClassName,
   dim = false,
   artworkPosition = "center",
+  eager = false,
 }: {
   eventType: string;
   imageUrl?: string | null;
@@ -48,7 +50,15 @@ export function EventArtwork({
   /** Where the generated artwork is anchored when the frame crops it. The pieces are wide with their motif
    *  on the right, so a tall frame (the featured hero on a phone) anchors right to keep the motif in view. */
   artworkPosition?: string;
+  /** Load the photograph now rather than when it scrolls near. For the one picture that is always above the
+   *  fold: a lazy image inside a tall, absolutely-filled frame is the kind of thing some phone browsers
+   *  decline to paint. */
+  eager?: boolean;
 }) {
+  // A photograph that cannot be loaded (moved, deleted, blocked) falls back to the artwork this event would
+  // have had anyway, instead of leaving an empty frame under white text.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  imageUrl = imageUrl && imageUrl !== failedUrl ? imageUrl : null;
   const style = eventTypeStyle(eventType);
   const Icon = style.icon;
 
@@ -58,7 +68,9 @@ export function EventArtwork({
         src={imageUrl}
         alt=""
         aria-hidden
-        loading="lazy"
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+        onError={() => setFailedUrl(imageUrl)}
         style={{ objectPosition: focusObjectPosition(focus) }}
         className={cn("object-cover", dim && "saturate-[0.9]", className)}
       />

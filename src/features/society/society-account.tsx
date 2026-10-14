@@ -34,7 +34,7 @@ export function SocietyAccount({
   const location = useLocation();
 
   // Never flash "Sign in" at somebody who is signed in while the session is still being read.
-  if (isLoading) return <div className="h-11 w-48 animate-pulse rounded-full bg-muted/60" aria-hidden="true" />;
+  if (isLoading) return <div className="h-10 w-48 animate-pulse rounded-full bg-muted/60" aria-hidden="true" />;
 
   if (!session) {
     return (
@@ -56,19 +56,19 @@ export function SocietyAccount({
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          className="-ml-1 flex min-w-0 max-w-full items-center gap-3 rounded-full py-1 pl-1 pr-2 text-left hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="-ml-1 flex min-w-0 max-w-full items-center gap-3 rounded-full py-0.5 pl-0.5 pr-2 text-left data-[state=open]:bg-muted/60 [@media(hover:hover)]:hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {session.user.avatarUrl ? (
             <img
               src={session.user.avatarUrl}
               alt=""
-              className="h-11 w-11 shrink-0 rounded-full border object-cover"
+              className="h-10 w-10 shrink-0 rounded-full border object-cover"
               referrerPolicy="no-referrer"
             />
           ) : (
             <span
               aria-hidden="true"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-semibold"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-semibold"
             >
               {(name[0] ?? "U").toUpperCase()}
             </span>
