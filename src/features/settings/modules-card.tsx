@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEventContext } from "@/lib/event-context";
 import { useEventPath } from "@/lib/event-path";
+import { ListGroup, ListRow } from "@/features/settings/ios-list";
 import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
 import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 import { usePageVisibility } from "@/lib/page-access";
@@ -59,60 +59,54 @@ export function ModulesCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Modules</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Turn a module off and it leaves the nav, Member Access and the address bar for this event. Rename one to what
-          your committee actually calls it. Editing is never widened here - it still comes from the role and the
-          per-member grants in Member Access.
+    <div>
+      <p className="mb-3 px-4 text-[13px] leading-snug text-muted-foreground">
+        Turn a module off and it leaves the nav, Member Access and the address bar for this event. Tap a module to rename
+        it to what your committee actually calls it, choose who can open it, or move it in the menu. Editing is never
+        widened here - it still comes from the role and the per-member grants in Team &amp; permissions.
+      </p>
+
+      {query.isLoading ? (
+        <p className="px-4 text-sm text-muted-foreground">Loading modules...</p>
+      ) : !current ? (
+        <p className="rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">
+          Modules could not be loaded. Check that migration 015_event_page_visibility.sql has been run.
         </p>
+      ) : (
+        <>
+          <ModuleEditor ios modules={current} onChange={setDraft} disabled={saveModules.isPending} />
 
-        {query.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading modules...</p>
-        ) : !current ? (
-          <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            Modules could not be loaded. Check that migration 015_event_page_visibility.sql has been run.
-          </p>
-        ) : (
-          <>
-            <ModuleEditor flat modules={current} onChange={setDraft} disabled={saveModules.isPending} />
-
-            <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+          <div className="mt-4 space-y-1.5 px-4 text-[13px] leading-snug text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">Settings</span> is always admin-only and cannot be opened up
+              - it is the screen that controls all the others.
+            </p>
+            <p>
+              A page set to <span className="font-medium text-foreground">Anyone with the link</span> is genuinely public.
+              Keep contact details and payment references off those pages.
+            </p>
+            {offCount ? (
               <p>
-                <span className="font-medium text-foreground">Settings</span> is always admin-only and cannot be opened
-                up - it is the screen that controls all the others.
+                {offCount} module{offCount === 1 ? " is" : "s are"} off. Nothing they hold is deleted - turning one back
+                on brings its records with it.
               </p>
-              <p>
-                A page set to <span className="font-medium text-foreground">Anyone with the link</span> is genuinely
-                public. Keep contact details and payment references off those pages.
-              </p>
-              {offCount ? (
-                <p>
-                  {offCount} module{offCount === 1 ? " is" : "s are"} off. Nothing they hold is deleted - turning one
-                  back on brings its records with it.
-                </p>
-              ) : null}
-            </div>
+            ) : null}
+          </div>
 
-            {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={() => void handleSave()} disabled={!draft || saveModules.isPending}>
-                {saveModules.isPending ? "Saving..." : "Save Modules"}
-              </Button>
-              <Button type="button" variant="outline" asChild>
-                <Link to={eventPath("/customise-dashboard")}>Arrange the dashboard</Link>
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setDraft(null)} disabled={!draft}>
-                Reset
-              </Button>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          {message ? <p className="mt-3 px-4 text-sm text-muted-foreground">{message}</p> : null}
+          <div className="mt-4 flex flex-wrap gap-2 px-1">
+            <Button type="button" className="h-11 rounded-2xl" onClick={() => void handleSave()} disabled={!draft || saveModules.isPending}>
+              {saveModules.isPending ? "Saving..." : "Save modules"}
+            </Button>
+            <Button type="button" variant="outline" className="h-11 rounded-2xl" onClick={() => setDraft(null)} disabled={!draft}>
+              Reset
+            </Button>
+          </div>
+          <ListGroup>
+            <ListRow icon={LayoutDashboard} tone="indigo" title="Arrange the dashboard" href={eventPath("/customise-dashboard")} />
+          </ListGroup>
+        </>
+      )}
+    </div>
   );
 }
-

@@ -1,12 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, Link2, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
+import { BlockRow, ListGroup, ListRow } from "@/features/settings/ios-list";
 
 /**
  * The permanent link to this event.
@@ -70,50 +69,44 @@ export function ShareCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Share this event</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          One link that opens this event for anybody, with no account and no invite code. What they can see is still
-          decided page by page in Modules above.
-        </p>
-
+    <div>
+      <ListGroup
+        header="Share this event"
+        footer={
+          <>
+            {message ? <span className="mb-1 block">{message}</span> : null}
+            One link that opens this event for anybody, with no account and no invite code. What they can see is still
+            decided page by page in Pages above.
+            {link ? " Replacing makes a new link and stops the old one working. Use it if a link went somewhere it should not have." : ""}
+          </>
+        }
+      >
         {link ? (
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-md border bg-card px-3 py-2 font-mono text-sm">
-                {link}
-              </code>
-              <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}>
-                <Copy className="h-4 w-4" />
-                {copied ? "Copied" : "Copy"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={mint.isPending}
-                onClick={() => void makeLink(true)}
-              >
-                <RefreshCw className="h-4 w-4" />
-                Replace
-              </Button>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Replacing makes a new link and stops the old one working. Use it if a link went somewhere it should not
-              have.
-            </p>
-          </div>
+          <>
+            <BlockRow>
+              <code className="block truncate font-mono text-sm text-muted-foreground">{link}</code>
+            </BlockRow>
+            <ListRow icon={Copy} tone="blue" title={copied ? "Copied" : "Copy link"} chevron={false} onClick={() => void copyLink()} />
+            <ListRow
+              icon={RefreshCw}
+              tone="orange"
+              title="Replace the link"
+              chevron={false}
+              disabled={mint.isPending}
+              onClick={() => void makeLink(true)}
+            />
+          </>
         ) : (
-          <Button type="button" disabled={mint.isPending} onClick={() => void makeLink(false)}>
-            {mint.isPending ? "Making the link..." : "Make a share link"}
-          </Button>
+          <ListRow
+            icon={Link2}
+            tone="green"
+            title={mint.isPending ? "Making the link..." : "Make a share link"}
+            chevron={false}
+            disabled={mint.isPending}
+            onClick={() => void makeLink(false)}
+          />
         )}
-
-        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-      </CardContent>
-    </Card>
+      </ListGroup>
+    </div>
   );
 }

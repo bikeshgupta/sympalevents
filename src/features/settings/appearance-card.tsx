@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, ImageUp, Trash2 } from "lucide-react";
 import { ChangeEvent, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
+import { BlockRow, IconTile, ListGroup, ListRow } from "@/features/settings/ios-list";
 import { HeroOptionsForm } from "@/features/settings/hero-options-form";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
@@ -128,18 +127,13 @@ export function AppearanceCard() {
   const busy = save.isPending || upload.isPending;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Appearance</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div>
-          <p className="text-sm font-medium">Colour</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Used for buttons, links, focus rings and the funding bar. Five to choose from rather than any colour at
-            all, so text on them stays readable.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+    <div>
+      <ListGroup
+        header="Colour"
+        footer="Used for buttons, links, focus rings and the funding bar. Five to choose from rather than any colour at all, so text on them stays readable."
+      >
+        <BlockRow>
+          <div className="flex flex-wrap gap-2">
             {themePresets.map((preset) => {
               const active = preset.key === currentTheme;
               return (
@@ -151,85 +145,71 @@ export function AppearanceCard() {
                   aria-pressed={active}
                   aria-label={`${preset.name}. ${preset.description}`}
                   className={cn(
-                    "flex items-center gap-2 rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
-                    active ? "border-foreground/30 bg-muted font-medium" : "bg-card",
+                    "flex items-center gap-2 rounded-full border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+                    active ? "border-foreground/30 bg-muted font-medium" : "bg-white",
                   )}
                 >
-                  <span
-                    className="h-5 w-5 shrink-0 rounded-full border"
-                    style={{ background: `hsl(${preset.primary})` }}
-                    aria-hidden
-                  />
+                  <span className="h-5 w-5 shrink-0 rounded-full border" style={{ background: `hsl(${preset.primary})` }} aria-hidden />
                   {preset.name}
                   {active ? <Check className="h-4 w-4 text-primary" aria-hidden /> : null}
                 </button>
               );
             })}
           </div>
-        </div>
+        </BlockRow>
+      </ListGroup>
 
-        <div>
-          <p className="text-sm font-medium">Hero photograph</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            The image behind the event name on the dashboard. Without one, {usesBundledPhoto(data.event)
-              ? "the standard photograph is used."
-              : "this kind of event shows its own artwork."}
-          </p>
-
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            {heroImageUrl ? (
-              <img
-                src={heroImageUrl}
-                alt="This event's hero photograph"
-                className="h-16 w-28 rounded-md border object-cover"
-              />
-            ) : (
-              <span className="flex h-16 w-28 items-center justify-center rounded-md border bg-muted text-xs text-muted-foreground">
-                {usesBundledPhoto(data.event) ? "Standard" : "Artwork"}
-              </span>
-            )}
-
-            <label
-              className={cn(
-                "inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border bg-card px-3 text-sm font-medium",
-                "hover:bg-muted focus-within:ring-2 focus-within:ring-ring",
-                busy && "pointer-events-none opacity-60",
-              )}
-            >
-              <ImageUp className="h-4 w-4" aria-hidden />
-              {heroImageUrl ? "Replace" : "Upload"}
-              <input type="file" accept="image/*" className="sr-only" onChange={chooseHero} disabled={busy} />
-            </label>
-
-            {heroImageUrl ? (
-              <Button variant="outline" size="sm" disabled={busy} onClick={() => void clearHero()}>
-                <Trash2 className="h-4 w-4" />
-                Remove
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        <HeroOptionsForm
-          key={`${heroImageUrl ?? "standard"}|${JSON.stringify(data.event.heroOptions ?? null)}`}
-          photoUrl={heroImageUrl}
-          options={data.event.heroOptions ?? null}
-          busy={busy}
-          onSave={saveHeroOptions}
-        />
-
-        {message ? (
-          <p
-            role={failed ? "alert" : "status"}
+      <ListGroup
+        header="Hero photograph"
+        footer={
+          <>
+            The image behind the event name on the dashboard. Without one,{" "}
+            {usesBundledPhoto(data.event) ? "the standard photograph is used." : "this kind of event shows its own artwork."}
+          </>
+        }
+      >
+        <BlockRow>
+          {heroImageUrl ? (
+            <img src={heroImageUrl} alt="This event's hero photograph" className="h-24 w-full max-w-xs rounded-2xl border object-cover" />
+          ) : (
+            <span className="flex h-24 w-full max-w-xs items-center justify-center rounded-2xl border bg-muted text-sm text-muted-foreground">
+              {usesBundledPhoto(data.event) ? "Standard photograph" : "Artwork"}
+            </span>
+          )}
+        </BlockRow>
+        <li style={{ ["--ios-inset" as string]: "3.75rem" } as React.CSSProperties}>
+          <label
             className={cn(
-              "text-sm",
-              failed ? "rounded-md bg-destructive/10 p-3 text-destructive" : "text-muted-foreground",
+              "flex min-h-[3.5rem] w-full cursor-pointer items-center gap-3 px-4 py-2 transition-colors focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring active:bg-black/[0.05]",
+              busy && "pointer-events-none opacity-50",
             )}
           >
-            {message}
-          </p>
+            <IconTile icon={ImageUp} tone="blue" />
+            <span className="flex-1 text-[16.5px]">{heroImageUrl ? "Replace photograph" : "Upload a photograph"}</span>
+            <input type="file" accept="image/*" className="sr-only" onChange={chooseHero} disabled={busy} />
+          </label>
+        </li>
+        {heroImageUrl ? (
+          <ListRow icon={Trash2} tone="red" title="Remove photograph" chevron={false} disabled={busy} onClick={() => void clearHero()} />
         ) : null}
-      </CardContent>
-    </Card>
+      </ListGroup>
+
+      <HeroOptionsForm
+        key={`${heroImageUrl ?? "standard"}|${JSON.stringify(data.event.heroOptions ?? null)}`}
+        photoUrl={heroImageUrl}
+        options={data.event.heroOptions ?? null}
+        busy={busy}
+        onSave={saveHeroOptions}
+      />
+
+      {message ? (
+        <p
+          role={failed ? "alert" : "status"}
+          className={cn("mt-4 text-sm", failed ? "rounded-2xl bg-destructive/10 p-3 text-destructive" : "px-4 text-muted-foreground")}
+        >
+          {message}
+        </p>
+      ) : null}
+    </div>
   );
 }

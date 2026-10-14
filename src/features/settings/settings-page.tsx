@@ -1,15 +1,14 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   AlertCircle,
-  ArrowUpRight,
   Bell,
   CalendarDays,
   Check,
   ChevronLeft,
-  ChevronRight,
   Info,
   LayoutGrid,
   MoreHorizontal,
+  Plus,
   Palette,
   SlidersHorizontal,
   Ticket,
@@ -42,10 +41,12 @@ import {
   type SectionTone,
   type SectionKey,
 } from "@/features/settings/settings-sections";
+import { ListGroup, ListRow } from "@/features/settings/ios-list";
+import { groupedBackground } from "@/features/settings/ios-styles";
 import { ShareCard } from "@/features/settings/share-card";
 import { SocietyCard } from "@/features/settings/society-card";
 import { TeamPanel } from "@/features/settings/team-panel";
-import { useAccessRequests, useRoster } from "@/features/settings/team-data";
+import { displayName, useAccessRequests, useRoster } from "@/features/settings/team-data";
 import { eventTypeLabel } from "@/features/society/event-type-style";
 import { EventArtwork } from "@/features/society/event-artwork";
 import { formatEventDate } from "@/features/dashboard/dashboard-utils";
@@ -92,20 +93,6 @@ const sectionIcons: Record<SectionKey, LucideIcon> = {
   advanced: SlidersHorizontal,
 };
 
-/** iOS Settings gives every row its own colour. Name -> the top and bottom of the tile's gradient. */
-const tones: Record<SectionTone, [string, string]> = {
-  blue: ["#5BA3FF", "#2F7CF6"],
-  red: ["#FF7A6B", "#F0443A"],
-  indigo: ["#8B8CF5", "#5A5BD6"],
-  green: ["#5FD07F", "#2FB457"],
-  orange: ["#FFB04D", "#F58A1F"],
-  pink: ["#FF7AA8", "#EE4A86"],
-  gray: ["#A7A9B2", "#7E808A"],
-};
-
-/** The grouped-list background. Opaque on purpose: the section sheet slides over the index and must hide it. */
-const groupedBackground = "bg-[hsl(42_26%_94%)]";
-
 export function SettingsPage() {
   return (
     <SettingsDirtyProvider>
@@ -130,6 +117,8 @@ function SettingsShell() {
   const { data: roster } = useRoster();
 
   const raw = params.get("section");
+  // A person's page inside Team is one level down: the phone's back button goes up to Team, not out to the index.
+  const person = params.get("person");
   const active: SectionKey | null = isPanelKey(raw) ? raw : null;
   // On a wide screen there is room for the index and a section side by side, so something is always open there.
   // The panel that slides back out keeps its content until it has gone, so it is the last one that was open.
@@ -164,7 +153,7 @@ function SettingsShell() {
       if (window.matchMedia("(min-width: 1024px)").matches) window.scrollTo({ top: 0 });
       headingRef.current?.focus({ preventScroll: true });
     }
-  }, [active]);
+  }, [active, person]);
 
   function openSection(key: SectionKey) {
     setParams({ section: key });
@@ -172,6 +161,8 @@ function SettingsShell() {
   function closeSection() {
     setParams({});
   }
+  const teamPerson = active === "team" ? person : null;
+  const personRow = teamPerson && teamPerson !== "new" ? roster?.find((member) => member.app_users.id === teamPerson) : undefined;
 
   // ---- one line per section, from data this page already has --------------------------------------------------
   const enabledModules = modules?.filter((module) => module.isEnabled) ?? [];
@@ -231,7 +222,13 @@ function SettingsShell() {
     registration: { icon: Ticket, tone: "orange" },
     programme: { icon: CalendarDays, tone: "blue" },
   };
-  const shownTitle = sectionDefs.find((section) => section.key === shown)?.title ?? "";
+  const shownTitle = teamPerson
+    ? teamPerson === "new"
+      ? "Add a person"
+      : personRow
+        ? displayName(personRow.app_users)
+        : "Team"
+    : (sectionDefs.find((section) => section.key === shown)?.title ?? "");
 
   return (
     <div
@@ -239,7 +236,7 @@ function SettingsShell() {
         "relative mx-auto max-w-5xl",
         // On a phone the page is the iOS grouped screen: a warm grey, edge to edge, with white lists on it.
         "max-lg:-mx-4 max-lg:-mb-20 max-lg:-mt-5 max-lg:min-h-[calc(100dvh-4rem)] max-lg:px-4 max-lg:pb-28 max-lg:pt-5",
-        "max-lg:bg-[hsl(42_26%_94%)]",
+        "max-lg:bg-[hsl(42_26%_94%)]", // = groupedBackground, spelled out so Tailwind can see it
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -277,6 +274,7 @@ function SettingsShell() {
             <ListGroup>
               <ListRow
                 href="?section=basics"
+                sideNav
                 title={event.name}
                 big
                 lead={
@@ -320,6 +318,7 @@ function SettingsShell() {
                       key={gap.key}
                       icon={look.icon}
                       tone={look.tone}
+                      sideNav
                       title={gap.label}
                       sub={gap.detail}
                       href={target?.kind === "page" ? path(`/${target.page}`) : undefined}
@@ -339,6 +338,7 @@ function SettingsShell() {
                 {group.map((section) => (
                   <ListRow
                     key={section.key}
+                    sideNav
                     icon={sectionIcons[section.key]}
                     tone={section.tone}
                     title={section.title}
@@ -376,12 +376,13 @@ function SettingsShell() {
                 to="?"
                 onClick={(clicked) => {
                   clicked.preventDefault();
-                  closeSection();
+                  if (teamPerson) setParams({ section: "team" });
+                  else closeSection();
                 }}
                 className="glass glass-press relative z-10 inline-flex h-9 items-center gap-0.5 rounded-full pl-2 pr-3.5 text-[15px] font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ChevronLeft className="h-[18px] w-[18px]" aria-hidden="true" />
-                Settings
+                {teamPerson ? "Team" : "Settings"}
               </Link>
               <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 text-center text-base font-semibold">
                 {shownTitle}
@@ -408,7 +409,7 @@ function SettingsShell() {
                         {section.title}
                       </h2>
                       <p className="mb-5 mt-1 hidden text-sm text-muted-foreground lg:block">{summaries[section.key]}</p>
-                      <div>{panels(section.key, isSocietyAdmin)}</div>
+                      <div className="space-y-7">{panels(section.key, isSocietyAdmin)}</div>
                     </section>
                   );
                 })}
@@ -463,131 +464,6 @@ function panels(key: SectionKey, isSocietyAdmin: boolean): ReactNode {
   }
 }
 
-/** One rounded white list: rows touch, with a hairline between them that starts after the icon. */
-function ListGroup({
-  header,
-  headerTone,
-  footer,
-  role,
-  children,
-}: {
-  header?: string;
-  headerTone?: "attention";
-  footer?: string;
-  role?: "status";
-  children: ReactNode;
-}) {
-  return (
-    <section className="mt-6 first:mt-0" role={role}>
-      {header ? (
-        <p
-          className={cn(
-            "mb-1.5 px-4 text-[13px] uppercase tracking-wide",
-            headerTone === "attention" ? "font-medium text-amber-800" : "text-muted-foreground",
-          )}
-        >
-          {header}
-        </p>
-      ) : null}
-      <ul className="ios-list overflow-hidden rounded-3xl bg-white shadow-[0_1px_2px_hsl(var(--foreground)/0.05)] ring-1 ring-black/[0.04]">
-        {children}
-      </ul>
-      {footer ? <p className="mt-1.5 px-4 text-[13px] leading-snug text-muted-foreground">{footer}</p> : null}
-    </section>
-  );
-}
-
-/**
- * A row in a list: a coloured icon tile (or a picture), the title, a short value on the right and a chevron.
- * It is a link when it has an `href`, a button when it has an `onClick`. On a wide screen the list is the side
- * navigation, so the value and chevron step aside and the open section is tinted.
- */
-function ListRow({
-  icon: Icon,
-  tone,
-  lead,
-  title,
-  sub,
-  sub2,
-  value,
-  href,
-  onClick,
-  selected = false,
-  unsaved = false,
-  external = false,
-  big = false,
-}: {
-  icon?: LucideIcon;
-  tone?: SectionTone;
-  lead?: ReactNode;
-  title: string;
-  sub?: string;
-  sub2?: ReactNode;
-  value?: string;
-  href?: string;
-  onClick?: () => void;
-  selected?: boolean;
-  unsaved?: boolean;
-  external?: boolean;
-  big?: boolean;
-}) {
-  const [top, bottom] = tones[tone ?? "gray"];
-  const body = (
-    <>
-      {lead ??
-        (Icon ? (
-          <span
-            aria-hidden="true"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-white shadow-[inset_0_0.5px_0_rgba(255,255,255,0.45),0_1px_2px_rgba(0,0,0,0.12)]"
-            style={{ background: `linear-gradient(180deg, ${top}, ${bottom})` }}
-          >
-            <Icon className="h-[18px] w-[18px]" />
-          </span>
-        ) : null)}
-      <span className="min-w-0 flex-1">
-        <span className={cn("block truncate", big ? "font-display text-lg font-semibold leading-tight" : "text-[16.5px]", selected && "lg:font-semibold")}>
-          {title}
-          {unsaved ? (
-            <span className="ml-2 inline-flex items-center gap-1 align-middle font-sans text-xs font-medium text-amber-800">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-600" aria-hidden="true" />
-              Unsaved
-            </span>
-          ) : null}
-        </span>
-        {sub ? <span className="block truncate text-[13px] text-muted-foreground">{sub}</span> : null}
-        {sub2 ? <span className="mt-0.5 block text-[13px] text-muted-foreground">{sub2}</span> : null}
-      </span>
-      {value ? (
-        <span className="max-w-[45%] shrink-0 truncate text-base text-muted-foreground lg:hidden">{value}</span>
-      ) : null}
-      {external ? (
-        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />
-      ) : (
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 lg:hidden" aria-hidden="true" />
-      )}
-    </>
-  );
-  const cls = cn(
-    "flex w-full items-center gap-3 px-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-    big ? "min-h-[5rem] py-3" : "min-h-[3.5rem] py-2",
-    "active:bg-black/[0.05] [@media(hover:hover)]:hover:bg-black/[0.03]",
-    selected && "lg:bg-primary/10",
-  );
-  return (
-    <li style={lead ? ({ ["--ios-inset" as string]: "5rem" } as React.CSSProperties) : undefined}>
-      {href ? (
-        <Link to={href} aria-current={selected ? "true" : undefined} className={cls}>
-          {body}
-        </Link>
-      ) : (
-        <button type="button" onClick={onClick} className={cls}>
-          {body}
-        </button>
-      )}
-    </li>
-  );
-}
-
 function OverflowMenu() {
   const path = useEventPath();
   const item =
@@ -625,18 +501,17 @@ function OverflowMenu() {
 /** Creating an event is not a setting of this one; it is only here so it is not lost. Same link as before. */
 function CreateEventBlock({ signedIn }: { signedIn: boolean }) {
   return (
-    <div className="border-t py-7 first:border-t-0 first:pt-1">
-      <h3 className="font-display text-xl leading-tight">Start another event</h3>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Start from a festival, a sports meet, a cultural night or a blank slate, then turn modules on and off before
-        anybody sees it.
-      </p>
-      <div className="mt-4">
-        <Button asChild disabled={!signedIn}>
-          <Link to="/new-event">New event</Link>
-        </Button>
-      </div>
-      {!signedIn ? <p className="mt-2 text-sm text-muted-foreground">Sign in to create an event.</p> : null}
-    </div>
+    <ListGroup
+      header="Start another event"
+      footer={
+        <>
+          Start from a festival, a sports meet, a cultural night or a blank slate, then turn modules on and off before
+          anybody sees it.
+          {signedIn ? null : " Sign in to create an event."}
+        </>
+      }
+    >
+      <ListRow icon={Plus} tone="green" title="New event" href="/new-event" disabled={!signedIn} />
+    </ListGroup>
   );
 }

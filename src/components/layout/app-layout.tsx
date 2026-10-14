@@ -21,6 +21,7 @@ import { menuHidesPage } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
 import { navItems } from "./nav-items";
 import { menuGlass } from "@/lib/glass";
+import { MenuIdentity, MenuList, MenuTile, menuRow } from "@/components/layout/menu-list";
 
 function pageKeyFromHref(href: string) {
   return href.split("/").filter(Boolean)[0] || "dashboard";
@@ -261,45 +262,29 @@ export function AppLayout() {
                   sideOffset={8}
                   className={`z-50 w-64 rounded-xl border p-2 text-popover-foreground ${menuGlass}`}
                 >
-                  <div className="px-2 py-2">
-                    <p className="truncate text-sm font-medium">{userName}</p>
-                    {session.user.email ? (
-                      <p className="mt-1 truncate text-xs text-muted-foreground">{session.user.email}</p>
-                    ) : null}
-                  </div>
-                  <DropdownMenu.Separator className="my-1 h-px bg-border" />
-                  <DropdownMenu.Item asChild>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-muted"
-                      onClick={() => navigate("/profile")}
-                    >
-                      <UserPen className="h-4 w-4" />
-                      My profile
-                    </button>
-                  </DropdownMenu.Item>
-                  {canRequestCommitteeAccess && residentMenu ? (
+                  <MenuIdentity name={userName} email={session.user.email} avatarUrl={session.user.avatarUrl} />
+                  <MenuList>
                     <DropdownMenu.Item asChild>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-muted"
-                        onClick={() => void requestCommitteeAccess()}
-                      >
-                        <UserPlus className="h-4 w-4" />
-                        Request committee access
+                      <button type="button" className={menuRow} onClick={() => navigate("/profile")}>
+                        <MenuTile icon={UserPen} tone="blue" />
+                        My profile
                       </button>
                     </DropdownMenu.Item>
-                  ) : null}
-                  <DropdownMenu.Item asChild>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none hover:bg-muted"
-                      onClick={() => void signOut()}
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Sign out
-                    </button>
-                  </DropdownMenu.Item>
+                    {canRequestCommitteeAccess && residentMenu ? (
+                      <DropdownMenu.Item asChild>
+                        <button type="button" className={menuRow} onClick={() => void requestCommitteeAccess()}>
+                          <MenuTile icon={UserPlus} tone="green" />
+                          Request committee access
+                        </button>
+                      </DropdownMenu.Item>
+                    ) : null}
+                    <DropdownMenu.Item asChild>
+                      <button type="button" className={menuRow} onClick={() => void signOut()}>
+                        <MenuTile icon={LogOut} tone="red" />
+                        Sign out
+                      </button>
+                    </DropdownMenu.Item>
+                  </MenuList>
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
             </DropdownMenu.Root>

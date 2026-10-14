@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
+import { BlockRow, FieldRow, ListGroup } from "@/features/settings/ios-list";
+import { fieldInput } from "@/features/settings/ios-styles";
 
 /**
  * The event's web address, both halves of it.
@@ -93,74 +93,61 @@ export function AddressCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Web address</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {!ready ? (
-          <p className="rounded-md bg-amber-100 p-3 text-sm text-amber-900">
-            Readable addresses need <code className="break-all font-mono">supabase/migrations/029_society_home.sql</code>.
-            Until it is run, this event uses its id in the address.
-          </p>
-        ) : (
-          <form onSubmit={submit} className="space-y-4">
-            {/* Shown as the URL it actually is, so somebody editing one segment
-                can see what they are editing it inside. */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium" htmlFor="society-slug">
-                Society
-              </label>
-              <div className="flex items-center gap-1 text-sm">
-                <span className="shrink-0 text-muted-foreground">/society/</span>
-                <Input
-                  id="society-slug"
-                  value={societyValue}
-                  onChange={(item) => setSocietyDraft(item.target.value)}
-                  className="h-10 w-full sm:w-64"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Shared by every event in this society &mdash; changing it moves all of them.
+    <div>
+      {!ready ? (
+        <p className="rounded-2xl bg-amber-100 p-3 text-sm text-amber-900">
+          Readable addresses need <code className="break-all font-mono">supabase/migrations/029_society_home.sql</code>.
+          Until it is run, this event uses its id in the address.
+        </p>
+      ) : (
+        <form onSubmit={submit}>
+          <ListGroup
+            header="Web address"
+            footer={
+              <>
+                {message ? <span className="mb-1 block">{message}</span> : null}
+                The society part is shared by every event in this society, so changing it moves all of them. Changing an
+                address <strong>breaks links already shared</strong>. For anything going into a residents&rsquo; group,
+                use the share link above instead &mdash; that one never moves.
+              </>
+            }
+          >
+            {/* Shown as the URL it actually is, so somebody editing one segment can see what they are editing it inside. */}
+            <FieldRow id="society-slug" label="Society">
+              <span className="shrink-0 text-sm text-muted-foreground">/society/</span>
+              <input
+                id="society-slug"
+                className={`${fieldInput} text-left`}
+                value={societyValue}
+                onChange={(item) => setSocietyDraft(item.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </FieldRow>
+            <FieldRow id="event-slug" label="Event">
+              <span className="shrink-0 text-sm text-muted-foreground">/events/</span>
+              <input
+                id="event-slug"
+                className={`${fieldInput} text-left`}
+                value={eventValue}
+                onChange={(item) => setEventDraft(item.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </FieldRow>
+            <BlockRow>
+              <p className="break-all font-mono text-xs text-muted-foreground">
+                /society/{societyValue || "…"}/events/{eventValue || "…"}/dashboard
               </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium" htmlFor="event-slug">
-                Event
-              </label>
-              <div className="flex items-center gap-1 text-sm">
-                <span className="shrink-0 text-muted-foreground">/events/</span>
-                <Input
-                  id="event-slug"
-                  value={eventValue}
-                  onChange={(item) => setEventDraft(item.target.value)}
-                  className="h-10 w-full sm:w-64"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-            </div>
-
-            <p className="break-all rounded-md bg-muted p-2.5 font-mono text-xs text-muted-foreground">
-              /society/{societyValue || "…"}/events/{eventValue || "…"}/dashboard
-            </p>
-
-            <Button type="submit" size="sm" disabled={busy || !dirty || !societyValue.trim() || !eventValue.trim()}>
+            </BlockRow>
+          </ListGroup>
+          <div className="mt-4 px-1">
+            <Button type="submit" className="h-12 w-full rounded-2xl text-base" disabled={busy || !dirty || !societyValue.trim() || !eventValue.trim()}>
               {busy ? "Saving..." : "Save address"}
             </Button>
-          </form>
-        )}
-
-        <p className="text-xs text-muted-foreground">
-          Changing an address <strong>breaks links already shared</strong>. For anything going into a
-          residents&rsquo; group, use the share link above instead &mdash; that one never moves.
-        </p>
-
-        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
-      </CardContent>
-    </Card>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useEventContext, type SocietyOption } from "@/lib/event-context";
+import { FieldRow, ListGroup } from "@/features/settings/ios-list";
+import { fieldInput } from "@/features/settings/ios-styles";
 import { useSocietyActions } from "@/lib/societies";
 import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 
@@ -26,11 +28,7 @@ export function SocietyCard() {
   // may change any of this. The guard lives out here so the form below can
   // take a society that is definitely there.
   if (!society || society.role !== "admin") return null;
-  return (
-    <div className="border-t pt-7">
-      <SocietyForm society={society} variant="page" readOnlyDetails societies={own} />
-    </div>
-  );
+  return <SocietyForm society={society} variant="page" readOnlyDetails societies={own} />;
 }
 
 export function SocietyForm({
@@ -110,26 +108,10 @@ export function SocietyForm({
     return (
       <div>
         {readOnlyDetails ? (
-          <section aria-labelledby="society-details-heading">
-            <h2 id="society-details-heading" className="font-display text-2xl font-semibold">
-              Society
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">The society this event belongs to.</p>
-            <div className="mt-5 max-w-md space-y-1.5">
-              <Label htmlFor="society-readonly">Society</Label>
-              <select
-                id="society-readonly"
-                disabled
-                value={society.id}
-                className="h-10 w-full rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground opacity-100"
-              >
-                {(societies.some((item) => item.id === society.id) ? societies : [society, ...societies]).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">
+          <ListGroup
+            header="Society"
+            footer={
+              <>
                 Read only here. To change the society&rsquo;s name or city, use{" "}
                 {society.slug ? (
                   <Link to={`/society/${society.slug}/admin`} className="font-medium text-primary underline-offset-4 hover:underline">
@@ -139,9 +121,24 @@ export function SocietyForm({
                   "Manage society"
                 )}
                 . Choose a different society when you start a new event.
-              </p>
-            </div>
-          </section>
+              </>
+            }
+          >
+            <FieldRow id="society-readonly" label="Society">
+              <select
+                id="society-readonly"
+                disabled
+                value={society.id}
+                className={`${fieldInput} appearance-none opacity-100 [text-align-last:right]`}
+              >
+                {(societies.some((item) => item.id === society.id) ? societies : [society, ...societies]).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+          </ListGroup>
         ) : (
         <section aria-labelledby="society-details-heading">
           <h2 id="society-details-heading" className="font-display text-2xl font-semibold">

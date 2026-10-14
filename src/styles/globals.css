@@ -398,7 +398,7 @@
     position: absolute;
     top: 0;
     right: 0;
-    left: var(--ios-inset, 3.625rem);
+    left: var(--ios-inset, 3.75rem);
     height: 0.5px;
     background: hsl(var(--foreground) / 0.14);
   }

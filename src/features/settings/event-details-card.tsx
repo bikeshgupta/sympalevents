@@ -1,8 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useState, type ReactNode } from "react";
+import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
+import { FieldRow } from "@/features/settings/ios-list";
+import { fieldInput } from "@/features/settings/ios-styles";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { usePageAccess } from "@/lib/page-access";
@@ -53,21 +55,6 @@ const partTitles: Record<DetailsPart, string> = {
   basics: "Event name",
   schedule: "Venue, dates and hours",
 };
-
-const fieldInput =
-  "min-w-0 flex-1 bg-transparent py-2 text-right text-base text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
-
-function FieldRow({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex min-h-[3.25rem] items-center gap-3 px-4">
-      <label htmlFor={id} className="w-28 shrink-0 text-base">
-        {label}
-        {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
-      </label>
-      {children}
-    </div>
-  );
-}
 
 export function EventDetailsCard({ part = "all" }: { part?: DetailsPart }) {
   const { data } = useEventData({ includeTasks: false });
@@ -173,7 +160,7 @@ export function EventDetailsCard({ part = "all" }: { part?: DetailsPart }) {
           ) : null}
 
           {/* Rows, as in iOS Settings: the label on the left, the value you type on the right, a hairline between. */}
-          <div className="ios-list -mx-4 -my-1" style={{ ["--ios-inset" as string]: "1rem" }}>
+          <ul className="ios-list -mx-4 -my-1">
             {owns("name") ? (
               <FieldRow id="event-name" label="Name">
                 <input
@@ -243,7 +230,7 @@ export function EventDetailsCard({ part = "all" }: { part?: DetailsPart }) {
                 </FieldRow>
               </>
             ) : null}
-          </div>
+          </ul>
 
           {owns("startDate") ? (
             <p className="text-xs text-muted-foreground">

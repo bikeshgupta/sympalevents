@@ -2255,10 +2255,19 @@ grouping**: no setting was added, no permission changed, and which pages an even
   (`SectionDef.group` / `.tone` in settings-sections.ts; `sectionGroups()` is pure and tested). Above them: the event
   card (links to Basics) and, while gaps exist, a "N items need attention" list from the command centre's checklist. On a
   phone the open section's sheet has a frosted-glass navigation bar (back pill + the section's name); from `lg` the same
-  lists are the side navigation. Section panels render inside `<GroupedCards>` (card.tsx): each card is a small grey
-  caption over one rounded white group. **Only Event details (Basics, Schedule & location) is true label-left/value-right
-  rows**; the other cards (modules, good to know, team, appearance...) keep their forms inside the white group, and the
-  Team page keeps its Rename / Manage / Remove buttons on the row (a per-person page was proposed and not chosen).
+  lists are the side navigation. **Every section is now iOS rows** built from [ios-list.tsx](src/features/settings/ios-list.tsx)
+(`ListGroup`, `ListRow`, `FieldRow`, `BlockRow`, `IosSwitch`, `Segmented`; class strings in ios-styles.ts): Event details
+and Run again are label/value rows, Good to know entries are grouped rows with a destructive Remove, Share and Address
+are action/field rows, Appearance has swatch, photograph and hero-detail groups, Society is a read-only row. **Pages &
+access**: each module is one row (name, who can open it, a switch); tapping it expands who-can-open, "Called" and its
+position in the menu (`ModuleEditor ios`, same fields and handlers; the wizard keeps the stacked editor).
+`<GroupedCards>` (card.tsx) still exists for any card left as a form: a grey caption over one rounded white group.
+- **Team & permissions has a page per person** (`?section=team&person=<userId>`, or `person=new` for the picker of
+  people with no role): Name (the same rename prompt), Role (tick rows; Admin only for a society admin), a None / Read /
+  Edit control per page (the same three states the old checkboxes held), Save access, and Remove from event with the
+  same confirmation. Committee requests and the member list are rows above. Same endpoints and the same last-admin
+  rule. The phone's back pill goes up to Team, not out to the index; the draft survives going back and returning to
+  the same person. The account menus (header avatar, Society pages) use the same grouped style (`menu-list.tsx`).
 - The open section is `?section=<key>`. On a phone the index is the page until one is opened (single-section focus, "All
   settings" back); from `lg` the index becomes a side navigation and `basics` is open by default.
 - **Readiness is the command centre's checklist** (`useCommandCentre`), not a second engine. "Ready to publish" is only ever

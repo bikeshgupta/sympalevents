@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { signOut, useSession } from "@/lib/auth";
 import type { SocietyOption } from "@/lib/event-context";
 import { menuGlass } from "@/lib/glass";
+import { MenuIdentity, MenuList, MenuTile, menuRow } from "@/components/layout/menu-list";
 
 /**
  * Who is looking at this society.
@@ -65,7 +66,6 @@ export function SocietyAccount({
 
   const name = session.user.name ?? session.user.email ?? "Signed in";
   const hasDrafts = canManage && draftCount > 0;
-  const item = "flex w-full items-center gap-2 rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-muted focus:bg-muted";
 
   return (
     <DropdownMenu.Root>
@@ -103,55 +103,47 @@ export function SocietyAccount({
           sideOffset={6}
           className={`z-50 w-64 rounded-xl border p-2 text-popover-foreground ${menuGlass}`}
         >
-          <div className="px-2 py-2">
-            <p className="truncate text-sm font-medium">{name}</p>
-            {session.user.email ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{session.user.email}</p> : null}
-            {role ? (
-              <span className="mt-1.5 inline-block whitespace-nowrap rounded-full bg-primary/10 px-2 py-px text-xs font-medium text-primary">
-                {roleLabels[role]}
-              </span>
-            ) : null}
-          </div>
-          <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          {canManage ? (
-            <>
-              <DropdownMenu.Item asChild>
-                <Link to="/new-event" className={item}>
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  Create event
-                </Link>
-              </DropdownMenu.Item>
-              {isSocietyAdmin && societySlug ? (
+          <MenuIdentity name={name} email={session.user.email} avatarUrl={session.user.avatarUrl} badge={role ? roleLabels[role] : null} />
+          <MenuList>
+            {canManage ? (
+              <>
                 <DropdownMenu.Item asChild>
-                  <Link to={`/society/${societySlug}/admin`} className={item}>
-                    <Settings2 className="h-4 w-4" aria-hidden="true" />
-                    Manage society
+                  <Link to="/new-event" className={menuRow}>
+                    <MenuTile icon={Plus} tone="green" />
+                    Create event
                   </Link>
                 </DropdownMenu.Item>
-              ) : null}
-              {hasDrafts ? (
-                <DropdownMenu.Item className={item} onSelect={onShowDrafts}>
-                  <FilePenLine className="h-4 w-4" aria-hidden="true" />
-                  <span>
-                    Drafts · <span className="tabular-nums">{draftCount}</span>
-                  </span>
-                </DropdownMenu.Item>
-              ) : null}
-              <DropdownMenu.Separator className="my-1 h-px bg-border" />
-            </>
-          ) : null}
-          <DropdownMenu.Item asChild>
-            <button type="button" className={item} onClick={() => navigate("/profile")}>
-              <UserPen className="h-4 w-4" aria-hidden="true" />
-              My profile
-            </button>
-          </DropdownMenu.Item>
-          <DropdownMenu.Item asChild>
-            <button type="button" className={item} onClick={() => void signOut()}>
-              <LogOut className="h-4 w-4" aria-hidden="true" />
-              Sign out
-            </button>
-          </DropdownMenu.Item>
+                {isSocietyAdmin && societySlug ? (
+                  <DropdownMenu.Item asChild>
+                    <Link to={`/society/${societySlug}/admin`} className={menuRow}>
+                      <MenuTile icon={Settings2} tone="gray" />
+                      Manage society
+                    </Link>
+                  </DropdownMenu.Item>
+                ) : null}
+                {hasDrafts ? (
+                  <DropdownMenu.Item className={menuRow} onSelect={onShowDrafts}>
+                    <MenuTile icon={FilePenLine} tone="orange" />
+                    <span>
+                      Drafts · <span className="tabular-nums">{draftCount}</span>
+                    </span>
+                  </DropdownMenu.Item>
+                ) : null}
+              </>
+            ) : null}
+            <DropdownMenu.Item asChild>
+              <button type="button" className={menuRow} onClick={() => navigate("/profile")}>
+                <MenuTile icon={UserPen} tone="blue" />
+                My profile
+              </button>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item asChild>
+              <button type="button" className={menuRow} onClick={() => void signOut()}>
+                <MenuTile icon={LogOut} tone="red" />
+                Sign out
+              </button>
+            </DropdownMenu.Item>
+          </MenuList>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

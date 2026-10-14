@@ -1,16 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
 import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
 import { MAX_ITEMS, MAX_TEXT, MAX_TITLE, suggestedTitles, type GoodToKnow } from "@/lib/good-to-know";
 import { usePageAccess } from "@/lib/page-access";
+import { BlockRow, FieldRow, ListGroup, ListRow } from "@/features/settings/ios-list";
+import { fieldInput } from "@/features/settings/ios-styles";
 
 /**
  * Settings -> Good to know: the practical things residents ask in the group.
@@ -73,98 +72,95 @@ function GoodToKnowEditor({ saved }: { saved: GoodToKnow | null }) {
   const unfinished = items.filter((item) => item.title.trim() && !item.text.trim()).length;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Good to know</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          The practical things residents ask in the group: parking, what to bring, who to call. Shown on the event page.
-          Anyone with the link may read it, so write what you would post in the society group.
-        </p>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="gtk-directions">Directions link (optional)</Label>
-          <Input
+    <div>
+      <ListGroup
+        header="Good to know"
+        footer="The practical things residents ask in the group: parking, what to bring, who to call. Shown on the event page. Anyone with the link may read it, so write what you would post in the society group."
+      >
+        <FieldRow id="gtk-directions" label="Directions" hint="optional">
+          <input
             id="gtk-directions"
             type="url"
             inputMode="url"
-            placeholder="https://maps.app.goo.gl/…"
+            className={fieldInput}
+            placeholder="Add a Maps link"
             value={directionsUrl}
             onChange={(event) => setDirectionsUrl(event.target.value)}
           />
-          <p className="text-xs text-muted-foreground">
-            A Google Maps link to the exact spot. Without one, residents get a search for the venue's name.
-          </p>
-        </div>
+        </FieldRow>
+      </ListGroup>
+      <p className="mt-1.5 px-4 text-[13px] leading-snug text-muted-foreground">
+        A Google Maps link to the exact spot. Without one, residents get a search for the venue&apos;s name.
+      </p>
 
-        <ul className="divide-y border-y">
-          {items.map((item, index) => (
-            <li key={index} className="space-y-2 py-3">
-              <div className="flex items-center gap-2">
-                <Input
-                  aria-label={`Heading ${index + 1}`}
-                  placeholder="Heading, e.g. Parking"
-                  value={item.title}
-                  maxLength={MAX_TITLE}
-                  onChange={(event) => setItems((all) => all.map((row, at) => (at === index ? { ...row, title: event.target.value } : row)))}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Remove ${item.title || `entry ${index + 1}`}`}
-                  onClick={() => setItems((all) => all.filter((_, at) => at !== index))}
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </Button>
-              </div>
-              <textarea
-                aria-label={`Text for ${item.title || `entry ${index + 1}`}`}
-                placeholder="What residents need to know"
-                value={item.text}
-                maxLength={MAX_TEXT}
-                onChange={(event) => setItems((all) => all.map((row, at) => (at === index ? { ...row, text: event.target.value } : row)))}
-                className="min-h-20 w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </li>
-          ))}
-        </ul>
+      {items.map((item, index) => (
+        <ListGroup key={index} header={`Entry ${index + 1}`}>
+          <FieldRow id={`gtk-title-${index}`} label="Heading">
+            <input
+              id={`gtk-title-${index}`}
+              aria-label={`Heading ${index + 1}`}
+              className={fieldInput}
+              placeholder="Parking"
+              value={item.title}
+              maxLength={MAX_TITLE}
+              onChange={(event) => setItems((all) => all.map((row, at) => (at === index ? { ...row, title: event.target.value } : row)))}
+            />
+          </FieldRow>
+          <BlockRow>
+            <textarea
+              aria-label={`Text for ${item.title || `entry ${index + 1}`}`}
+              placeholder="What residents need to know"
+              value={item.text}
+              maxLength={MAX_TEXT}
+              onChange={(event) => setItems((all) => all.map((row, at) => (at === index ? { ...row, text: event.target.value } : row)))}
+              className="min-h-20 w-full resize-y bg-transparent text-base outline-none placeholder:text-muted-foreground/70"
+            />
+          </BlockRow>
+          <ListRow
+            title="Remove entry"
+            destructive
+            chevron={false}
+            onClick={() => setItems((all) => all.filter((_, at) => at !== index))}
+          />
+        </ListGroup>
+      ))}
 
-        <div className="flex flex-wrap gap-2">
+      {items.length < MAX_ITEMS || !items.length ? (
+        <ListGroup>
           {items.length < MAX_ITEMS ? (
-            <Button type="button" variant="outline" className="h-10" onClick={() => setItems((all) => [...all, { title: "", text: "" }])}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add an entry
-            </Button>
+            <ListRow icon={Plus} tone="blue" title="Add an entry" chevron={false} onClick={() => setItems((all) => [...all, { title: "", text: "" }])} />
           ) : null}
           {!items.length ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10"
+            <ListRow
+              icon={Sparkles}
+              tone="orange"
+              title="Add suggestions"
+              chevron={false}
               onClick={() => setItems(suggestedTitles.map((title) => ({ title, text: "" })))}
-            >
-              Add suggestions
-            </Button>
+            />
           ) : null}
-        </div>
+        </ListGroup>
+      ) : null}
 
-        {unfinished ? (
-          <p className="text-xs text-muted-foreground">
-            {unfinished} {unfinished === 1 ? "heading has" : "headings have"} no text yet, so {unfinished === 1 ? "it" : "they"} will not be shown.
-          </p>
-        ) : null}
-        {message ? (
-          <p role={message.tone === "error" ? "alert" : "status"} className={message.tone === "error" ? "rounded-md bg-destructive/10 p-3 text-sm text-destructive" : "text-sm text-emerald-800"}>
-            {message.text}
-          </p>
-        ) : null}
+      {unfinished ? (
+        <p className="mt-3 px-4 text-[13px] text-muted-foreground">
+          {unfinished} {unfinished === 1 ? "heading has" : "headings have"} no text yet, so {unfinished === 1 ? "it" : "they"} will not be shown.
+        </p>
+      ) : null}
+      {message ? (
+        <p
+          role={message.tone === "error" ? "alert" : "status"}
+          className={message.tone === "error" ? "mt-3 rounded-2xl bg-destructive/10 p-3 text-sm text-destructive" : "mt-3 px-4 text-sm text-emerald-800"}
+        >
+          {message.text}
+        </p>
+      ) : null}
 
-        <Button type="button" disabled={save.isPending} onClick={() => void submit()}>
+      <div className="mt-6 px-1">
+        <Button type="button" className="h-12 w-full rounded-2xl text-base" disabled={save.isPending} onClick={() => void submit()}>
           {save.isPending ? "Saving…" : "Save"}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

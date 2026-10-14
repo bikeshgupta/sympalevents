@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldRow, ListGroup } from "@/features/settings/ios-list";
+import { fieldInput } from "@/features/settings/ios-styles";
 import { apiFetch } from "@/lib/api";
 import { useSettingsDirty } from "@/features/settings/settings-dirty-state";
 import { useEventContext } from "@/lib/event-context";
@@ -16,7 +18,16 @@ import { useEventContext } from "@/lib/event-context";
  * Shared by Settings (copy the event you are in) and the new-event wizard (copy
  * one of your earlier events), so the promise it makes is said in one place.
  */
-export function DuplicateEventForm({ eventId, defaultName }: { eventId: string; defaultName: string }) {
+export function DuplicateEventForm({
+  eventId,
+  defaultName,
+  ios = false,
+}: {
+  eventId: string;
+  defaultName: string;
+  /** Event Settings: iOS-style rows. The wizard keeps the stacked form. */
+  ios?: boolean;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { setSelectedEventId } = useEventContext();
@@ -44,6 +55,41 @@ export function DuplicateEventForm({ eventId, defaultName }: { eventId: string; 
       setError(failure instanceof Error ? failure.message : "Could not copy the event");
       setBusy(false);
     }
+  }
+
+  if (ios) {
+    return (
+      <form onSubmit={(event) => void submit(event)}>
+        <ListGroup
+          header="Run this event again"
+          footer={
+            <>
+              {error ? (
+                <span role="alert" className="mb-1 block text-destructive">
+                  {error}
+                </span>
+              ) : null}
+              Copies the setup - modules, appearance, registration prices and the programme (moved to the new dates) -
+              into a new <span className="font-medium text-foreground">draft</span>. It does not copy registrations,
+              payments, contributions, sponsors, budgets, expenses, tasks, announcements, photos or members.
+              Registration starts switched off.
+            </>
+          }
+        >
+          <FieldRow id="dup-name" label="New name">
+            <input id="dup-name" className={fieldInput} value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={100} />
+          </FieldRow>
+          <FieldRow id="dup-start" label="Starts on">
+            <input id="dup-start" className={fieldInput} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required />
+          </FieldRow>
+        </ListGroup>
+        <div className="mt-4 px-1">
+          <Button type="submit" className="h-12 w-full rounded-2xl text-base" disabled={busy || !name.trim() || !startDate}>
+            {busy ? "Copying…" : "Create draft copy"}
+          </Button>
+        </div>
+      </form>
+    );
   }
 
   return (
