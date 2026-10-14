@@ -1,8 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
@@ -54,6 +53,21 @@ const partTitles: Record<DetailsPart, string> = {
   basics: "Event name",
   schedule: "Venue, dates and hours",
 };
+
+const fieldInput =
+  "min-w-0 flex-1 bg-transparent py-2 text-right text-base text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+
+function FieldRow({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="flex min-h-[3.25rem] items-center gap-3 px-4">
+      <label htmlFor={id} className="w-28 shrink-0 text-base">
+        {label}
+        {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 export function EventDetailsCard({ part = "all" }: { part?: DetailsPart }) {
   const { data } = useEventData({ includeTasks: false });
@@ -158,97 +172,84 @@ export function EventDetailsCard({ part = "all" }: { part?: DetailsPart }) {
             </p>
           ) : null}
 
-          {owns("name") ? (
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium" htmlFor="event-name">
-              Name
-            </label>
-            <Input
-              id="event-name"
-              value={value.name}
-              onChange={(item) => change("name", item.target.value)}
-              maxLength={120}
-              autoComplete="off"
-            />
+          {/* Rows, as in iOS Settings: the label on the left, the value you type on the right, a hairline between. */}
+          <div className="ios-list -mx-4 -my-1" style={{ ["--ios-inset" as string]: "1rem" }}>
+            {owns("name") ? (
+              <FieldRow id="event-name" label="Name">
+                <input
+                  id="event-name"
+                  className={fieldInput}
+                  value={value.name}
+                  onChange={(item) => change("name", item.target.value)}
+                  maxLength={120}
+                  autoComplete="off"
+                  placeholder="Event name"
+                />
+              </FieldRow>
+            ) : null}
+            {owns("location") ? (
+              <FieldRow id="event-venue" label="Venue">
+                <input
+                  id="event-venue"
+                  className={fieldInput}
+                  value={value.location}
+                  onChange={(item) => change("location", item.target.value)}
+                  maxLength={160}
+                  autoComplete="off"
+                  placeholder="Add the venue"
+                />
+              </FieldRow>
+            ) : null}
+            {owns("startDate") ? (
+              <>
+                <FieldRow id="event-start-date" label="Starts on">
+                  <input
+                    id="event-start-date"
+                    className={fieldInput}
+                    type="date"
+                    value={value.startDate}
+                    onChange={(item) => change("startDate", item.target.value)}
+                  />
+                </FieldRow>
+                <FieldRow id="event-start-time" label="Start time" hint="optional">
+                  <input
+                    id="event-start-time"
+                    className={fieldInput}
+                    type="time"
+                    value={value.startTime}
+                    disabled={!timesReady}
+                    onChange={(item) => change("startTime", item.target.value)}
+                  />
+                </FieldRow>
+                <FieldRow id="event-end-date" label="Ends on">
+                  <input
+                    id="event-end-date"
+                    className={fieldInput}
+                    type="date"
+                    value={value.endDate}
+                    min={value.startDate || undefined}
+                    onChange={(item) => change("endDate", item.target.value)}
+                  />
+                </FieldRow>
+                <FieldRow id="event-end-time" label="End time" hint="optional">
+                  <input
+                    id="event-end-time"
+                    className={fieldInput}
+                    type="time"
+                    value={value.endTime}
+                    disabled={!timesReady}
+                    onChange={(item) => change("endTime", item.target.value)}
+                  />
+                </FieldRow>
+              </>
+            ) : null}
           </div>
-          ) : null}
-
-          {owns("location") ? (
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium" htmlFor="event-venue">
-              Venue
-            </label>
-            <Input
-              id="event-venue"
-              value={value.location}
-              onChange={(item) => change("location", item.target.value)}
-              maxLength={160}
-              autoComplete="off"
-            />
-          </div>
-          ) : null}
 
           {owns("startDate") ? (
-            <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="min-w-0 space-y-1.5">
-              <label className="block text-sm font-medium" htmlFor="event-start-date">
-                Starts on
-              </label>
-              <Input
-                id="event-start-date"
-                className="w-full min-w-0"
-                type="date"
-                value={value.startDate}
-                onChange={(item) => change("startDate", item.target.value)}
-              />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <label className="block text-sm font-medium" htmlFor="event-start-time">
-                Start time <span className="font-normal text-muted-foreground">(optional)</span>
-              </label>
-              <Input
-                id="event-start-time"
-                className="w-full min-w-0"
-                type="time"
-                value={value.startTime}
-                disabled={!timesReady}
-                onChange={(item) => change("startTime", item.target.value)}
-              />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <label className="block text-sm font-medium" htmlFor="event-end-date">
-                Ends on
-              </label>
-              <Input
-                id="event-end-date"
-                className="w-full min-w-0"
-                type="date"
-                value={value.endDate}
-                min={value.startDate || undefined}
-                onChange={(item) => change("endDate", item.target.value)}
-              />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <label className="block text-sm font-medium" htmlFor="event-end-time">
-                End time <span className="font-normal text-muted-foreground">(optional)</span>
-              </label>
-              <Input
-                id="event-end-time"
-                className="w-full min-w-0"
-                type="time"
-                value={value.endTime}
-                disabled={!timesReady}
-                onChange={(item) => change("endTime", item.target.value)}
-              />
-            </div>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            Times are India time. Leave a time blank for the whole day &mdash; the event then starts at the
-            beginning of its first day and ends at the close of its last.
-          </p>
-            </>
+            <p className="text-xs text-muted-foreground">
+              Times are India time. Leave a time blank for the whole day &mdash; the event then starts at the
+              beginning of its first day and ends at the close of its last.
+            </p>
           ) : null}
 
           {dirty && problem ? (

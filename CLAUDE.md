@@ -2249,6 +2249,16 @@ grouping**: no setting was added, no permission changed, and which pages an even
   closing/reloading the tab (`beforeunload`) or following a link out (capture-phase click check) asks first. The router is
   a plain `BrowserRouter`, so there is **no `useBlocker`, and the browser Back button is not guarded**.
 - **The society in Advanced is read-only** (`SocietyForm readOnlyDetails`: a disabled dropdown of the societies the person belongs to, this event's selected, with a link to Manage society). Renaming a society moves every event it runs, so it is edited only in Society Management; choosing a society happens in the new-event form. The invite code is not shown in Settings at all; it is a society credential and lives in Society Management.
+- **Event Settings is an iOS-style inset grouped list** (reference: iOS Settings, mocked and approved). The index is three
+  rounded white lists on a warm grey page (`ListGroup` / `ListRow` in settings-page.tsx; hairlines inset past the icon via
+  `.ios-list`), each section a **coloured icon tile with its label**, a short value on the right and a chevron
+  (`SectionDef.group` / `.tone` in settings-sections.ts; `sectionGroups()` is pure and tested). Above them: the event
+  card (links to Basics) and, while gaps exist, a "N items need attention" list from the command centre's checklist. On a
+  phone the open section's sheet has a frosted-glass navigation bar (back pill + the section's name); from `lg` the same
+  lists are the side navigation. Section panels render inside `<GroupedCards>` (card.tsx): each card is a small grey
+  caption over one rounded white group. **Only Event details (Basics, Schedule & location) is true label-left/value-right
+  rows**; the other cards (modules, good to know, team, appearance...) keep their forms inside the white group, and the
+  Team page keeps its Rename / Manage / Remove buttons on the row (a per-person page was proposed and not chosen).
 - The open section is `?section=<key>`. On a phone the index is the page until one is opened (single-section focus, "All
   settings" back); from `lg` the index becomes a side navigation and `basics` is open by default.
 - **Readiness is the command centre's checklist** (`useCommandCentre`), not a second engine. "Ready to publish" is only ever

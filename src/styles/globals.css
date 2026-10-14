@@ -388,6 +388,21 @@
     }
   }
 
+  /* iOS-style list: rows touch, with a hairline between them that starts after the icon (or at --ios-inset). */
+  .ios-list > * {
+    position: relative;
+  }
+
+  .ios-list > * + *::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: var(--ios-inset, 3.625rem);
+    height: 0.5px;
+    background: hsl(var(--foreground) / 0.14);
+  }
+
   @media print {
     .glass,
     .glass-panel {

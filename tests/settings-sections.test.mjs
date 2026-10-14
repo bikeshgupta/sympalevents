@@ -11,6 +11,7 @@ import {
   dirtySectionKeys,
   sectionOfDirtyId,
   defaultSection,
+  sectionGroups,
 } from '../src/features/settings/settings-sections.ts';
 
 test('the eight sections are the agreed groups, in order, with no duplicates', () => {
@@ -81,4 +82,21 @@ test('unsaved changes are credited to the section that holds the card', () => {
   assert.equal(sectionOfDirtyId('unknown'), null);
   assert.deepEqual([...dirtySectionKeys(['details:schedule', 'good-to-know', 'modules', 'unknown'])].sort(), ['pages', 'schedule']);
   assert.equal(dirtySectionKeys([]).size, 0);
+});
+
+test('the index is three rounded lists, and a list with nothing the viewer may open disappears', () => {
+  const keysOf = (groups) => groups.map((group) => group.map((section) => section.key));
+  assert.deepEqual(keysOf(sectionGroups(sectionDefs)), [
+    ['basics', 'schedule', 'pages', 'team'],
+    ['registration', 'appearance', 'notifications'],
+    ['advanced'],
+  ]);
+  // Neither link is openable: the second list keeps only Appearance, and nothing becomes an empty list.
+  const noLinks = sectionDefs.filter((section) => section.kind === 'panel');
+  assert.deepEqual(keysOf(sectionGroups(noLinks)), [['basics', 'schedule', 'pages', 'team'], ['appearance'], ['advanced']]);
+  assert.deepEqual(sectionGroups([]), []);
+});
+
+test('every section has a tone for its icon tile', () => {
+  for (const section of sectionDefs) assert.ok(section.tone, section.key);
 });

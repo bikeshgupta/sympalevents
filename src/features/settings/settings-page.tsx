@@ -20,7 +20,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
 import { Button } from "@/components/ui/button";
-import { FlatCards } from "@/components/ui/card";
+import { GroupedCards } from "@/components/ui/card";
 import { AddressCard } from "@/features/settings/address-card";
 import { AppearanceCard } from "@/features/settings/appearance-card";
 import { DuplicateEventCard } from "@/features/settings/duplicate-event-card";
@@ -38,8 +38,8 @@ import {
   readinessHeadline,
   readinessTarget,
   sectionDefs,
-  type ReadinessTarget,
-  type SectionDef,
+  sectionGroups,
+  type SectionTone,
   type SectionKey,
 } from "@/features/settings/settings-sections";
 import { ShareCard } from "@/features/settings/share-card";
@@ -57,7 +57,7 @@ import { useEventData } from "@/lib/event-data";
 import { useEventPath } from "@/lib/event-path";
 import { describeEventHours } from "@/lib/event-hours";
 import { getEventStatus, statusLabels } from "@/lib/event-status";
-import { usePageAccess, usePageVisibility, visibilityLabels } from "@/lib/page-access";
+import { usePageAccess, usePageVisibility } from "@/lib/page-access";
 import { heroFocus } from "@/lib/hero";
 import { themeByKey } from "@/lib/themes";
 import { cn } from "@/lib/utils";
@@ -91,6 +91,20 @@ const sectionIcons: Record<SectionKey, LucideIcon> = {
   notifications: Bell,
   advanced: SlidersHorizontal,
 };
+
+/** iOS Settings gives every row its own colour. Name -> the top and bottom of the tile's gradient. */
+const tones: Record<SectionTone, [string, string]> = {
+  blue: ["#5BA3FF", "#2F7CF6"],
+  red: ["#FF7A6B", "#F0443A"],
+  indigo: ["#8B8CF5", "#5A5BD6"],
+  green: ["#5FD07F", "#2FB457"],
+  orange: ["#FFB04D", "#F58A1F"],
+  pink: ["#FF7AA8", "#EE4A86"],
+  gray: ["#A7A9B2", "#7E808A"],
+};
+
+/** The grouped-list background. Opaque on purpose: the section sheet slides over the index and must hide it. */
+const groupedBackground = "bg-[hsl(42_26%_94%)]";
 
 export function SettingsPage() {
   return (
@@ -198,25 +212,36 @@ function SettingsShell() {
     (section) => section.kind === "panel" || eventAccess?.pages.some((page) => page.pageKey === section.page && page.canView),
   );
 
-  const dashboardVisibility = modules?.find((module) => module.pageKey === "dashboard");
   const hours = describeEventHours(event);
-  const identityLine = [
-    dateRangeLabel(event.startDate, event.endDate, formatEventDate),
-    hours,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const identityLine = [dateRangeLabel(event.startDate, event.endDate, formatEventDate), hours].filter(Boolean).join(" · ");
+  const statusLine = `${statusLabels[status]}${isDraft ? " · not visible to residents yet" : ""}`;
+
+  // The short thing on the right of each row. The longer sentence (`summaries`) is the open section's subtitle.
+  const values: Partial<Record<SectionKey, string>> = {
+    basics: eventTypeLabel(event.eventType ?? "festival"),
+    schedule: dateRangeLabel(event.startDate, event.endDate, formatEventDate),
+    pages: modules ? `${enabledModules.length} on` : undefined,
+    team: roster ? plural(roster.length, "person", "people") : undefined,
+    registration: registrationItem ? (registrationItem.status === "complete" ? "On" : "Off") : undefined,
+    appearance: themeByKey(event.theme).name,
+  };
+  const gapIcons: Record<string, { icon: LucideIcon; tone: SectionTone }> = {
+    details: { icon: CalendarDays, tone: "red" },
+    hero: { icon: Palette, tone: "pink" },
+    registration: { icon: Ticket, tone: "orange" },
+    programme: { icon: CalendarDays, tone: "blue" },
+  };
+  const shownTitle = sectionDefs.find((section) => section.key === shown)?.title ?? "";
 
   return (
-    <div className="relative isolate mx-auto max-w-5xl">
-      {/* Soft ambient colour behind the page. The glass rows blur and saturate whatever is behind them, and on a
-          flat off-white there is nothing to refract; these two washes, in the event's own colour, are it. */}
-      <div aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -top-8 -z-10 h-[44rem] overflow-x-clip [mask-image:linear-gradient(to_bottom,black_55%,transparent)]">
-        <div className="absolute -left-24 top-28 h-72 w-72 rounded-full bg-primary/25 blur-3xl" />
-        <div className="absolute -right-16 top-72 h-80 w-80 rounded-full bg-accent blur-3xl" />
-        <div className="absolute left-1/3 top-[26rem] h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
-      </div>
-      {/* Compact header. */}
+    <div
+      className={cn(
+        "relative mx-auto max-w-5xl",
+        // On a phone the page is the iOS grouped screen: a warm grey, edge to edge, with white lists on it.
+        "max-lg:-mx-4 max-lg:-mb-20 max-lg:-mt-5 max-lg:min-h-[calc(100dvh-4rem)] max-lg:px-4 max-lg:pb-28 max-lg:pt-5",
+        "max-lg:bg-[hsl(42_26%_94%)]",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {selectedEventId ? (
@@ -229,19 +254,6 @@ function SettingsShell() {
             </Link>
           ) : null}
           <h1 className="font-display text-3xl leading-tight sm:text-4xl">Event settings</h1>
-          {selectedEventId ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              <span
-                className={cn(
-                  "mr-2 inline-block h-2 w-2 rounded-full align-middle",
-                  status === "live" ? "bg-emerald-600" : status === "draft" || status === "cancelled" ? "bg-amber-600" : "bg-primary",
-                )}
-                aria-hidden="true"
-              />
-              {statusLabels[status]}
-              {isDraft ? " · not visible to residents yet" : ""}
-            </p>
-          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-1">
           <DataSourceBadge source={data.source} reason={data.fallbackReason} />
@@ -259,109 +271,150 @@ function SettingsShell() {
       ) : null}
 
       {selectedEventId && access.canEdit ? (
-        <>
-          {/* Compact identity: the event as a resident would meet it, from the event's own data. */}
-          <div className="mt-5 flex items-center gap-3.5 border-y py-4">
-            <EventArtwork
-              eventType={event.eventType ?? "festival"}
-              imageUrl={event.heroImageUrl}
-              templateKey={event.templateKey}
-              focus={heroFocus(event.heroOptions)}
-              className="h-14 w-14 shrink-0 rounded-lg"
-              iconClassName="h-6 w-6"
-            />
-            <div className="min-w-0">
-              <p className="truncate font-display text-xl leading-tight">{event.name}</p>
-              {identityLine ? <p className="truncate text-sm text-muted-foreground">{identityLine}</p> : null}
-              <p className="text-sm text-muted-foreground">
-                {event.location?.trim() || "No venue yet"}
-                {dashboardVisibility ? ` · Event page: ${visibilityLabels[dashboardVisibility.visibility].toLowerCase()}` : ""}
-              </p>
-            </div>
-          </div>
+        <div className="mt-5 lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10">
+          {/* The index on a phone; the side navigation from lg. */}
+          <nav aria-label="Settings sections" className="min-w-0">
+            <ListGroup>
+              <ListRow
+                href="?section=basics"
+                title={event.name}
+                big
+                lead={
+                  <EventArtwork
+                    eventType={event.eventType ?? "festival"}
+                    imageUrl={event.heroImageUrl}
+                    templateKey={event.templateKey}
+                    focus={heroFocus(event.heroOptions)}
+                    className="h-14 w-14 shrink-0 rounded-2xl"
+                    iconClassName="h-6 w-6"
+                  />
+                }
+                sub={identityLine}
+                sub2={
+                  <>
+                    <span
+                      className={cn(
+                        "mr-1.5 inline-block h-2 w-2 rounded-full align-middle",
+                        status === "live" ? "bg-emerald-600" : status === "draft" || status === "cancelled" ? "bg-amber-600" : "bg-primary",
+                      )}
+                      aria-hidden="true"
+                    />
+                    {statusLine}
+                  </>
+                }
+              />
+            </ListGroup>
 
-          {headline.tone !== "none" ? (
-            <ReadinessBlock
-              headline={headline}
-              gaps={gaps}
-              dashboardHref={path("/dashboard")}
-              pathFor={(page) => path(`/${page}`)}
-              onSection={openSection}
-            />
-          ) : null}
+            {headline.tone === "attention" ? (
+              <ListGroup
+                header={headline.text}
+                headerTone="attention"
+                footer="Fix these before you publish. Each opens the place where it is set."
+                role="status"
+              >
+                {gaps.map((gap) => {
+                  const target = readinessTarget(gap);
+                  const look = gapIcons[gap.key] ?? { icon: AlertCircle, tone: "orange" as SectionTone };
+                  return (
+                    <ListRow
+                      key={gap.key}
+                      icon={look.icon}
+                      tone={look.tone}
+                      title={gap.label}
+                      sub={gap.detail}
+                      href={target?.kind === "page" ? path(`/${target.page}`) : undefined}
+                      onClick={target?.kind === "section" ? () => openSection(target.section) : undefined}
+                    />
+                  );
+                })}
+              </ListGroup>
+            ) : headline.tone === "ready" ? (
+              <ListGroup footer="Every check passes.">
+                <ListRow icon={Check} tone="green" title={headline.text} value="Publish" href={path("/dashboard")} />
+              </ListGroup>
+            ) : null}
 
-          <div className="mt-2 lg:mt-6 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12">
-            {/* The index on a phone; the side navigation from lg. */}
-            <nav aria-label="Settings sections">
-              <ul className="space-y-2.5">
-                {visibleSections.map((section) => (
-                  <SectionRow
+            {sectionGroups(visibleSections).map((group) => (
+              <ListGroup key={group[0].key}>
+                {group.map((section) => (
+                  <ListRow
                     key={section.key}
-                    section={section}
-                    summary={summaries[section.key]}
+                    icon={sectionIcons[section.key]}
+                    tone={section.tone}
+                    title={section.title}
+                    value={values[section.key]}
                     selected={section.kind === "panel" && shown === section.key}
                     unsaved={dirtySections.has(section.key)}
+                    external={section.kind === "link"}
                     href={section.kind === "link" && section.page ? path(`/${section.page}`) : `?section=${section.key}`}
                   />
                 ))}
-              </ul>
-            </nav>
+              </ListGroup>
+            ))}
+          </nav>
 
-            {/* Every panel stays mounted so a draft survives a visit elsewhere; only the open one is shown. */}
-            <div
-              ref={sheetRef}
-              // aria-hidden + invisible while closed, so the panels that stay mounted for their drafts cannot be
-              // tabbed into or read out. Visibility is transitioned with the transform, so it stays visible for the
-              // whole slide out and only then is taken away.
-              aria-hidden={active === null ? true : undefined}
-              className={cn(
-                "fixed inset-x-0 bottom-0 top-16 z-30 min-w-0 overflow-y-auto shadow-[12px_0_32px_-16px_hsl(var(--foreground)/0.35)] lg:shadow-none overscroll-contain bg-background px-4 pb-28 pt-3",
-                "transition-[transform,visibility] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                active ? "visible translate-x-0" : "invisible -translate-x-full",
-                // From lg the section sits beside the side navigation and is simply part of the page.
-                "lg:visible lg:static lg:z-auto lg:translate-x-0 lg:overflow-visible lg:bg-transparent lg:p-0 lg:transition-none",
-              )}
-            >
+          {/* Every panel stays mounted so a draft survives a visit elsewhere; only the open one is shown. */}
+          <div
+            ref={sheetRef}
+            // aria-hidden + invisible while closed, so the panels that stay mounted for their drafts cannot be
+            // tabbed into or read out. Visibility is transitioned with the transform, so it stays visible for the
+            // whole slide out and only then is taken away.
+            aria-hidden={active === null ? true : undefined}
+            className={cn(
+              "fixed inset-x-0 bottom-0 top-16 z-30 min-w-0 overflow-y-auto overscroll-contain px-4 pb-28 pt-3",
+              groupedBackground,
+              "shadow-[12px_0_32px_-16px_hsl(var(--foreground)/0.35)]",
+              "transition-[transform,visibility] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              active ? "visible translate-x-0" : "invisible -translate-x-full",
+              // From lg the section sits beside the side navigation and is simply part of the page.
+              "lg:visible lg:static lg:z-auto lg:translate-x-0 lg:overflow-visible lg:bg-transparent lg:p-0 lg:shadow-none lg:transition-none",
+            )}
+          >
+            {/* The phone's navigation bar: frosted glass, a back button and the section's name in the middle. */}
+            <div className="sticky top-0 z-10 -mx-4 -mt-3 mb-4 flex h-14 items-center border-b border-black/[0.06] bg-[hsl(42_26%_94%/0.72)] px-4 backdrop-blur-xl backdrop-saturate-150 lg:hidden">
               <Link
                 to="?"
                 onClick={(clicked) => {
                   clicked.preventDefault();
                   closeSection();
                 }}
-                className="-ml-1 mb-2 inline-flex min-h-10 items-center gap-0.5 rounded-md pr-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+                className="glass glass-press relative z-10 inline-flex h-9 items-center gap-0.5 rounded-full pl-2 pr-3.5 text-[15px] font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                All settings
+                <ChevronLeft className="h-[18px] w-[18px]" aria-hidden="true" />
+                Settings
               </Link>
-              <FlatCards>
-                {sectionDefs
-                  .filter((section) => section.kind === "panel")
-                  .map((section) => {
-                    const open = shown === section.key;
-                    const visibility = open ? "block" : "hidden";
-                    return (
-                      <section
-                        key={section.key}
-                        aria-labelledby={`settings-${section.key}`}
-                        className={visibility}
-                      >
-                        <h2
-                          id={`settings-${section.key}`}
-                          ref={open ? headingRef : undefined}
-                          tabIndex={-1}
-                          className="font-display text-2xl leading-tight outline-none sm:text-3xl"
-                        >
-                          {section.title}
-                        </h2>
-                        <p className="mt-1 text-sm text-muted-foreground">{summaries[section.key]}</p>
-                        <div className="mt-5">{panels(section.key, isSocietyAdmin)}</div>
-                      </section>
-                    );
-                  })}
-              </FlatCards>
+              <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 text-center text-base font-semibold">
+                {shownTitle}
+              </span>
             </div>
+            <GroupedCards>
+              {sectionDefs
+                .filter((section) => section.kind === "panel")
+                .map((section) => {
+                  const open = shown === section.key;
+                  return (
+                    <section
+                      key={section.key}
+                      aria-labelledby={`settings-${section.key}`}
+                      className={open ? "block" : "hidden"}
+                    >
+                      {/* The phone's bar already names the section; the heading stays for focus and screen readers. */}
+                      <h2
+                        id={`settings-${section.key}`}
+                        ref={open ? headingRef : undefined}
+                        tabIndex={-1}
+                        className="sr-only font-display text-2xl leading-tight outline-none sm:text-3xl lg:not-sr-only lg:block"
+                      >
+                        {section.title}
+                      </h2>
+                      <p className="mb-5 mt-1 hidden text-sm text-muted-foreground lg:block">{summaries[section.key]}</p>
+                      <div>{panels(section.key, isSocietyAdmin)}</div>
+                    </section>
+                  );
+                })}
+            </GroupedCards>
           </div>
-        </>
+        </div>
       ) : null}
 
       {/* No event open: the only thing Settings can still do is start one. */}
@@ -410,125 +463,128 @@ function panels(key: SectionKey, isSocietyAdmin: boolean): ReactNode {
   }
 }
 
-function SectionRow({
-  section,
-  summary,
-  selected,
-  unsaved,
-  href,
+/** One rounded white list: rows touch, with a hairline between them that starts after the icon. */
+function ListGroup({
+  header,
+  headerTone,
+  footer,
+  role,
+  children,
 }: {
-  section: SectionDef;
-  summary: string;
-  selected: boolean;
-  unsaved: boolean;
-  href: string;
+  header?: string;
+  headerTone?: "attention";
+  footer?: string;
+  role?: "status";
+  children: ReactNode;
 }) {
-  const Icon = sectionIcons[section.key];
-  const isLink = section.kind === "link";
   return (
-    // A sheet of liquid glass (globals.css .glass), tinted by the event's colour when it is the open section on a
-    // wide screen. The tile is the glass; the link inside is the hit area.
-    <li className={cn("glass glass-press rounded-2xl", selected && "lg:glass-active")}>
-      <Link
-        to={href}
-        aria-current={selected ? "true" : undefined}
-        className="flex min-h-[3.75rem] items-center gap-3.5 rounded-2xl px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-      >
-        <span
-          aria-hidden="true"
+    <section className="mt-6 first:mt-0" role={role}>
+      {header ? (
+        <p
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/60 text-muted-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.9)]",
-            selected && "lg:text-primary",
+            "mb-1.5 px-4 text-[13px] uppercase tracking-wide",
+            headerTone === "attention" ? "font-medium text-amber-800" : "text-muted-foreground",
           )}
         >
-          <Icon className="h-[18px] w-[18px]" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className={cn("block font-medium leading-snug", selected && "lg:font-semibold")}>
-            {section.title}
-            {unsaved ? (
-              <span className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-medium text-amber-800">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-600" aria-hidden="true" />
-                Unsaved
-              </span>
-            ) : null}
-          </span>
-          <span className="block truncate text-sm text-muted-foreground lg:hidden">{summary}</span>
-        </span>
-        {isLink ? (
-          <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground lg:hidden" aria-hidden="true" />
-        )}
-      </Link>
-    </li>
+          {header}
+        </p>
+      ) : null}
+      <ul className="ios-list overflow-hidden rounded-3xl bg-white shadow-[0_1px_2px_hsl(var(--foreground)/0.05)] ring-1 ring-black/[0.04]">
+        {children}
+      </ul>
+      {footer ? <p className="mt-1.5 px-4 text-[13px] leading-snug text-muted-foreground">{footer}</p> : null}
+    </section>
   );
 }
 
-function ReadinessBlock({
-  headline,
-  gaps,
-  className,
-  dashboardHref,
-  pathFor,
-  onSection,
+/**
+ * A row in a list: a coloured icon tile (or a picture), the title, a short value on the right and a chevron.
+ * It is a link when it has an `href`, a button when it has an `onClick`. On a wide screen the list is the side
+ * navigation, so the value and chevron step aside and the open section is tinted.
+ */
+function ListRow({
+  icon: Icon,
+  tone,
+  lead,
+  title,
+  sub,
+  sub2,
+  value,
+  href,
+  onClick,
+  selected = false,
+  unsaved = false,
+  external = false,
+  big = false,
 }: {
-  headline: { tone: "ready" | "attention" | "none"; text: string };
-  gaps: { key: string; label: string; detail?: string; page?: string; status: "complete" | "missing" | "optional" }[];
-  className?: string;
-  dashboardHref: string;
-  pathFor: (page: string) => string;
-  onSection: (section: SectionKey) => void;
+  icon?: LucideIcon;
+  tone?: SectionTone;
+  lead?: ReactNode;
+  title: string;
+  sub?: string;
+  sub2?: ReactNode;
+  value?: string;
+  href?: string;
+  onClick?: () => void;
+  selected?: boolean;
+  unsaved?: boolean;
+  external?: boolean;
+  big?: boolean;
 }) {
-  const attention = headline.tone === "attention";
-  const rowClass =
-    "flex min-h-11 w-full items-center gap-3 py-2 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
-  return (
-    <div className={cn("border-b py-3", className)} role="status">
-      <p className={cn("flex items-center gap-2 text-sm font-medium", attention ? "text-amber-900" : "text-emerald-800")}>
-        {attention ? <AlertCircle className="h-4 w-4" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
-        {headline.text}
-      </p>
-      {attention ? (
-        <ul className="mt-1 divide-y">
-          {gaps.map((gap) => {
-            const target: ReadinessTarget | null = readinessTarget(gap);
-            const body = (
-              <>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm">{gap.label}</span>
-                  {gap.detail ? <span className="block text-xs text-muted-foreground">{gap.detail}</span> : null}
-                </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              </>
-            );
-            return (
-              <li key={gap.key}>
-                {target?.kind === "section" ? (
-                  <button type="button" className={rowClass} onClick={() => onSection(target.section)}>
-                    {body}
-                  </button>
-                ) : target?.kind === "page" ? (
-                  <Link to={pathFor(target.page)} className={rowClass}>
-                    {body}
-                  </Link>
-                ) : (
-                  <div className={rowClass}>{body}</div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+  const [top, bottom] = tones[tone ?? "gray"];
+  const body = (
+    <>
+      {lead ??
+        (Icon ? (
+          <span
+            aria-hidden="true"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-white shadow-[inset_0_0.5px_0_rgba(255,255,255,0.45),0_1px_2px_rgba(0,0,0,0.12)]"
+            style={{ background: `linear-gradient(180deg, ${top}, ${bottom})` }}
+          >
+            <Icon className="h-[18px] w-[18px]" />
+          </span>
+        ) : null)}
+      <span className="min-w-0 flex-1">
+        <span className={cn("block truncate", big ? "font-display text-lg font-semibold leading-tight" : "text-[16.5px]", selected && "lg:font-semibold")}>
+          {title}
+          {unsaved ? (
+            <span className="ml-2 inline-flex items-center gap-1 align-middle font-sans text-xs font-medium text-amber-800">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-600" aria-hidden="true" />
+              Unsaved
+            </span>
+          ) : null}
+        </span>
+        {sub ? <span className="block truncate text-[13px] text-muted-foreground">{sub}</span> : null}
+        {sub2 ? <span className="mt-0.5 block text-[13px] text-muted-foreground">{sub2}</span> : null}
+      </span>
+      {value ? (
+        <span className="max-w-[45%] shrink-0 truncate text-base text-muted-foreground lg:hidden">{value}</span>
+      ) : null}
+      {external ? (
+        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />
       ) : (
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every check passes.{" "}
-          <Link to={dashboardHref} className="font-medium text-primary underline-offset-4 hover:underline">
-            Publish from the event page
-          </Link>
-          .
-        </p>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 lg:hidden" aria-hidden="true" />
       )}
-    </div>
+    </>
+  );
+  const cls = cn(
+    "flex w-full items-center gap-3 px-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+    big ? "min-h-[5rem] py-3" : "min-h-[3.5rem] py-2",
+    "active:bg-black/[0.05] [@media(hover:hover)]:hover:bg-black/[0.03]",
+    selected && "lg:bg-primary/10",
+  );
+  return (
+    <li style={lead ? ({ ["--ios-inset" as string]: "5rem" } as React.CSSProperties) : undefined}>
+      {href ? (
+        <Link to={href} aria-current={selected ? "true" : undefined} className={cls}>
+          {body}
+        </Link>
+      ) : (
+        <button type="button" onClick={onClick} className={cls}>
+          {body}
+        </button>
+      )}
+    </li>
   );
 }
 
