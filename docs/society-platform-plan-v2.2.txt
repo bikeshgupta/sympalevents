@@ -1,0 +1,286 @@
+SYMPAL EVENTS - SOCIETY / APPROVALS / PLATFORM  -  PLAN v2.2
+Drafted: 2026-10-14.   Supersedes the "event_role_history" proposal and section E of v2.1.
+Status: FOR REVIEW. Nothing below has been run against your database. No migration is applied.
+
+Migration state, as I understand it from you:
+   001-041  applied (confirmed 2026-10-09)
+   042      PREPARED - waiting for your D6 report and pre-check results
+   043      PREPARED (this round) - event_proposals + approve_event_proposal()
+   044      HELD (audit scope index + backfill)
+   045      HELD - section 3 below is a DESIGN, no SQL exists
+   046      PROPOSED (this round) - event_role_history, for review
+
+How the SQL was checked: I built a scratch PostgreSQL 16 database on the build machine (not Supabase, not
+your data) from migrations 001-042, then ran 043 and 046 and every verification block against it. All
+verification blocks print OK there. That proves the SQL is valid and behaves as described; it does not
+replace your running the pre-checks on the real project.
+
+
+=====================================================================
+0. DONE THIS ROUND (code, no migration)
+=====================================================================
+
+ Society Overview tiles are actionable (pushed to the feature branch only):
+   People  : Members -> Members tab, all | Admins -> filter admin | Committee -> filter committee |
+             Residents -> filter resident
+   Events  : Total -> Events & access, all | Upcoming | Live | Completed
+ Plain links, so they work with a thumb, keyboard and the browser's Back button. The filter lives in the
+ address (?tab=members&filter=admin, ?tab=events&filter=live) so it survives a refresh. Events & access
+ gained filter chips (All, Upcoming, Live, Completed, plus Drafts / Cancelled when there are any) with
+ counts, and the Overview's own counts and the list use the same status function, so a tile and the list
+ it opens always agree. Verified in a browser at desktop and 390px: tile -> filtered list -> Back, and the
+ "All" chip clears the filter. The proposals card on the Overview becomes a link to the Approvals tab when
+ Phase D lands.
+
+
+=====================================================================
+1. event_role_history (046) - SCHEMA AND INTEGRATION DESIGN
+=====================================================================
+
+1.1 The question it answers
+   "Which role did this person previously hold on this event, and when did that role end?"
+   Three tables, three jobs, never mixed:
+     event_members       roles held NOW
+     event_role_history  roles held BEFORE, and when they ended          <- new
+     audit_log           WHO made the change
+   Identity is user_id throughout. Two people both called "Rohan" are two people; one person who corrects
+   their name is still one person. Nothing is de-duplicated by display name anywhere in this design.
+
+1.2 Schema (supabase/migrations/046_event_role_history.sql)
+   id, event_id, user_id, role (the role that ended), became_role (null = removed), started_at (best
+   effort), ended_at, ended_by (nullable), end_reason (removed | role_changed | society_removed |
+   audit_backfill), source (trigger | audit_backfill), created_at.
+   RLS on, zero policies, service-role access only - same as every table since 009.
+   You suggested id, event_id, user_id, role, started_at, ended_at, ended_by, end_reason, created_at.
+   Differences, and why: became_role (a demotion and a removal are different events, and the credits
+   want to know which); source (rows recovered from the audit log are marked as such); started_at is
+   nullable because only event_members.created_at can supply it and audit-recovered rows have none.
+
+1.3 How it is written: a trigger on event_members
+   I recommend a database trigger over writing history from each API route. Every way a role can end passes
+   through event_members, and the app currently has several: Settings removal (DELETE), a role change
+   (the POST upsert), an access request approved over an existing role (api/access-requests.ts also
+   upserts), and the planned society removal. A trigger covers all of them - and manual SQL - in the same
+   transaction as the change, so there is never a removal without its history, and the next route someone
+   writes cannot forget it. The cost is that the trigger does not know WHO acted; audit_log does, and
+   remains the authority. A SQL function (below) can pass the actor in through a transaction setting.
+
+   Coverage of the four paths you listed:
+     1. Member removed from Event Settings      DELETE /api/event-members  -> trigger, no API change
+     2. Event Admin removed or demoted          POST (role change) / DELETE -> trigger, no API change
+     3. Event Committee removed or demoted      same
+     4. Society membership removal that revokes event access   -> remove_society_member() (1.5)
+   Also covered for free: access-request approvals that change a role; role changes made in SQL.
+   A role "re-saved" unchanged (page access edited) writes nothing.
+   Deleting an event or an account does not write history (there is nothing left to describe).
+
+1.4 Closing credits (api/_lib/closing.ts) - the read side
+   Today: core = event_members with role admin/committee, admin first then committee then alphabetical,
+          merged with the hand-typed extra_core, ordered by the committee's core_order.
+   Proposed: core = the union, BY user_id, of
+          (a) current event_members with role admin/committee, and
+          (b) event_role_history rows whose role (the role that ENDED) is admin/committee.
+   - One entry per person. Their tier is the HIGHEST role they ever held on the event (admin > committee),
+     so the Admin-before-Committee order is preserved. DECISION 1 below.
+   - A former read-only member is never added; neither is somebody whose only history is read_only.
+     A resident promoted to committee and later removed IS credited (they held committee).
+   - Names come from app_users at read time (the person's current display name), never copied, never
+     matched by name. extra_core, volunteers, prasad, sponsors and contributors are untouched.
+   - Names only: no email, no flat, no role label shown, no "former" marker - same as today's public card.
+   - If the table does not exist (046 not run) the read treats history as empty and the page is exactly
+     today's. This code is NOT written yet; I will write it only after you approve this design and report
+     046 as applied.
+   - Society Management's roster is a different surface and is not affected.
+
+1.5 Society member removal (B7) - design only, depends on 046 AND 042
+   One SQL function, remove_society_member(p_org, p_user, p_actor), one transaction:
+     - sets app.actor and app.role_end_reason = 'society_removed' for the transaction,
+     - deletes the person's event_page_permissions and event_members rows for EVERY event of that society
+       (the trigger records each ended role into history),
+     - deletes their organization_members row (042's trigger refuses it if they are the last society admin),
+     - returns how many event roles ended.
+   Nothing the person recorded is touched: contributions, expenses, comments, registrations, auction bids,
+   tasks and photographs are the event's history, not their membership - the same rule the Settings roster
+   already states. Their registered household bookings are not cancelled.
+   The Members tab gets a Remove button with a confirmation that lists, before anything happens: the roles
+   they hold on events ("Admin of Garba Night, Committee of Ganesh Chaturthi"), and a WARNING for any event
+   where they are the ONLY event admin (society admins still administer it, but the committee should know).
+   Audit: one society_member delete row plus one event_member row per ended role, sharing a request id.
+   DECISION 2 below (what removal does to event roles) - you wrote "revoking event access", so that is the
+   design; say if you want it optional.
+
+1.6 Recovering the past (optional)
+   Endings before 046 are not in event_members, but audit_log has recorded every removal and role change
+   since 030. docs/migration-notes/046_event_role_history.txt section 4 has a read-only "look first" query
+   and an idempotent recovery, tested on scratch data. It is a separate step, run only if you want it.
+
+1.7 Decisions I need on 046
+   D1. A person who held admin and was later demoted to committee (or removed): credit them in the ADMIN
+       tier ("highest role ever held" - my recommendation, because credits record service) or in the tier
+       of their CURRENT role only?
+   D2. Should removing a society member always revoke their event roles (as written), or ask the admin?
+   D3. Show a small "former" marker on credits for people who no longer hold a role? (Recommended: no.)
+   D4. Run the audit recovery (1.6) at all?
+
+
+=====================================================================
+2. EVENT PROPOSALS (043) AND PHASE D
+=====================================================================
+
+2.1 Migration 043 (prepared; do not run until you have reviewed it)
+   supabase/migrations/043_event_proposals.sql, notes in docs/migration-notes/043_event_proposals.txt
+   (pre-checks A-E, run, verification V1-V6, rollback, review notes).
+   - Table event_proposals: the proposal's own copy of the event fields (name, type, template, unit label,
+     dates, hours, venue, short description, a note to the admins), a status, a revision counter, who
+     reviewed and when, a review note, and the event_id once approved. RLS on, zero policies.
+   - Statuses: submitted | changes_requested | approved | rejected | archived. approved/rejected/archived
+     are final. Only approved ever has an event.
+   - approve_event_proposal(proposal, reviewer, modules, expected_revision): ONE transaction that locks the
+     proposal, re-checks that the reviewer is a society admin of THAT society (not only in the API), the
+     proposal is still submitted, the revision is the one the admin saw, and the proposer is still in the
+     society; then inserts the event as a DRAFT (never published), makes the proposer its Event Admin,
+     writes its modules and registration settings, and marks the proposal approved with the event's id.
+     Any failure rolls all of it back: there is never an approved proposal with no event or an event
+     with no proposal behind it. Two admins approving at once get one event.
+   - Everything else (request changes, reject, discard, resubmit) is one conditional update in the API,
+     so concurrent actions get one success and one clear message.
+   - Tested on scratch: a non-admin and the proposer cannot approve; a stale revision is refused and
+     creates nothing; a rejected proposal cannot become an event; approval creates exactly one draft
+     with the proposer as admin and the proposal linked; a second approval is refused.
+   Open points (details in the notes file): the proposer, being Event Admin of the draft, can publish it
+   under the existing rules (say if publishing should also need a society admin); a society admin may
+   approve their own proposal; the 40-event creation cap is not applied to approval; new events have no
+   slug until the admin sets one (same as every draft today).
+
+2.2 Phase D application design (code starts only after you report 043 applied; until then it degrades)
+   API: ?resource=societies&part=proposals on the existing route - no new function (count stays 12).
+     GET   mine                -> the caller's own proposals (any society member)
+     POST  create              -> any member of the society (admin/committee/resident); max 3 open per
+                                  person per society; fields validated with the same rules as New event
+     PATCH edit + resubmit     -> proposer only, only while changes_requested
+     PATCH withdraw            -> proposer, -> archived
+     GET   queue / one         -> society admin only
+     PATCH approve | request_changes | reject | discard  -> society admin only; the note is required for
+                                  request_changes and reject
+   Modules at approval come from the template catalogue (src/data/event-templates.ts moves to shared/,
+   unchanged, so the server and the wizard use one list).
+   Before 043: reads answer "not ready" and the UI shows a plain message; writes answer 501 naming 043;
+   the Overview's pending count stays unknown (never shown as 0).
+   Audit: every transition writes audit_log with organization_id and event_id (on approval), as
+   entity 'event_proposal'.
+   Screens:
+     Resident / member: "Propose an event" on Society home (a short form: name, type, dates, venue, what
+       it is, a note), and "Your proposals" - a private shelf only that person sees, showing Pending /
+       Changes requested (with the admin's note and "Edit and resubmit") / Approved ("Continue setup",
+       opens the new draft) / Rejected (with the note).
+     Society admin: an Approvals tab in Society Management - a queue (oldest waiting first), one proposal
+       open at a time, Approve / Request changes / Reject, and Discard (archives, with a confirmation).
+       The Overview card links to it, with the count.
+   Visibility: a proposal is visible only to its proposer and the society's admins. No proposal is on any
+   event list, the nav, a counter, a report, the OG preview or the society's public face. Committee and
+   admins keep creating events directly (D2) - this adds a door for members, it removes none.
+
+
+=====================================================================
+3. 045 - PLATFORM ACTIVITY DATA: THE MODEL I WOULD PROPOSE  (design only; no SQL, no migration)
+=====================================================================
+
+3.1 The question you asked
+   Can the existing event_visits / event_page_views be generalised, or are new platform tables genuinely
+   necessary - and how do we avoid two tables collecting different versions of the same traffic?
+
+   My answer: GENERALISE THE EXISTING TWO TABLES. New platform tables are not necessary, and v2.1's
+   "new tables plus a union view" is withdrawn. Reasons:
+     - Both existing tables already hold exactly what a platform needs: visitor_key, user_id, started_at,
+       last_seen_at, page_key, page_views, coarse device/browser/country/city, and per-page dwell. The only
+       thing that ties them to events is event_id NOT NULL and the cascade on it.
+     - One heartbeat, one write, one set of privacy rules. A second pair of tables would either double the
+       writes on the app's hottest path or need a view that papers over two definitions of "a visit".
+     - No history is lost and no existing read changes: every existing row is an event visit, and the
+       Traffic read filters by event_id as it does now.
+   What generalising changes (the actual 045 shape, for approval before any SQL is written):
+     event_visits       + surface text not null default 'event'
+                        + organization_id uuid null  (-> organizations, on delete set null)
+                        event_id: NOT NULL dropped; FK changed from "on delete cascade" to "on delete
+                        set null" so platform history survives an event being deleted (today deleting an
+                        event silently deletes its traffic)
+     event_page_views   same three changes
+     app_users          + last_seen_at timestamptz null (3.6)
+     indexes            (organization_id, started_at), (surface, started_at)
+     existing rows      organization_id filled once from events.organization_id; surface = 'event'
+   The names stay "event_*": renaming a hot table in a live app means a window where deployed code and
+   schema disagree, for a cosmetic gain. A comment on each table records that it now holds every surface.
+   Adding nullable / constant-default columns is a metadata change in PostgreSQL 11+, not a table rewrite.
+   DECISION 5: confirm "generalise, do not duplicate".
+
+3.2 Visit model
+   A visit = one browser tab session, one row (id held in sessionStorage, as today). A new tab or a
+   reopened browser is a new visit. visitor_key = a random value the browser keeps (localStorage); it
+   groups repeat visits and identifies nobody. user_id is set only when signed in. The same visitor_key
+   is used on every surface, which is what makes "unique visitors across the society" answerable.
+3.3 Session model
+   There is no separate session table. The visit IS the session. A "browsing session" in the analytics
+   sense (activity separated by 30 minutes of silence) can be derived at query time from a visitor's
+   visits if it is ever needed; it is not stored, so there is nothing to keep in step.
+3.4 Page-view model
+   One row per page opened within a visit (event_page_views, generalised), with page_key, opened_at,
+   left_at, seconds. page_key comes from a fixed server allowlist per surface, never free text.
+   Surfaces (allowlist): event, society_home, society_admin, profile, event_proposal, login.
+   Scope: organization_id and event_id are resolved and verified ON THE SERVER; the browser never gets to
+   assert them. event surface -> event_id set, organization_id derived. society surfaces -> organization_id
+   set, event_id null. login/profile -> neither.
+3.5 Heartbeat and last_seen_at (of a VISIT)
+   Same endpoint (api/event-access.ts ?resource=traffic, still importing only page-visibility and server):
+   eventId becomes optional and a surface is accepted. A visit row's last_seen_at is the time of its latest
+   heartbeat while the tab is visible; "time spent" = last_seen_at - started_at, approximate and under-
+   counting by up to one beat (no unload beat is possible), exactly as the panel says today. Throttles
+   (20 s per page) and "a different page always counts" are unchanged.
+3.6 app_users.last_seen_at (of a PERSON) - a different thing with a similar name
+   Meaning: the last time the server saw an authenticated application request from this person. It is
+   application activity, not login time, not session length, not "online now".
+   Updated by: any /api request whose Firebase token the server verified (requireAppUser / optionalAppUser
+   with a valid token), including a signed-in visible-tab heartbeat. NOT by: no/invalid token, link
+   crawlers, server work.
+   Throttle: at most one write per person per hour, enforced in SQL so it holds across serverless
+   instances (update ... where last_seen_at is null or last_seen_at < now() - interval '1 hour').
+   Fire-and-forget; it never delays or fails a request; silent if the column is absent.
+   Readable by: nobody in the product. Platform analytics only (future). Never by society or event admins.
+3.7 Identity / who can read what
+   The same rows serve two readers, separated by the API, not by table: a society admin reads their own
+   society's rows (Traffic, moved into Society Management later); the platform owner reads across
+   societies (future Control Center). Names appear only for signed-in visitors, as today. No IP address is
+   stored, raw or hashed. Coarse device/browser/city only. No per-click paths.
+3.8 Retention
+   Nothing is deleted today (F1 removed the 90-day delete; 90 days is only the display window). Row count
+   is per VISIT, not per beat, so volume is small (a society of ~500 households is on the order of tens of
+   thousands of visit rows a month). My assumption for a future policy, NOT implemented and not decided:
+   keep raw rows ~13 months, rolling them into daily per-society aggregates first, and only delete rows
+   that have been rolled up. Deleting anything needs your explicit decision; the aggregation must exist
+   before the deletion does.
+3.9 Behavioural / product events - still DESIGN ONLY
+   Unchanged from v2.1 section G: a separate small allowlisted stream (platform_events) for a handful of
+   named actions, never a clickstream, no free text, nothing collected until you approve the allowlist.
+   audit_log stays for business actions. Nothing here is built.
+3.10 Not decided / to verify before 045 SQL is written
+   - Who may send a beat for a society surface: I would require that the society exists and that the
+     caller could open that page (the same check Society Home uses), so a stranger cannot write rows into
+     a society's stream.
+   - The size of event_visits / event_page_views in production (a one-line count you can run) - to confirm
+     the one-time organization_id backfill is small.
+   - Whether to keep "event_*" table names (recommended) or rename later in a quiet window.
+
+
+=====================================================================
+4. WHAT I NEED FROM YOU
+=====================================================================
+
+ 1. D6 report and the 042 pre-checks -> then 042 and its verification. I treat 042 as NOT applied until
+    you send results, and I demote nobody.
+ 2. Review docs/migration-notes/043_event_proposals.txt and supabase/migrations/043_event_proposals.sql.
+    Run the pre-checks if you are happy and send them; I write Phase D code (with its 501 fallback) only
+    after you report 043 applied. Tell me about the open points in 2.1 (proposer publishing; self-approval).
+ 3. Review section 1 and docs/migration-notes/046_event_role_history.txt. Answer D1-D4.
+ 4. Section 3: confirm "generalise, do not duplicate" (DECISION 5) and the surface allowlist. I will not
+    write 045 until you do.
+ 5. Order I intend to follow once you reply: Phase D code -> 046 integration (credits, B7 removal) -> 045
+    -> verification matrix. Nothing is pushed to master.

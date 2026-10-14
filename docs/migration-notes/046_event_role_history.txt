@@ -1,0 +1,208 @@
+MIGRATION 046 - event_role_history  (PROPOSED FOR REVIEW; YOU run it by hand, only after approving the design)
+File: supabase/migrations/046_event_role_history.sql
+Status: PROPOSED, NOT APPLIED. Design and decisions: docs/society-platform-plan-v2.2.txt section 1.
+
+WHAT IT DOES (plain words)
+  Keeps a record of every role a person USED to hold on an event, and when it ended, so that removing
+  someone from an event - or changing their role - no longer erases them from the closing credits of an
+  event they actually ran. event_members stays "what you are now". audit_log stays "who did it". This table
+  is "what you were, and until when". It is written by a database trigger, so every way a role can end is
+  covered, in the same transaction as the change, and none can be forgotten.
+
+WHAT IT ADDS (and only this)
+  - table  public.event_role_history  (row level security ON, no policies)
+  - 2 indexes
+  - function public.event_members_record_history() + trigger on public.event_members
+  It changes no existing table, column or row. Nothing in the app reads the new table until a later,
+  separate change (closing credits), so after running it the app looks and behaves exactly as before.
+
+WHEN THE TRIGGER WRITES
+  - a member row is DELETED                        -> history row: role ended, became nothing
+  - a member row's ROLE CHANGES                    -> history row for the OLD role, "became" the new one
+  - an update that leaves the role unchanged       -> nothing (re-saving page access writes no history)
+  - the event or the account is being deleted      -> nothing (nothing left to describe)
+  Both admin and committee AND read-only endings are recorded (it is a true history). The credits only
+  ever read admin and committee, so a former read-only member is never credited.
+
+COLUMNS
+  event_id, user_id (identity is the account, never the display name), role (the role that ended),
+  became_role (null = removed), started_at (event_members.created_at; best effort), ended_at,
+  ended_by, end_reason (removed | role_changed | society_removed | audit_backfill), source
+  (trigger | audit_backfill), created_at.
+  ended_by / end_reason: a SQL function may set the transaction settings app.actor and
+  app.role_end_reason (the planned remove_society_member function will). A plain API call leaves ended_by
+  empty and the reason is inferred. audit_log is where "who" is authoritative.
+
+------------------------------------------------------------------------------------
+1. PRE-CHECKS  (run in the Supabase SQL editor; send me the results)
+------------------------------------------------------------------------------------
+
+-- A. The table and trigger must not exist yet (expect 0 rows from each).
+select table_name from information_schema.tables where table_schema = 'public' and table_name = 'event_role_history';
+select tgname from pg_trigger where tgrelid = 'public.event_members'::regclass and not tgisinternal;
+
+-- B. event_members and the event_role enum are as expected (expect event_id, user_id, role, created_at).
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'event_members' order by ordinal_position;
+select enum_range(null::public.event_role);   -- expect {admin,committee,read_only}
+
+-- C. audit_log has the columns the optional backfill reads (expect all 6 rows).
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'audit_log'
+  and column_name in ('event_id','action','entity_type','entity_id','changes','actor_user_id')
+order by column_name;
+
+------------------------------------------------------------------------------------
+2. RUN
+------------------------------------------------------------------------------------
+Paste supabase/migrations/046_event_role_history.sql into the SQL editor and run it once
+(begin ... commit; all or nothing).
+
+------------------------------------------------------------------------------------
+3. VERIFICATION SQL
+------------------------------------------------------------------------------------
+
+-- V1. Table, row level security on (expect relrowsecurity = true), and no policies (expect 0 rows).
+select c.relname, c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relname = 'event_role_history';
+select policyname from pg_policies where schemaname = 'public' and tablename = 'event_role_history';
+
+-- V2. The trigger exists and is enabled (expect tgenabled = 'O').
+select tgname, tgenabled from pg_trigger
+where tgrelid = 'public.event_members'::regclass and tgname = 'event_members_record_history';
+
+-- V3. Behaviour test. Creates a throwaway society, two events and four users; proves a removal, a demotion,
+--     a read-only removal, the actor/reason settings (including a bogus one that must not break anything),
+--     that a no-op write records nothing, and that deleting an account or an event still works; then
+--     deletes everything it made. Expect a NOTICE starting with OK. (Run against a scratch copy of the
+--     schema built from migrations 001-046 and passed.)
+do $$
+declare
+  org uuid; ev uuid; ev2 uuid; a uuid; c uuid; r uuid; d uuid; n int;
+begin
+  insert into public.app_users (firebase_uid, email, full_name) values ('__h_a','__h_a@test.invalid','Hist Admin') returning id into a;
+  insert into public.app_users (firebase_uid, email, full_name) values ('__h_c','__h_c@test.invalid','Rohan') returning id into c;
+  insert into public.app_users (firebase_uid, email, full_name) values ('__h_r','__h_r@test.invalid','Rohan') returning id into r;
+  insert into public.app_users (firebase_uid, email, full_name) values ('__h_d','__h_d@test.invalid','Doomed') returning id into d;
+  insert into public.organizations (name) values ('__history_test__') returning id into org;
+  insert into public.events (organization_id, name, start_date, end_date) values (org, 'H1', current_date, current_date) returning id into ev;
+  insert into public.events (organization_id, name, start_date, end_date) values (org, 'H2', current_date, current_date) returning id into ev2;
+  insert into public.event_members (event_id, user_id, role) values (ev, a, 'admin'), (ev, c, 'committee'), (ev, r, 'read_only'), (ev2, d, 'committee');
+
+  -- 1. a no-op upsert of the same role writes nothing
+  update public.event_members set role = 'committee' where event_id = ev and user_id = c;
+  select count(*) into n from public.event_role_history where event_id = ev; if n <> 0 then raise exception 'FAILED 1: no-op wrote history (%)', n; end if;
+  -- 2. removal
+  delete from public.event_members where event_id = ev and user_id = c;
+  select count(*) into n from public.event_role_history where event_id = ev and user_id = c and role = 'committee' and became_role is null and end_reason = 'removed' and started_at is not null;
+  if n <> 1 then raise exception 'FAILED 2: removal not recorded'; end if;
+  -- 3. demotion admin -> committee records the admin role, with what it became
+  update public.event_members set role = 'committee' where event_id = ev and user_id = a;
+  select count(*) into n from public.event_role_history where event_id = ev and user_id = a and role = 'admin' and became_role = 'committee' and end_reason = 'role_changed';
+  if n <> 1 then raise exception 'FAILED 3: demotion not recorded'; end if;
+  -- 4. a read-only member removed is recorded as read_only (credits will ignore it)
+  delete from public.event_members where event_id = ev and user_id = r;
+  select count(*) into n from public.event_role_history where event_id = ev and user_id = r and role = 'read_only';
+  if n <> 1 then raise exception 'FAILED 4'; end if;
+  -- 5. actor / reason from transaction settings; a bogus actor cannot break the change
+  perform set_config('app.actor', a::text, true); perform set_config('app.role_end_reason', 'society_removed', true);
+  delete from public.event_members where event_id = ev and user_id = a;
+  select count(*) into n from public.event_role_history where user_id = a and role = 'committee' and ended_by = a and end_reason = 'society_removed';
+  if n <> 1 then raise exception 'FAILED 5: actor/reason'; end if;
+  perform set_config('app.actor', 'not-a-uuid', true); perform set_config('app.role_end_reason', 'nonsense', true);
+  insert into public.event_members (event_id, user_id, role) values (ev, a, 'admin');
+  delete from public.event_members where event_id = ev and user_id = a;
+  select count(*) into n from public.event_role_history where user_id = a and role = 'admin' and ended_by is null and end_reason = 'removed';
+  if n <> 1 then raise exception 'FAILED 5b: bad settings not tolerated'; end if;
+  perform set_config('app.actor', '', true); perform set_config('app.role_end_reason', '', true);
+  -- 6. deleting an account / an event must still work and leave no dangling history
+  delete from public.app_users where id = d;
+  select count(*) into n from public.event_role_history where user_id = d; if n <> 0 then raise exception 'FAILED 6a'; end if;
+  insert into public.event_members (event_id, user_id, role) values (ev2, c, 'admin');
+  delete from public.events where id = ev2;
+  select count(*) into n from public.event_role_history where event_id = ev2; if n <> 0 then raise exception 'FAILED 6b'; end if;
+
+  delete from public.organizations where id = org;
+  delete from public.app_users where id in (a, c, r);
+  raise notice 'OK: removals, demotions and cascades behave; no-ops write nothing; test data removed';
+end $$;
+
+-- V4. Nothing left behind (expect 0, 0, 0).
+select (select count(*) from public.organizations where name = '__history_test__') as societies,
+       (select count(*) from public.app_users where email like '\_\_h\_%@test.invalid') as users,
+       (select count(*) from public.event_role_history where event_id not in (select id from public.events)) as orphans;
+
+------------------------------------------------------------------------------------
+4. OPTIONAL, SEPARATE STEP: RECOVER ENDINGS THAT HAPPENED BEFORE 046
+------------------------------------------------------------------------------------
+Roles that ended before this migration are gone from event_members, but audit_log (030) recorded every
+removal and role change - if 030 was applied at the time. This step turns those audit rows into history
+rows so people already removed from an event are not missing from its credits. It is idempotent
+(running it twice adds nothing) and tagged source = 'audit_backfill'. Look first, then decide:
+
+-- Look first (read-only): which endings would be recovered.
+select a.occurred_at, e.name as event, u.full_name, a.action,
+       coalesce(a.changes->'role'->>'from') as was_role, a.changes->'role'->>'to' as became
+from public.audit_log a
+join public.events e on e.id = a.event_id
+left join public.app_users u on u.id::text = coalesce(a.changes->'user_id'->>'from', a.entity_id)
+where a.entity_type = 'event_member' and a.event_id is not null
+  and a.action in ('delete','update')
+  and a.changes->'role'->>'from' in ('admin','committee')
+  and (a.action = 'delete' or a.changes->'role'->>'to' is distinct from a.changes->'role'->>'from')
+order by a.occurred_at;
+
+-- Then, if it looks right, run the recovery (tested on scratch data: recovers one removal and one
+-- demotion, and a second run adds nothing).
+begin;
+-- Rows to recover: admin/committee roles that ended before 046, as the audit log recorded them.
+-- Removals ("delete event_member": changes.user_id.from / changes.role.from) and demotions
+-- ("update event_member": entity_id = the person, changes.role.from -> to).
+with removed as (
+  select a.event_id, (a.changes->'user_id'->>'from')::uuid as user_id, (a.changes->'role'->>'from')::public.event_role as role,
+         null::public.event_role as became_role, a.occurred_at, a.actor_user_id
+  from public.audit_log a
+  where a.entity_type = 'event_member' and a.action = 'delete' and a.event_id is not null
+    and a.changes->'role'->>'from' in ('admin', 'committee')
+    and a.changes->'user_id'->>'from' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+), demoted as (
+  select a.event_id, a.entity_id::uuid as user_id, (a.changes->'role'->>'from')::public.event_role as role,
+         (a.changes->'role'->>'to')::public.event_role as became_role, a.occurred_at, a.actor_user_id
+  from public.audit_log a
+  where a.entity_type = 'event_member' and a.action = 'update' and a.event_id is not null
+    and a.changes->'role'->>'from' in ('admin', 'committee')
+    and a.changes->'role'->>'to' is distinct from a.changes->'role'->>'from'
+    and a.entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+)
+insert into public.event_role_history (event_id, user_id, role, became_role, started_at, ended_at, ended_by, end_reason, source)
+select r.event_id, r.user_id, r.role, r.became_role, null, r.occurred_at,
+       (select u.id from public.app_users u where u.id = r.actor_user_id),
+       case when r.became_role is null then 'removed' else 'role_changed' end, 'audit_backfill'
+from (select * from removed union all select * from demoted) r
+where exists (select 1 from public.events e where e.id = r.event_id)
+  and exists (select 1 from public.app_users u where u.id = r.user_id)
+  -- never write the same ending twice, and never re-run into duplicates
+  and not exists (select 1 from public.event_role_history h
+                  where h.event_id = r.event_id and h.user_id = r.user_id and h.role = r.role and h.ended_at = r.occurred_at);
+commit;
+
+------------------------------------------------------------------------------------
+5. ROLLBACK
+------------------------------------------------------------------------------------
+Safe at any time; no member, role or page access is affected either way.
+
+begin;
+drop trigger if exists event_members_record_history on public.event_members;
+drop function if exists public.event_members_record_history();
+drop table if exists public.event_role_history;
+commit;
+
+Note: dropping the table loses the recorded history. To only stop recording, drop the trigger and keep the table.
+
+------------------------------------------------------------------------------------
+6. BEFORE AND AFTER YOU RUN IT
+------------------------------------------------------------------------------------
+Before: nothing in the app depends on it. The credits code (not yet written) will treat a missing table as
+"no history" and behave exactly as today.
+After: send me the pre-check output, V1-V4 and (if you ran it) what the recovery changed. Until then I treat
+046 as NOT applied and will not write the code that reads it.

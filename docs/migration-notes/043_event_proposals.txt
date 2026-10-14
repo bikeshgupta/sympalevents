@@ -1,0 +1,188 @@
+MIGRATION 043 - event_proposals  (YOU run this by hand; nothing here is automatic)
+File: supabase/migrations/043_event_proposals.sql
+Status: PREPARED, NOT APPLIED. Do not treat the schema as available until you send me the results.
+
+WHAT IT DOES (plain words)
+  Lets a society MEMBER propose an event and a society ADMIN approve it. A proposal is its own
+  record. Nothing exists as an event until it is approved, so a rejected or discarded proposal can
+  never appear in any event list, counter, menu or report.
+
+  Approval turns the proposal into an ordinary DRAFT event (not published), makes the proposer the
+  event admin of that draft, and gives it its pages and registration settings - all in one
+  database transaction. Publishing remains the existing, separate, readiness-checked step.
+
+WHAT IT ADDS (and only this)
+  - table  public.event_proposals  (row level security ON, no policies - same as every table since 009)
+  - 3 indexes: the admin's queue, "your proposals", and one-event-per-proposal
+  - function public.approve_event_proposal(proposal, reviewer, modules, expected_revision)
+    callable only by the server (service_role)
+  It does not alter any existing table, column, function or row.
+
+HOW A PROPOSAL MOVES
+  submitted -> approved            (an event is created, as a Draft)
+  submitted -> changes_requested -> submitted again (proposer edits and resubmits)
+  submitted | changes_requested -> rejected
+  submitted | changes_requested -> archived   (admin "Discard", or the proposer withdraws)
+  approved, rejected and archived are final.
+  Only "approve" needs the database function (it must create several rows together). The other
+  moves are single conditional updates made by the API (".. where status = 'submitted'"), so two
+  people acting at once get one success and one clear refusal.
+
+REVIEW NOTES / DECISIONS TO CONFIRM
+  1. Modules are not stored on the proposal. At approval the API picks them from the event's template
+     (the same catalogue the New-event wizard uses) and passes them in. The proposer is not asked about
+     modules, which is not a question a resident can answer.
+  2. The new event gets no slug, exactly like create_event_draft today, so its address is /e/<id> until
+     its admin sets a web address in Settings. (Existing behaviour, not new.)
+  3. The creation limits in create_event_draft (40 events per admin) are not applied to approval: they
+     exist to stop one person flooding the system, and approval is a society admin's deliberate act.
+     The API instead limits a person to 3 open proposals per society.
+  4. The proposer becomes Event Admin of the draft, as you specified. Existing rules therefore let them
+     publish it themselves once its readiness checks pass. If you want publishing of an approved
+     proposal to need a society admin as well, say so - it is a small extra check in the publish route,
+     not a schema change.
+  5. A society admin may approve their own proposal. They could have created the event directly, so
+     blocking it would only add a step.
+  6. If the proposer has left the society by the time it is approved, approval is refused with a
+     sentence (they cannot be made admin of one of its events).
+  7. Deleting an account deletes that person's proposals. An approved proposal's event is untouched
+     (the link is simply lost).
+
+------------------------------------------------------------------------------------
+1. PRE-CHECKS  (run in the Supabase SQL editor; send me the results)
+------------------------------------------------------------------------------------
+
+-- A. The table must not exist yet (expect 0 rows).
+select table_name from information_schema.tables
+where table_schema = 'public' and table_name = 'event_proposals';
+
+-- B. The function must not exist yet (expect 0 rows).
+select proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and proname = 'approve_event_proposal';
+
+-- C. The things approval writes to exist (expect events, event_members, event_page_visibility,
+--    event_registration_settings, organization_members, organizations, app_users - 7 rows).
+select table_name from information_schema.tables
+where table_schema = 'public'
+  and table_name in ('events','event_members','event_page_visibility','event_registration_settings',
+                     'organization_members','organizations','app_users')
+order by table_name;
+
+-- D. Migration 033 is in (expect 1 row) - approval mirrors create_event_draft.
+select proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and proname = 'create_event_draft';
+
+-- E. The events columns approval inserts (expect all 11 rows).
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'events'
+  and column_name in ('organization_id','name','start_date','end_date','start_time','end_time',
+                      'location','description','event_type','template_key','unit_label','status_override')
+order by column_name;
+
+------------------------------------------------------------------------------------
+2. RUN
+------------------------------------------------------------------------------------
+Paste supabase/migrations/043_event_proposals.sql into the SQL editor and run it once.
+It is wrapped in begin ... commit, so it either applies completely or not at all.
+
+------------------------------------------------------------------------------------
+3. VERIFICATION SQL
+------------------------------------------------------------------------------------
+
+-- V1. Table, columns and row level security (expect relrowsecurity = true).
+select c.relname, c.relrowsecurity
+from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relname = 'event_proposals';
+
+-- V2. No policies (expect 0 rows - the app reads and writes through the API only).
+select policyname from pg_policies where schemaname = 'public' and tablename = 'event_proposals';
+
+-- V3. Indexes (expect 4 rows: the primary key and the three above).
+select indexname from pg_indexes where schemaname = 'public' and tablename = 'event_proposals' order by indexname;
+
+-- V4. Only the server may call the function (expect service_role = true, authenticated = false, anon = false).
+select has_function_privilege('service_role', 'public.approve_event_proposal(uuid,uuid,jsonb,integer)', 'execute') as service_role,
+       has_function_privilege('authenticated', 'public.approve_event_proposal(uuid,uuid,jsonb,integer)', 'execute') as authenticated,
+       has_function_privilege('anon', 'public.approve_event_proposal(uuid,uuid,jsonb,integer)', 'execute') as anon;
+
+-- V5. Behaviour test. Creates a throwaway society, three throwaway users and two proposals, proves
+--     a non-admin and the proposer cannot approve, a stale revision is refused, a rejected proposal
+--     cannot become an event, approval creates exactly one DRAFT event with the proposer as its admin,
+--     a second approval is refused, then deletes everything it made.
+--     Expect a NOTICE starting with OK. (It was run against a scratch copy of the schema built from
+--     migrations 001-043 and passed.)
+do $$
+declare
+  org uuid; admin_u uuid; prop_u uuid; other_u uuid;
+  p1 uuid; p2 uuid; ev uuid; failed boolean;
+  mods jsonb := '[{"page_key":"dashboard","visibility":"public","is_enabled":true,"label_override":null},{"page_key":"registration","visibility":"authenticated","is_enabled":true,"label_override":null}]';
+begin
+  insert into public.app_users (firebase_uid, email, full_name) values ('__t_admin','__t_admin@test.invalid','T Admin') returning id into admin_u;
+  insert into public.app_users (firebase_uid, email, full_name) values ('__t_prop','__t_prop@test.invalid','T Proposer') returning id into prop_u;
+  insert into public.app_users (firebase_uid, email, full_name) values ('__t_other','__t_other@test.invalid','T Other') returning id into other_u;
+  insert into public.organizations (name) values ('__proposal_test__') returning id into org;
+  insert into public.organization_members (organization_id, user_id, role) values (org, admin_u, 'admin'), (org, prop_u, 'read_only');
+
+  insert into public.event_proposals (organization_id, proposed_by, name, start_date, end_date) values (org, prop_u, 'Test Garba', current_date + 30, current_date + 31) returning id into p1;
+  insert into public.event_proposals (organization_id, proposed_by, name, start_date, end_date) values (org, prop_u, 'Test Rejected', current_date + 30, current_date + 31) returning id into p2;
+
+  -- 1. not a society admin
+  failed := false; begin perform public.approve_event_proposal(p1, other_u, mods); exception when sqlstate '42501' then failed := true; end;
+  if not failed then raise exception 'FAILED 1: a non-admin approved'; end if;
+  failed := false; begin perform public.approve_event_proposal(p1, prop_u, mods); exception when sqlstate '42501' then failed := true; end;
+  if not failed then raise exception 'FAILED 1b: the proposer (a resident) approved their own'; end if;
+  -- 2. stale revision
+  failed := false; begin perform public.approve_event_proposal(p1, admin_u, mods, 99); exception when sqlstate 'P0001' then failed := true; end;
+  if not failed then raise exception 'FAILED 2: a stale revision was approved'; end if;
+  -- 3. nothing was created by the failures
+  if exists (select 1 from public.events where organization_id = org) then raise exception 'FAILED 3: an event exists after refused approvals'; end if;
+  -- 4. rejected never becomes an event
+  update public.event_proposals set status = 'rejected' where id = p2;
+  failed := false; begin perform public.approve_event_proposal(p2, admin_u, mods); exception when sqlstate 'P0001' then failed := true; end;
+  if not failed then raise exception 'FAILED 4: a rejected proposal was approved'; end if;
+  -- 5. the real approval
+  ev := public.approve_event_proposal(p1, admin_u, mods, 1);
+  if (select status_override from public.events where id = ev) is distinct from 'draft' then raise exception 'FAILED 5a: not a draft'; end if;
+  if (select role::text from public.event_members where event_id = ev and user_id = prop_u) is distinct from 'admin' then raise exception 'FAILED 5b: proposer is not event admin'; end if;
+  if (select count(*) from public.event_page_visibility where event_id = ev) <> 2 then raise exception 'FAILED 5c: modules'; end if;
+  if not exists (select 1 from public.event_registration_settings where event_id = ev) then raise exception 'FAILED 5d: registration settings'; end if;
+  if (select status from public.event_proposals where id = p1) <> 'approved' or (select event_id from public.event_proposals where id = p1) <> ev then raise exception 'FAILED 5e: proposal not linked'; end if;
+  -- 6. second approval is refused and creates nothing
+  failed := false; begin perform public.approve_event_proposal(p1, admin_u, mods); exception when sqlstate 'P0001' then failed := true; end;
+  if not failed then raise exception 'FAILED 6: approved twice'; end if;
+  if (select count(*) from public.events where organization_id = org) <> 1 then raise exception 'FAILED 6b: more than one event'; end if;
+  -- 7. only one event exists for the rejected one
+  if exists (select 1 from public.event_proposals where id = p2 and event_id is not null) then raise exception 'FAILED 7'; end if;
+
+  -- cleanup (events cascade from the society)
+  delete from public.event_proposals where organization_id = org;
+  delete from public.organizations where id = org;
+  delete from public.app_users where id in (admin_u, prop_u, other_u);
+  raise notice 'OK: approval guarded, atomic, draft-only, proposer is event admin; test data removed';
+end $$;
+
+-- V6. Nothing left behind (expect 0, 0, 0).
+select (select count(*) from public.organizations where name = '__proposal_test__') as societies,
+       (select count(*) from public.app_users where email like '\_\_t\_%@test.invalid') as users,
+       (select count(*) from public.event_proposals where name like 'Test %') as proposals;
+
+------------------------------------------------------------------------------------
+4. ROLLBACK
+------------------------------------------------------------------------------------
+Safe at any time. Events already created by approving a proposal are ordinary events and are NOT
+touched; only the proposal records go.
+
+begin;
+drop function if exists public.approve_event_proposal(uuid, uuid, jsonb, integer);
+drop table if exists public.event_proposals;
+commit;
+
+Note: dropping the table loses the proposals' history (who proposed what, who decided, the notes).
+If you only want to stop the feature, switch it off in the app instead; I can make that one setting.
+
+------------------------------------------------------------------------------------
+5. BEFORE AND AFTER YOU RUN IT
+------------------------------------------------------------------------------------
+Before: the app's proposal screens answer "needs migration 043" (reads show nothing, writes answer 501
+naming 043), and the Society Overview shows no pending count (unknown is never shown as zero).
+After: send me the pre-check output, then V1-V6. Until then I treat 043 as NOT applied.
