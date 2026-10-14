@@ -24,11 +24,12 @@ the owner says so.
 **042_society_member_safety is PREPARED, not applied** (the owner runs every migration by hand, from
 `supabase/migrations/` with the pre-check / verification / rollback in `docs/migration-notes/`). Society role
 management is not production-ready until 042 is applied. The planned sequence is 043 event_proposals, 044
-audit scope, 045 platform readiness (see `docs/society-platform-plan-v2.2.txt`).
+audit scope, 045 platform readiness (see `docs/society-platform-plan-v2.3.txt`).
 **043_event_proposals and 046_event_role_history are PREPARED, not applied** (notes in `docs/migration-notes/`;
 both were run, with their verification blocks, against a scratch PostgreSQL built from 001-042 - not against
-Supabase). 044 and 045 do not exist: 045 is a design only (generalise `event_visits` / `event_page_views`
-rather than add platform tables). No application code reads 043 or 046 yet.
+Supabase). 043 now also replaces `create_event_draft` so the event-creation limit (per person, 40) lives in one
+function and approval obeys it. 044 and 045 do not exist: 045 is a design only (generalise `event_visits` /
+`event_page_views`, keep their names; impact review in v2.3 section 3). No application code reads 043 or 046 yet.
 
 ## Commands
 

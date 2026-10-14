@@ -1,6 +1,6 @@
 SYMPAL EVENTS - SOCIETY / APPROVALS / PLATFORM  -  PLAN v2.2
 Drafted: 2026-10-14.   Supersedes the "event_role_history" proposal and section E of v2.1.
-Status: FOR REVIEW. Nothing below has been run against your database. No migration is applied.
+Status: PARTLY SUPERSEDED by docs/society-platform-plan-v2.3.txt (043 limit, 046 credits/removal, 045). FOR REVIEW. Nothing below has been run against your database. No migration is applied.
 
 Migration state, as I understand it from you:
    001-041  applied (confirmed 2026-10-09)

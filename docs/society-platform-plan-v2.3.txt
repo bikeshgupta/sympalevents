@@ -1,0 +1,265 @@
+SYMPAL EVENTS - SOCIETY / APPROVALS / PLATFORM  -  PLAN v2.3
+Drafted: 2026-10-14.   Applies your decisions on v2.2. v2.2 sections 1.4, 1.5, 1.7 (046 credits/removal) and
+section 3 (045) are superseded by this document; the rest of v2.2 stands.
+Status: NO MIGRATION IS APPLIED. 042, 043, 046 are prepared. 045 is a design plus the impact review in
+section 3 - no SQL for it exists, and none will be written until you have read that review.
+
+
+=====================================================================
+0. YOUR DECISIONS, AS APPLIED
+=====================================================================
+
+ 043  Publishing stays with the Event Admin; no second society approval          -> no change needed (today's rule)
+ 043  Society Admin self-approval allowed at API/authority level                  -> the database does not forbid it
+ 043  Approval obeys the same event-creation limit as every other path            -> CHANGED in 043 (section 1)
+ 046  Trigger design approved                                                     -> unchanged
+ 046  Credits: current role for current members; LAST relevant role for ended     -> design finalised (section 2.2)
+ 046  Society removal ALWAYS revokes event access, history preserved              -> design finalised (section 2.4)
+ 046  No "former" marker on public credits                                        -> applied
+ 046  Audit recovery conditional: look first, on the real project                 -> read-only file ready (2.5)
+ 045  Generalise, do not duplicate; surface, nullable org/event ids; one heartbeat;
+      event_id ON DELETE SET NULL; last_seen_at once an hour; no retention delete  -> approved direction
+ 045  Final impact review before any SQL                                          -> section 3 (for you to read)
+
+
+=====================================================================
+1. 043 - WHAT CHANGED (the event-creation limit)
+=====================================================================
+
+ 1.1 What the existing limit actually is
+   It is not a society limit. migration 033 (create_event_draft) refuses when the person is ALREADY ADMIN OF
+   40 EVENTS ("Event creation limit reached"). It counts event_members rows with role admin for that person,
+   across every society. (A separate cap of 10 societies per person applies only to creating a NEW society,
+   which is closed.) There is exactly one place events are created from the application - create_event_draft -
+   and it is called by the New-event route and by "Run an event again". So the authoritative rule lived inline
+   in that one function, as the literal 40.
+
+ 1.2 What 043 now does
+   - public.event_creation_limit()            returns 40 - the only place the number is written
+   - public.event_creation_allowed(user)      takes the per-person lock and applies the rule
+   - create_event_draft is REPLACED by an identical function whose first check calls event_creation_allowed()
+     (same arguments, same result, same error text, same grants). Direct creation, "Run an event again" and
+     proposal approval therefore cannot drift: change the number once and all three follow.
+   - approve_event_proposal checks it for the PROPOSER (who is about to become an admin) before it inserts
+     anything. At the limit it raises SY001 with the sentence "The person who proposed this already organises
+     the maximum of 40 events, so it cannot be approved yet". The whole call is one transaction, so no event
+     exists and the proposal is still "submitted" - not rejected, not archived. The API maps SY001 to 409.
+   - This is the one pre-existing database object 043 now touches. It is called out in the notes, has its
+     own pre-check (F: confirm the live function is the 033 one I tested against) and its own rollback step
+     (restore the 033 function first, then drop the new ones).
+
+ 1.3 Tested (scratch PostgreSQL 16 built from 001-043; not Supabase)
+   non-admin and proposer cannot approve | stale revision refused | rejected cannot become an event |
+   direct creation refused at 40 with the original message | approval refused at 40 with SY001, no event
+   created, proposal still submitted | with one place free approval creates exactly one DRAFT with the proposer
+   as Event Admin and consumes their last place (a direct create then refuses) | second approval refused |
+   below the limit direct creation works as before | the rollback block restores the 033 function exactly.
+
+ 1.4 Product behaviour for self-approval (UX only, per your note)
+   Resident: "Propose an event". Committee and Society Admin: "Create event". Admins are not offered the
+   proposal form. A proposal an admin already owns (promoted after submitting) shows the normal Approve button.
+
+
+=====================================================================
+2. 046 - FINAL DESIGN
+=====================================================================
+
+ 2.1 Concepts kept separate
+   event_members       current access
+   event_role_history  factual historical roles - only facts: role, became, when, why
+   closing credits     presentation/recognition, computed at read time
+   audit_log           who performed the change
+ event_role_history contains no credit decision. It never records "tier" or "credited as".
+
+ 2.2 Closing credits - the read rule (code NOT written yet; written after you report 046 applied)
+   For each person (by user_id, never by display name):
+     - holds admin or committee NOW        -> credited with their CURRENT role.
+     - otherwise, has history rows         -> credited with the role of their most recent history row whose
+                                              role is admin or committee (latest ended_at; ties by created_at).
+                                              That is "the last relevant role at the time access ended".
+     - otherwise (read-only only, or nothing) -> not credited, exactly as today.
+   No "highest role ever held". Worked examples:
+     committee, promoted to admin, then removed        history: committee, admin           -> Admin
+     admin, demoted to committee, still a member       current committee                   -> Committee
+     admin, demoted to committee, then removed         history: admin, committee           -> Committee
+     admin, demoted to read-only, then removed         history: admin, read_only           -> Admin (read_only is not relevant)
+     resident, promoted to committee, demoted back     current read_only, history committee-> Committee
+     resident, never anything else                     -                                    -> not credited
+   Ordering is unchanged: Admin tier, then Committee tier, then alphabetical, then the committee's own
+   core_order; extra_core is merged as it is today. Names only, no "former" marker, no role label.
+   Because credits are computed (not stored) they can be made independently editable later, as you say;
+   nothing in 046 stands in the way, and nothing is built for it now.
+   If event_role_history does not exist the read treats history as empty and the page is exactly today's.
+
+ 2.3 Writing history (unchanged from v2.2 and approved)
+   Trigger on event_members: a delete or a role change writes one row; a no-op writes nothing; deleting an
+   event or an account writes nothing. Covers Settings removal, admin/committee demotion, access-request
+   approval over an existing role, society removal, and manual SQL. Tested on scratch.
+
+ 2.4 Society member removal (B7) - ALWAYS revokes active event access
+   One SQL function remove_society_member(p_org, p_user, p_actor), one transaction (written after 046 is
+   applied; it needs 042 as well):
+     1. sets the transaction settings app.actor and app.role_end_reason = 'society_removed';
+     2. deletes the person's event_page_permissions and event_members rows for EVERY event of that society
+        (the 046 trigger records each ended role - this is what preserves the history);
+     3. deletes their organization_members row (042's trigger refuses it for the last society admin);
+     4. returns how many event accesses were revoked.
+   Preserved: every business record - contributions, expenses, registrations, auction bids, tasks, comments,
+   photographs, reviews. Their household's registrations are not cancelled. Only access ends.
+   Confirmation dialog (computed by a read call BEFORE anything changes): "Remove Priya Shah from TRU
+   WindChimes? This revokes society membership and event access on N events: Admin of Garba Night, Committee of
+   Ganesh Chaturthi... Everything they recorded stays." A line is added for any event where they are the only
+   Event Admin ("Society admins can still manage it"). There is no "keep their event access" option.
+   Audit: one society_member delete row plus one event_member row per revoked role, one request id.
+   A society admin removing themselves is refused while they are the last admin (the 042 rule).
+
+ 2.5 Audit recovery - conditional, nothing runs
+   docs/migration-notes/046_look_first_recovery.sql is READ-ONLY and works with or without 046 applied. It has
+   four queries: how far back the audit log goes; every ending the recovery would write (with the person, the
+   role, who did it, the role they hold today and whether the event/person still exists); per event, who it
+   would add to the closing credits and as what (their LAST relevant role, matching 2.2); and a check for
+   removals with no readable person. I cannot run it against your Supabase project (I never touch the live
+   database), so please run it and send me the output. Only after we have read the result together do you
+   decide whether to run the recovery step (046 notes, section 4). I run nothing automatically.
+
+
+=====================================================================
+3. 045 - FINAL SCHEMA-IMPACT REVIEW  (no SQL written; for your approval)
+=====================================================================
+
+ 3.1 EVERY reference to the two tables (searched: api/, src/, tests/, vite.config.ts, vercel.json, supabase/,
+     docs/, CLAUDE.md, scripts)
+   Code - ONE file:
+     api/_lib/traffic.ts
+       :66   isMissingTable() - recognises a missing table by error code 42P01/PGRST205 OR by the error
+             MESSAGE containing the text "event_visits"   <- a rename must change this string too
+       :143  recordBeat: select from event_visits (look up the visit)
+       :157  recordBeat: insert into event_visits (new visit)
+       :194  recordBeat: update event_visits (heartbeat)
+       :262  readTraffic: select from event_visits (society admin's report)
+       :374  recordPageView: select event_page_views (the open row)
+       :388  recordPageView: update event_page_views (close it: left_at, seconds)
+       :396  recordPageView: select event_page_views (is this page already open)
+       :405  recordPageView: insert into event_page_views
+   Everything else reaches the tables only through that file:
+     api/event-access.ts            imports handleEventTraffic (the hot route; imports only traffic + page-visibility + server)
+     src/lib/traffic.ts             useTrafficHeartbeat (POST /api/event-access?resource=traffic, line 121) and
+                                    useEventTraffic (GET, line 159; currently UNUSED - the Settings card was removed)
+     src/components/layout/app-layout.tsx:59   the only place the heartbeat is mounted
+   Not in code: no component, no other API route, no SQL function, no view, no trigger, no test and no
+   vite/vercel config names either table. (RLS on, zero policies; reachable only through the service role.)
+   Schema/docs: migrations 028 and 030 (history - never edited), docs/MIGRATION_CHECKLIST.md (3 places),
+   CLAUDE.md (Traffic and Logging sections), two older plan files.
+
+ 3.2 Keep the names or rename to visits / page_views?   RECOMMENDATION: KEEP event_visits / event_page_views.
+   - Only one file in the codebase names them, so a rename is cheap to WRITE. The risk is not the edit; it is
+     the deploy window. You run migrations by hand and Vercel deploys on merge, so schema and code can never
+     change at the same instant. A plain rename leaves a window in which the live code points at a table that
+     no longer has that name; this code swallows that error on purpose (missing table = silent no-op), so
+     the failure would be silent loss of traffic data, not a visible error.
+   - A safe rename is a three-step sequence (rename table + leave a view under the old name; deploy code on the
+     new name; drop the view later), each step manual. That is real production process for a cosmetic gain.
+   - Everything 045 needs is ADDITIVE or LOOSENING (new nullable columns, a dropped NOT NULL, a relaxed
+     foreign key). Old code keeps working against the new schema, so there is no ordering hazard at all.
+   - What I do instead: table and column comments saying "holds every surface, not only events", and the
+     code uses neutral names (recordVisit, surface) internally. If the names ever genuinely mislead, the
+     three-step rename above can be done in a quiet window as its own change.
+
+ 3.3 What the generalisation changes (the proposed 045, in full, still not written)
+   event_visits and event_page_views, each:
+     + surface text not null default 'event'      (every existing row becomes 'event' - correct)
+     + organization_id uuid null  -> organizations(id)  ON DELETE SET NULL (see 3.4)
+       existing rows filled once from events.organization_id
+     event_id: NOT NULL dropped; foreign key replaced: ON DELETE CASCADE -> ON DELETE SET NULL
+     + indexes (organization_id, started_at / opened_at) and (surface, started_at / opened_at)
+     comments: "holds every surface"
+   app_users: + last_seen_at timestamptz null (3.6)
+   Nothing is dropped, renamed or rewritten. Adding a nullable column or a constant default is a metadata
+   change; the foreign-key swap is done with ADD CONSTRAINT ... NOT VALID then VALIDATE so writers are not
+   blocked while it checks. Pre-check for you: row counts of both tables (to confirm the backfill is small).
+   Deploy order: run 045 first; the code that writes surface/organization_id ships after and degrades (via the
+   existing insertDegrading helper) if a column is absent, so code and schema can land in either order.
+   Surface allowlist (server side): event, society_home, society_admin, profile, event_proposal, login.
+
+ 3.4 If an ORGANIZATION is deleted - what happens to analytics history (explicit decision needed)
+   Today: deleting a society deletes its events (events.organization_id is ON DELETE CASCADE), and each
+   event's visits and page views are deleted with the event (event_visits.event_id is ON DELETE CASCADE). So
+   history silently disappears with the society. Approving event_id ON DELETE SET NULL fixes the event half:
+   an event can be deleted and its traffic stays, still attributed to the society via organization_id.
+   The society half needs a choice, because the new organization_id column needs a delete rule:
+     A. ON DELETE SET NULL  (my recommendation) - the rows survive; they no longer say which society. They
+        remain in platform-wide totals (visits, people, devices, trend). No cascade, no blocked deletes.
+     B. no foreign key, keep the bare id - rows keep their attribution ("society X, since deleted") for
+        platform history, at the cost of referential integrity (an id that points at nothing; same trade-off
+        event_page_views.visit_id already makes on purpose).
+     C. RESTRICT - refuses to delete a society that has traffic. Effectively blocks deleting any society.
+     D. CASCADE - deletes the society's analytics with it. NOT proposed; shown only because it is what the
+        current event-level rule would do transitively, and you asked that it not happen accidentally.
+   Whichever you pick, deleting a society is not a feature in the app today (no route does it); it is a manual
+   act. Recommended companion rule: before such a deletion the platform owner exports or rolls up that
+   society's figures, since under A they stop being attributable afterwards. person deletion is already
+   SET NULL (history kept, anonymised). The decision is yours: A or B.
+
+ 3.5 Findings from the review that affect the design
+   a. The visit's scope. A visit id is held per browser tab and the visit row stores ONE event_id (set when
+      it is created and never updated). Today, moving between two events in one tab keeps the first event on
+      the visit row. With several surfaces this matters more (society home -> an event in the same tab).
+      Proposal: the client starts a NEW visit whenever the scope changes (scope = surface + society + event),
+      so a visit is one tab session within one scope, and page views inherit exactly that scope. Counts of
+      "visits" then mean visits to a surface; "people" still come from visitor_key. Needs your nod.
+   b. The heartbeat is mounted only inside AppLayout (event pages). Society home, Society Management, Profile,
+      New event and Login live outside it, so a small client change mounts the same hook there with its
+      surface. No new endpoint, no new request pattern.
+   c. A beat for a society surface must be authorised like an event beat is today (resolvePageAccess), so a
+      stranger cannot write rows into a society's stream: the society must exist and the caller must be able
+      to open that page (Society Management: society admins only).
+   d. isMissingTable() matches the table name in the error message; it keeps working because the names stay.
+   e. app_users.updated_at is already rewritten on EVERY authenticated request (requireAppUser upserts the
+      profile each time). It is therefore a de-facto, unthrottled "last activity", and it also moves when the
+      profile changes, so it cannot stand in for last_seen_at. (It is also a write per request that exists
+      today and is not part of this change; I mention it because it is the hottest write in the app.)
+
+ 3.6 app_users.last_seen_at - definition and the write (approved: once an hour)
+   Definition: "the most recent qualifying authenticated Sympal application activity, written at most once
+   per hour." It is NOT last login and is never labelled that in any screen, API field or document.
+   Qualifying: a request carrying a Firebase token the server verified (requireAppUser, or optionalAppUser
+   with a valid token), including a signed-in visible-tab heartbeat. Not qualifying: no/invalid token, link
+   crawlers, server-side jobs.
+   How it is written without adding cost to normal requests: the common path adds ONE in-memory lookup (a
+   per-instance map of user -> time last written) and no database call. Only when that says "over an hour
+   ago, or unknown" does it fire one fire-and-forget statement:
+       update app_users set last_seen_at = now()
+       where id = :user and (last_seen_at is null or last_seen_at < now() - interval '1 hour')
+   The WHERE clause is the real throttle and holds across serverless instances; the map only avoids
+   repeating a no-op statement. I do NOT add last_seen_at to requireAppUser's select list: before 045 is run
+   that column would not exist and every authenticated request would fail. If the update errors because the
+   column is missing, the code remembers that for ten minutes and stops trying. Never delays or fails a request.
+   Readable by nobody in the product (not users, not event admins, not society admins) - platform analytics
+   only, later.
+
+ 3.7 Other open points
+   - Retention: nothing is deleted; no policy decided; behavioural events remain design only (v2.1 section G).
+   - The visit/page-view privacy model is unchanged: no IP in any form, coarse device/browser/city, names only
+     for signed-in visitors, no per-click paths.
+
+ 3.8 Decisions I need before writing 045
+   P1. Keep the table names (recommended) or the three-step rename?
+   P2. Organization deletion rule for analytics: A (SET NULL, recommended) or B (bare id)?
+   P3. New visit whenever the scope changes (3.5a) - yes/no?
+   P4. Surface allowlist in 3.3 - add or remove any?
+   Also useful: row counts of event_visits and event_page_views.
+
+
+=====================================================================
+4. WHAT I NEED FROM YOU
+=====================================================================
+
+ 1. D6 report + 042 pre-checks and results (unchanged; 042 is not treated as applied).
+ 2. 043: re-read docs/migration-notes/043_event_proposals.txt - it now includes the limit change, a new
+    pre-check F/G, an extended behaviour test (V5), V4b, and a rollback that restores the 033 function.
+    Run the pre-checks and send them; after you report 043 applied I build Phase D.
+ 3. 046_look_first_recovery.sql on the real project, output to me (read-only).
+ 4. 046 itself when you are ready (pre-checks and V1-V4 in its notes). Then I write the closing-credits read
+    (2.2) and society removal (2.4).
+ 5. P1-P4 (3.8), then I write 045.
+ Nothing has been or will be pushed to master.

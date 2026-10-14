@@ -1,8 +1,8 @@
 -- 046: event role history - who held which role on an event, and when it ended.
 --
--- STATUS: PROPOSED FOR REVIEW. NOT APPLIED. Do not run until the design in
--- docs/society-platform-plan-v2.2.txt (section 1) and docs/migration-notes/046_event_role_history.txt
--- have been reviewed and approved.
+-- STATUS: DESIGN APPROVED, NOT APPLIED. Run only when you are ready, after reading
+-- docs/society-platform-plan-v2.3.txt (section 2) and docs/migration-notes/046_event_role_history.txt
+-- and running the pre-checks.
 --
 -- THE THREE TABLES, AND WHAT EACH ONE ANSWERS (they are never mixed)
 --   event_members       what role each person holds on an event NOW

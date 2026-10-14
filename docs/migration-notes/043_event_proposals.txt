@@ -14,9 +14,27 @@ WHAT IT DOES (plain words)
 WHAT IT ADDS (and only this)
   - table  public.event_proposals  (row level security ON, no policies - same as every table since 009)
   - 3 indexes: the admin's queue, "your proposals", and one-event-per-proposal
+  - function public.event_creation_limit()        the one place the limit (40) is written
+  - function public.event_creation_allowed(user)  the one rule that applies it
   - function public.approve_event_proposal(proposal, reviewer, modules, expected_revision)
     callable only by the server (service_role)
-  It does not alter any existing table, column, function or row.
+  - REPLACES the existing function public.create_event_draft (033). Behaviour, arguments, errors, grants
+    and result are unchanged; the only edit is that its inline "40" check now calls event_creation_allowed().
+    This is the one existing object the migration touches, and it is the reason for the extra pre-check F
+    and the matching rollback step. It does not alter any table, column or row.
+
+THE EVENT-CREATION LIMIT (your change 3)
+  The limit that exists today is PER PERSON, not per society: nobody may be admin of more than 40 events
+  (033). It is not a society cap, so I kept its meaning and made it single-sourced. Direct creation,
+  "Run an event again" (which calls create_event_draft) and proposal approval now all go through
+  event_creation_allowed(), and the number 40 appears once, in event_creation_limit().
+  Approval makes the proposer an admin, so it counts against THEIR 40 as if they had created the event.
+  If they are at the limit: no event is created, the proposal is NOT rejected or archived (the whole call
+  is one transaction, so it stays "submitted"), and the API answers 409 with a sentence ("The person who
+  proposed this already organises the maximum of 40 events, so it cannot be approved yet"). The admin can
+  try again once the proposer has room, or request changes / reject it by their own choice.
+  (The separate "society creation limit" of 10 in create_event_draft concerns creating a NEW society, which
+  is closed; it is unrelated and untouched.)
 
 HOW A PROPOSAL MOVES
   submitted -> approved            (an event is created, as a Draft)
@@ -28,25 +46,23 @@ HOW A PROPOSAL MOVES
   moves are single conditional updates made by the API (".. where status = 'submitted'"), so two
   people acting at once get one success and one clear refusal.
 
-REVIEW NOTES / DECISIONS TO CONFIRM
-  1. Modules are not stored on the proposal. At approval the API picks them from the event's template
-     (the same catalogue the New-event wizard uses) and passes them in. The proposer is not asked about
-     modules, which is not a question a resident can answer.
-  2. The new event gets no slug, exactly like create_event_draft today, so its address is /e/<id> until
-     its admin sets a web address in Settings. (Existing behaviour, not new.)
-  3. The creation limits in create_event_draft (40 events per admin) are not applied to approval: they
-     exist to stop one person flooding the system, and approval is a society admin's deliberate act.
-     The API instead limits a person to 3 open proposals per society.
-  4. The proposer becomes Event Admin of the draft, as you specified. Existing rules therefore let them
-     publish it themselves once its readiness checks pass. If you want publishing of an approved
-     proposal to need a society admin as well, say so - it is a small extra check in the publish route,
-     not a schema change.
-  5. A society admin may approve their own proposal. They could have created the event directly, so
-     blocking it would only add a step.
-  6. If the proposer has left the society by the time it is approved, approval is refused with a
-     sentence (they cannot be made admin of one of its events).
-  7. Deleting an account deletes that person's proposals. An approved proposal's event is untouched
-     (the link is simply lost).
+REVIEW NOTES / DECISIONS (all confirmed by you)
+  1. Publishing stays with the Event Admin. Society approval is approval of the idea and delegates management
+     of that event to the proposer: proposal -> society admin approves -> Draft -> proposer is Event Admin ->
+     configures -> existing readiness checks -> Event Admin publishes. No second society approval at
+     publication. A Society Admin keeps their existing authority over the event. (No code or schema is
+     needed for this: it is today's rule.)
+  2. A Society Admin MAY approve their own proposal (the database does not forbid it; they could create the
+     event directly anyway). The UX will not invite it: residents see "Propose an event"; committee and
+     society admins see "Create event". A proposal an admin already owns (e.g. promoted after submitting)
+     can be approved.
+  3. The event-creation limit applies to approval, from one definition (see above).
+  4. Modules are not stored on the proposal. At approval the API picks them from the event's template and
+     passes them in; a resident is not asked about modules.
+  5. The new event gets no slug, exactly like create_event_draft today, so its address is /e/<id> until its
+     admin sets a web address in Settings. (Existing behaviour.)
+  6. If the proposer has left the society by the time it is approved, approval is refused with a sentence.
+  7. Deleting an account deletes that person's proposals; an approved proposal's event is untouched.
 
 ------------------------------------------------------------------------------------
 1. PRE-CHECKS  (run in the Supabase SQL editor; send me the results)
@@ -79,6 +95,20 @@ where table_schema = 'public' and table_name = 'events'
                       'location','description','event_type','template_key','unit_label','status_override')
 order by column_name;
 
+-- F. The function this migration replaces is still the 033 one. Expect 1 row, with has_inline_40 = true and
+--    has_society_cap = true. If either is false, the live function differs from the one I tested against:
+--    send me the output of  select pg_get_functiondef('public.create_event_draft(uuid,jsonb,jsonb)'::regprocedure);
+select proname,
+       prosrc like '%>=40%'                  as has_inline_40,
+       prosrc like '%Society creation limit%' as has_society_cap
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and proname = 'create_event_draft';
+
+-- G. Information: how close anybody is to the limit today (people at or above 30 admin roles). Usually 0 rows.
+select u.full_name, count(*) as events_administered
+from public.event_members m join public.app_users u on u.id = m.user_id
+where m.role = 'admin' group by u.id, u.full_name having count(*) >= 30 order by 2 desc;
+
 ------------------------------------------------------------------------------------
 2. RUN
 ------------------------------------------------------------------------------------
@@ -105,16 +135,24 @@ select has_function_privilege('service_role', 'public.approve_event_proposal(uui
        has_function_privilege('authenticated', 'public.approve_event_proposal(uuid,uuid,jsonb,integer)', 'execute') as authenticated,
        has_function_privilege('anon', 'public.approve_event_proposal(uuid,uuid,jsonb,integer)', 'execute') as anon;
 
--- V5. Behaviour test. Creates a throwaway society, three throwaway users and two proposals, proves
---     a non-admin and the proposer cannot approve, a stale revision is refused, a rejected proposal
---     cannot become an event, approval creates exactly one DRAFT event with the proposer as its admin,
---     a second approval is refused, then deletes everything it made.
---     Expect a NOTICE starting with OK. (It was run against a scratch copy of the schema built from
---     migrations 001-043 and passed.)
+-- V4b. The replaced function keeps its privileges (expect service_role = true, authenticated = false) and the
+--      one limit lives in one place (expect 40).
+select has_function_privilege('service_role', 'public.create_event_draft(uuid,jsonb,jsonb)', 'execute') as service_role,
+       has_function_privilege('authenticated', 'public.create_event_draft(uuid,jsonb,jsonb)', 'execute') as authenticated,
+       public.event_creation_limit() as the_limit;
+
+-- V5. Behaviour test. Creates a throwaway society, three throwaway users, two proposals and 40 throwaway
+--     events, and proves: a non-admin and the proposer cannot approve; a stale revision is refused; a rejected
+--     proposal cannot become an event; direct creation is still refused at the limit with the same message
+--     as before; approval is refused at the limit with its own code, creates nothing and leaves the proposal
+--     submitted; once there is room approval creates exactly one DRAFT event with the proposer as its admin
+--     and uses the proposer's last place; a second approval is refused; below the limit direct creation still
+--     works. Then it deletes everything it made.
+--     Expect a NOTICE starting with OK. (Run against a scratch PostgreSQL built from migrations 001-043 and passed.)
 do $$
 declare
   org uuid; admin_u uuid; prop_u uuid; other_u uuid;
-  p1 uuid; p2 uuid; ev uuid; failed boolean;
+  p1 uuid; p2 uuid; p3 uuid; ev uuid; failed boolean; i int; msg text; code text;
   mods jsonb := '[{"page_key":"dashboard","visibility":"public","is_enabled":true,"label_override":null},{"page_key":"registration","visibility":"authenticated","is_enabled":true,"label_override":null}]';
 begin
   insert into public.app_users (firebase_uid, email, full_name) values ('__t_admin','__t_admin@test.invalid','T Admin') returning id into admin_u;
@@ -126,7 +164,7 @@ begin
   insert into public.event_proposals (organization_id, proposed_by, name, start_date, end_date) values (org, prop_u, 'Test Garba', current_date + 30, current_date + 31) returning id into p1;
   insert into public.event_proposals (organization_id, proposed_by, name, start_date, end_date) values (org, prop_u, 'Test Rejected', current_date + 30, current_date + 31) returning id into p2;
 
-  -- 1. not a society admin
+  -- 1. not a society admin (and the proposer, a resident, cannot approve their own)
   failed := false; begin perform public.approve_event_proposal(p1, other_u, mods); exception when sqlstate '42501' then failed := true; end;
   if not failed then raise exception 'FAILED 1: a non-admin approved'; end if;
   failed := false; begin perform public.approve_event_proposal(p1, prop_u, mods); exception when sqlstate '42501' then failed := true; end;
@@ -134,31 +172,57 @@ begin
   -- 2. stale revision
   failed := false; begin perform public.approve_event_proposal(p1, admin_u, mods, 99); exception when sqlstate 'P0001' then failed := true; end;
   if not failed then raise exception 'FAILED 2: a stale revision was approved'; end if;
-  -- 3. nothing was created by the failures
   if exists (select 1 from public.events where organization_id = org) then raise exception 'FAILED 3: an event exists after refused approvals'; end if;
   -- 4. rejected never becomes an event
   update public.event_proposals set status = 'rejected' where id = p2;
   failed := false; begin perform public.approve_event_proposal(p2, admin_u, mods); exception when sqlstate 'P0001' then failed := true; end;
   if not failed then raise exception 'FAILED 4: a rejected proposal was approved'; end if;
-  -- 5. the real approval
+
+  -- 5. THE EVENT-CREATION LIMIT. Make the proposer a committee member (so direct creation is otherwise
+  --    allowed to them) and give them 40 events to administer.
+  update public.organization_members set role = 'committee' where organization_id = org and user_id = prop_u;
+  for i in 1..40 loop
+    insert into public.events (organization_id, name, start_date, end_date) values (org, 'Cap ' || i, current_date, current_date) returning id into ev;
+    insert into public.event_members (event_id, user_id, role) values (ev, prop_u, 'admin');
+  end loop;
+  -- 5a. direct creation is refused at 40, with today's message
+  failed := false; msg := null;
+  begin perform public.create_event_draft(prop_u, jsonb_build_object('societyId', org, 'eventName','Direct 41','startDate',current_date,'endDate',current_date,'eventType','festival','templateKey','x','unitLabel','Flat'), mods);
+  exception when others then failed := true; msg := sqlerrm; end;
+  if not failed or msg <> 'Event creation limit reached' then raise exception 'FAILED 5a: direct creation not refused as before (%)', msg; end if;
+  -- 5b. approval is refused at 40, with its own sentence and code, creating nothing and leaving the proposal actionable
+  failed := false; code := null;
+  begin perform public.approve_event_proposal(p1, admin_u, mods, 1); exception when others then failed := true; code := sqlstate; msg := sqlerrm; end;
+  if not failed or code <> 'SY001' then raise exception 'FAILED 5b: approval not refused by the limit (%)', code; end if;
+  if (select status from public.event_proposals where id = p1) <> 'submitted' then raise exception 'FAILED 5c: the proposal was not left submitted'; end if;
+  if (select event_id from public.event_proposals where id = p1) is not null then raise exception 'FAILED 5d'; end if;
+  if (select count(*) from public.events where organization_id = org) <> 40 then raise exception 'FAILED 5e: an event was created'; end if;
+  -- 5f. free one place: both paths work again (approval is event 40, a direct create would be 41 and refused)
+  delete from public.event_members where user_id = prop_u and event_id = (select id from public.events where name = 'Cap 1' and organization_id = org);
   ev := public.approve_event_proposal(p1, admin_u, mods, 1);
-  if (select status_override from public.events where id = ev) is distinct from 'draft' then raise exception 'FAILED 5a: not a draft'; end if;
-  if (select role::text from public.event_members where event_id = ev and user_id = prop_u) is distinct from 'admin' then raise exception 'FAILED 5b: proposer is not event admin'; end if;
-  if (select count(*) from public.event_page_visibility where event_id = ev) <> 2 then raise exception 'FAILED 5c: modules'; end if;
-  if not exists (select 1 from public.event_registration_settings where event_id = ev) then raise exception 'FAILED 5d: registration settings'; end if;
-  if (select status from public.event_proposals where id = p1) <> 'approved' or (select event_id from public.event_proposals where id = p1) <> ev then raise exception 'FAILED 5e: proposal not linked'; end if;
-  -- 6. second approval is refused and creates nothing
+  if (select status_override from public.events where id = ev) is distinct from 'draft' then raise exception 'FAILED 5f: not a draft'; end if;
+  failed := false;
+  begin perform public.create_event_draft(prop_u, jsonb_build_object('societyId', org, 'eventName','Direct 41','startDate',current_date,'endDate',current_date,'eventType','festival','templateKey','x','unitLabel','Flat'), mods);
+  exception when others then failed := true; end;
+  if not failed then raise exception 'FAILED 5g: approval did not use up the proposer''s last place'; end if;
+  -- 5h. the approved event: proposer is admin, modules, settings, link
+  if (select role::text from public.event_members where event_id = ev and user_id = prop_u) is distinct from 'admin' then raise exception 'FAILED 5h: proposer is not event admin'; end if;
+  if (select count(*) from public.event_page_visibility where event_id = ev) <> 2 then raise exception 'FAILED 5i: modules'; end if;
+  if not exists (select 1 from public.event_registration_settings where event_id = ev) then raise exception 'FAILED 5j: registration settings'; end if;
+  if (select event_id from public.event_proposals where id = p1) <> ev then raise exception 'FAILED 5k: proposal not linked'; end if;
+  -- 6. second approval refused, nothing extra created
   failed := false; begin perform public.approve_event_proposal(p1, admin_u, mods); exception when sqlstate 'P0001' then failed := true; end;
   if not failed then raise exception 'FAILED 6: approved twice'; end if;
-  if (select count(*) from public.events where organization_id = org) <> 1 then raise exception 'FAILED 6b: more than one event'; end if;
-  -- 7. only one event exists for the rejected one
   if exists (select 1 from public.event_proposals where id = p2 and event_id is not null) then raise exception 'FAILED 7'; end if;
+  -- 8. below the limit, direct creation still works exactly as before
+  delete from public.event_members where user_id = prop_u and event_id = (select id from public.events where name = 'Cap 2' and organization_id = org);
+  ev := public.create_event_draft(prop_u, jsonb_build_object('societyId', org, 'eventName','Direct ok','startDate',current_date,'endDate',current_date,'eventType','festival','templateKey','x','unitLabel','Flat'), mods);
+  if (select status_override from public.events where id = ev) <> 'draft' then raise exception 'FAILED 8'; end if;
 
-  -- cleanup (events cascade from the society)
   delete from public.event_proposals where organization_id = org;
   delete from public.organizations where id = org;
   delete from public.app_users where id in (admin_u, prop_u, other_u);
-  raise notice 'OK: approval guarded, atomic, draft-only, proposer is event admin; test data removed';
+  raise notice 'OK: approval guarded and atomic; draft-only; obeys the same event limit as direct creation, leaving the proposal actionable; test data removed';
 end $$;
 
 -- V6. Nothing left behind (expect 0, 0, 0).
@@ -169,16 +233,45 @@ select (select count(*) from public.organizations where name = '__proposal_test_
 ------------------------------------------------------------------------------------
 4. ROLLBACK
 ------------------------------------------------------------------------------------
-Safe at any time. Events already created by approving a proposal are ordinary events and are NOT
-touched; only the proposal records go.
+Safe at any time. Events already created by approving a proposal are ordinary events and are NOT touched;
+only the proposal records go. The order matters: put the original create_event_draft (033) back FIRST,
+because the new one calls event_creation_allowed().
 
 begin;
+create or replace function public.create_event_draft(p_user uuid,p_input jsonb,p_modules jsonb)
+returns uuid language plpgsql set search_path=public as $$
+declare society uuid; event uuid;
+begin
+ -- Serialize creation by this user so the creation cap cannot be raced.
+ perform 1 from app_users where id=p_user for update;
+ if (select count(*) from event_members where user_id=p_user and role='admin')>=40 then raise exception 'Event creation limit reached'; end if;
+ society:=nullif(p_input->>'societyId','')::uuid;
+ if society is not null then
+  if not exists(select 1 from organization_members where organization_id=society and user_id=p_user and role in ('admin','committee')) then raise exception 'You cannot add an event to that society'; end if;
+ else
+  if (select count(*) from organization_members where user_id=p_user and role='admin')>=10 then raise exception 'Society creation limit reached'; end if;
+  insert into organizations(name) values(p_input->>'societyName') returning id into society;
+  insert into organization_members(organization_id,user_id,role) values(society,p_user,'admin');
+ end if;
+ insert into events(organization_id,name,start_date,end_date,start_time,end_time,location,description,event_type,template_key,unit_label,status_override)
+ values(society,p_input->>'eventName',(p_input->>'startDate')::date,(p_input->>'endDate')::date,
+ nullif(p_input->>'startTime','')::time,nullif(p_input->>'endTime','')::time,
+ coalesce(p_input->>'location',''),coalesce(p_input->>'description',''),p_input->>'eventType',p_input->>'templateKey',p_input->>'unitLabel','draft') returning id into event;
+ insert into event_members(event_id,user_id,role) values(event,p_user,'admin');
+ insert into event_page_visibility(event_id,page_key,visibility,is_enabled,label_override)
+ select event,m->>'page_key',m->>'visibility',(m->>'is_enabled')::boolean,m->>'label_override' from jsonb_array_elements(p_modules) m;
+ insert into event_registration_settings(event_id) values(event);
+ return event;
+end $$;
+
 drop function if exists public.approve_event_proposal(uuid, uuid, jsonb, integer);
+drop function if exists public.event_creation_allowed(uuid);
+drop function if exists public.event_creation_limit();
 drop table if exists public.event_proposals;
 commit;
 
-Note: dropping the table loses the proposals' history (who proposed what, who decided, the notes).
-If you only want to stop the feature, switch it off in the app instead; I can make that one setting.
+Note: dropping the table loses the proposals' history (who proposed what, who decided, the notes). To only
+stop the feature, switch it off in the app instead; I can make that one setting.
 
 ------------------------------------------------------------------------------------
 5. BEFORE AND AFTER YOU RUN IT

@@ -1,6 +1,6 @@
-MIGRATION 046 - event_role_history  (PROPOSED FOR REVIEW; YOU run it by hand, only after approving the design)
+MIGRATION 046 - event_role_history  (design approved; YOU run it by hand)
 File: supabase/migrations/046_event_role_history.sql
-Status: PROPOSED, NOT APPLIED. Design and decisions: docs/society-platform-plan-v2.2.txt section 1.
+Status: DESIGN APPROVED, NOT APPLIED. Design and decisions: docs/society-platform-plan-v2.3.txt section 2.
 
 WHAT IT DOES (plain words)
   Keeps a record of every role a person USED to hold on an event, and when it ended, so that removing
@@ -133,8 +133,12 @@ select (select count(*) from public.organizations where name = '__history_test__
        (select count(*) from public.event_role_history where event_id not in (select id from public.events)) as orphans;
 
 ------------------------------------------------------------------------------------
-4. OPTIONAL, SEPARATE STEP: RECOVER ENDINGS THAT HAPPENED BEFORE 046
+4. OPTIONAL, SEPARATE STEP: RECOVER ENDINGS THAT HAPPENED BEFORE 046   (DO NOT RUN YET)
 ------------------------------------------------------------------------------------
+STATUS: approved only conditionally. FIRST run docs/migration-notes/046_look_first_recovery.sql (read-only,
+works before 046 exists) and send me the output; we inspect exactly which endings can be recovered. Only
+after that review will you decide whether to run the recovery below. I never run it, and nothing runs it
+automatically.
 Roles that ended before this migration are gone from event_members, but audit_log (030) recorded every
 removal and role change - if 030 was applied at the time. This step turns those audit rows into history
 rows so people already removed from an event are not missing from its credits. It is idempotent
