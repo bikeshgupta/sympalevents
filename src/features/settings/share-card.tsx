@@ -86,10 +86,9 @@ export function ShareCard() {
             <BlockRow>
               <code className="block truncate font-mono text-sm text-muted-foreground">{link}</code>
             </BlockRow>
-            <ListRow icon={Copy} tone="blue" title={copied ? "Copied" : "Copy link"} chevron={false} onClick={() => void copyLink()} />
+            <ListRow icon={Copy} title={copied ? "Copied" : "Copy link"} chevron={false} onClick={() => void copyLink()} />
             <ListRow
               icon={RefreshCw}
-              tone="orange"
               title="Replace the link"
               chevron={false}
               disabled={mint.isPending}
@@ -99,7 +98,6 @@ export function ShareCard() {
         ) : (
           <ListRow
             icon={Link2}
-            tone="green"
             title={mint.isPending ? "Making the link..." : "Make a share link"}
             chevron={false}
             disabled={mint.isPending}

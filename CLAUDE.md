@@ -2251,8 +2251,9 @@ grouping**: no setting was added, no permission changed, and which pages an even
 - **The society in Advanced is read-only** (`SocietyForm readOnlyDetails`: a disabled dropdown of the societies the person belongs to, this event's selected, with a link to Manage society). Renaming a society moves every event it runs, so it is edited only in Society Management; choosing a society happens in the new-event form. The invite code is not shown in Settings at all; it is a society credential and lives in Society Management.
 - **Event Settings is an iOS-style inset grouped list** (reference: iOS Settings, mocked and approved). The index is three
   rounded white lists on a warm grey page (`ListGroup` / `ListRow` in settings-page.tsx; hairlines inset past the icon via
-  `.ios-list`), each section a **coloured icon tile with its label**, a short value on the right and a chevron
-  (`SectionDef.group` / `.tone` in settings-sections.ts; `sectionGroups()` is pure and tested). Above them: the event
+  `.ios-list`), each section a **plain line icon with its label** (no coloured tiles any more - see "One icon style"
+  below), a short value on the right and a chevron (`SectionDef.group` in settings-sections.ts; `sectionGroups()` is
+  pure and tested). Above them: the event
   card (links to Basics) and, while gaps exist, a "N items need attention" list from the command centre's checklist. On a
   phone the open section's sheet has a frosted-glass navigation bar (back pill + the section's name); from `lg` the same
   lists are the side navigation. **Every section is now iOS rows** built from [ios-list.tsx](src/features/settings/ios-list.tsx)
@@ -2306,7 +2307,7 @@ exactly as before.**
   the working pages, Settings sections and the wizard: no page-level or container overflow. Keep it that way - a new
   table needs its phone list (UI rules §5).
 - **The wizard** ([create-event-wizard.tsx](src/features/onboarding/create-event-wizard.tsx)) is a grouped list per step
-  (kinds of event as rows with a coloured icon and a tick; details as label/value rows; a review list), a frosted bar
+  (kinds of event as rows with an icon and a tick; details as label/value rows; a review list), a frosted bar
   with a back pill, and three progress bars. State, validation and the create call are unchanged. It reuses
   `ListGroup` / `ListRow` / `FieldRow` from the Settings feature and `DuplicateEventForm ios`.
 
@@ -2351,7 +2352,12 @@ Anything that opens over the page, and the Event Settings section rows, share on
   profile) and pins **View as resident** and **Sign out** (or Sign in) as two buttons underneath, so they never scroll
   away. The current row is matched on the page's own route segment (`routeSegmentFromPath`), not the whole path - a page
   has three address shapes - and not the page key, which folds `/updates` into the dashboard. Fold ids carry a
-  `useId()` prefix because the sidebar and the drawer are both in the page. Settings keeps its coloured tiles.
+  `useId()` prefix because the sidebar and the drawer are both in the page.
+- **One icon style everywhere: plain line icons.** The menu, Event Settings (`ListRow` draws `RowIcon`), the New event
+  wizard and both account menus behind the profile picture (`MenuIcon` in menu-list.tsx, header and Society pages) use
+  the same 18px muted-grey line icon. The coloured iOS tiles were built, shown and dropped on request; the tone fields
+  and colour maps went with them, so do not bring colour back through a `tone` prop. A destructive row (Remove
+  photograph, Sign out) colours its icon and words red.
   A fold opens and closes smoothly (a one-row grid from `0fr` to `1fr`; closed, its links are `aria-hidden` and out of
   the tab order). **Page names have every word capitalised** wherever they are shown - the menu and each page's
   heading (`useVocabulary().labelFor`) - through `titleCase()` ([title-case.ts](src/lib/title-case.ts), tested): a

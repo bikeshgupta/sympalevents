@@ -97,6 +97,3 @@ test('the index is three rounded lists, and a list with nothing the viewer may o
   assert.deepEqual(sectionGroups([]), []);
 });
 
-test('every section has a tone for its icon tile', () => {
-  for (const section of sectionDefs) assert.ok(section.tone, section.key);
-});

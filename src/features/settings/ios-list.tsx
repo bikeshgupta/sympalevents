@@ -1,25 +1,13 @@
 import { ArrowUpRight, Check, ChevronRight, type LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link } from "react-router-dom";
-import type { SectionTone } from "@/features/settings/settings-sections";
 import { cn } from "@/lib/utils";
 
 /**
  * The iOS-Settings building blocks Event Settings is made of: a rounded white list, rows that touch with a hairline
- * between them (inset past the icon), a coloured icon tile, a value and a chevron on the right, switches and a
+ * between them (inset past the icon), a plain line icon, a value and a chevron on the right, switches and a
  * three-way segmented control. Presentation only - every control is still the same handler it was before.
  */
-
-/** iOS Settings gives every row its own colour. Name -> the top and bottom of the tile's gradient. */
-const tones: Record<SectionTone, [string, string]> = {
-  blue: ["#5BA3FF", "#2F7CF6"],
-  red: ["#FF7A6B", "#F0443A"],
-  indigo: ["#8B8CF5", "#5A5BD6"],
-  green: ["#5FD07F", "#2FB457"],
-  orange: ["#FFB04D", "#F58A1F"],
-  pink: ["#FF7AA8", "#EE4A86"],
-  gray: ["#A7A9B2", "#7E808A"],
-};
 
 /** One rounded white list. `header` is the small grey caption above it, `footer` the note below. */
 export function ListGroup({
@@ -57,28 +45,22 @@ export function ListGroup({
   );
 }
 
-export function IconTile({ icon: Icon, tone, size = "md" }: { icon: LucideIcon; tone: SectionTone; size?: "md" | "sm" }) {
-  const [top, bottom] = tones[tone];
-  return (
-    <span
-      aria-hidden="true"
-      className={cn("flex shrink-0 items-center justify-center text-white shadow-[inset_0_0.5px_0_rgba(255,255,255,0.45),0_1px_2px_rgba(0,0,0,0.12)]", size === "sm" ? "h-7 w-7 rounded-lg" : "h-7 w-7 rounded-lg")}
-      style={{ background: `linear-gradient(180deg, ${top}, ${bottom})` }}
-    >
-      <Icon className="h-4 w-4" />
-    </span>
-  );
+/**
+ * A row's icon: a plain line icon in the muted grey, the same as the menu's. The coloured iOS tiles were tried and
+ * dropped - a dozen colours on one screen stopped meaning anything. `destructive` rows (Remove, Sign out) colour it.
+ */
+export function RowIcon({ icon: Icon, destructive = false }: { icon: LucideIcon; destructive?: boolean }) {
+  return <Icon className={cn("h-[18px] w-[18px] shrink-0", destructive ? "text-destructive" : "text-muted-foreground")} aria-hidden="true" />;
 }
 
 /**
- * A row: an icon tile (or a picture), a title, an optional second line, a short value, then a chevron, a tick or an
+ * A row: an icon (or a picture), a title, an optional second line, a short value, then a chevron, a tick or an
  * "opens elsewhere" arrow. A link when it has `href`, a button when it has `onClick`, otherwise plain.
  * On a wide screen the index list is the side navigation, so its value and chevron step aside (`sideNav`) and the
  * open section is tinted.
  */
 export function ListRow({
   icon,
-  tone,
   lead,
   title,
   sub,
@@ -99,7 +81,6 @@ export function ListRow({
   trailing,
 }: {
   icon?: LucideIcon;
-  tone?: SectionTone;
   lead?: ReactNode;
   title: ReactNode;
   sub?: ReactNode;
@@ -123,7 +104,7 @@ export function ListRow({
   const interactive = Boolean(href || onClick);
   const body = (
     <>
-      {lead ?? (icon ? <IconTile icon={icon} tone={tone ?? "gray"} /> : null)}
+      {lead ?? (icon ? <RowIcon icon={icon} destructive={destructive} /> : null)}
       <span className="min-w-0 flex-1">
         <span
           className={cn(
@@ -166,7 +147,7 @@ export function ListRow({
     disabled && "pointer-events-none opacity-50",
     selected && "lg:bg-primary/10",
   );
-  const inset: CSSProperties = { ["--ios-inset" as string]: big ? "5rem" : lead ? "4rem" : icon ? "3.5rem" : "1rem" } as CSSProperties;
+  const inset: CSSProperties = { ["--ios-inset" as string]: big ? "5rem" : lead ? "4rem" : icon ? "2.875rem" : "1rem" } as CSSProperties;
   return (
     <li style={inset}>
       {href ? (

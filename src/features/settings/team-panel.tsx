@@ -455,7 +455,7 @@ export function TeamPanel() {
       </ListGroup>
 
       <ListGroup>
-        <ListRow icon={UserPlus} tone="green" title="Add a person" onClick={() => setParams({ section: "team", person: "new" })} />
+        <ListRow icon={UserPlus} title="Add a person" onClick={() => setParams({ section: "team", person: "new" })} />
       </ListGroup>
     </div>
   );

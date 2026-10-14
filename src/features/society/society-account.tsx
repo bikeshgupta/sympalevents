@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { signOut, useSession } from "@/lib/auth";
 import type { SocietyOption } from "@/lib/event-context";
 import { menuGlass } from "@/lib/glass";
-import { MenuIdentity, MenuList, MenuTile, menuRow } from "@/components/layout/menu-list";
+import { MenuIdentity, MenuList, MenuIcon, menuRow } from "@/components/layout/menu-list";
 
 /**
  * Who is looking at this society.
@@ -109,21 +109,21 @@ export function SocietyAccount({
               <>
                 <DropdownMenu.Item asChild>
                   <Link to="/new-event" className={menuRow}>
-                    <MenuTile icon={Plus} tone="green" />
+                    <MenuIcon icon={Plus} />
                     Create event
                   </Link>
                 </DropdownMenu.Item>
                 {isSocietyAdmin && societySlug ? (
                   <DropdownMenu.Item asChild>
                     <Link to={`/society/${societySlug}/admin`} className={menuRow}>
-                      <MenuTile icon={Settings2} tone="gray" />
+                      <MenuIcon icon={Settings2} />
                       Manage society
                     </Link>
                   </DropdownMenu.Item>
                 ) : null}
                 {hasDrafts ? (
                   <DropdownMenu.Item className={menuRow} onSelect={onShowDrafts}>
-                    <MenuTile icon={FilePenLine} tone="orange" />
+                    <MenuIcon icon={FilePenLine} />
                     <span>
                       Drafts · <span className="tabular-nums">{draftCount}</span>
                     </span>
@@ -133,14 +133,14 @@ export function SocietyAccount({
             ) : null}
             <DropdownMenu.Item asChild>
               <button type="button" className={menuRow} onClick={() => navigate("/profile")}>
-                <MenuTile icon={UserPen} tone="blue" />
+                <MenuIcon icon={UserPen} />
                 My profile
               </button>
             </DropdownMenu.Item>
             <DropdownMenu.Item asChild>
               <button type="button" className={menuRow} onClick={() => void signOut()}>
-                <MenuTile icon={LogOut} tone="red" />
-                Sign out
+                <MenuIcon icon={LogOut} destructive />
+                <span className="text-destructive">Sign out</span>
               </button>
             </DropdownMenu.Item>
           </MenuList>

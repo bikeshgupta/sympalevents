@@ -1,11 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { IconTile } from "@/features/settings/ios-list";
-import type { SectionTone } from "@/features/settings/settings-sections";
+import { RowIcon } from "@/features/settings/ios-list";
 
 /**
  * The account menu in the iOS grouped style: who you are on top, then one rounded white list of actions, each with a
- * small coloured icon tile. The menus keep their items, order, handlers and permissions; this only draws them.
+ * plain line icon, the same as the page menu's. The menus keep their items, order, handlers and permissions; this only draws them.
  */
 
 export function MenuIdentity({
@@ -44,12 +43,12 @@ export function MenuIdentity({
   );
 }
 
-/** A rounded white list inside the menu. Its children are the menu items (use `menuRow` and `MenuTile`). */
+/** A rounded white list inside the menu. Its children are the menu items (use `menuRow` and `MenuIcon`). */
 export function MenuList({ children }: { children: ReactNode }) {
   return (
     <div
       className="ios-list overflow-hidden rounded-2xl bg-white/85 shadow-[0_1px_2px_hsl(var(--foreground)/0.05)] ring-1 ring-black/[0.05]"
-      style={{ ["--ios-inset" as string]: "3.25rem" } as CSSProperties}
+      style={{ ["--ios-inset" as string]: "2.625rem" } as CSSProperties}
     >
       {children}
     </div>
@@ -59,6 +58,7 @@ export function MenuList({ children }: { children: ReactNode }) {
 export const menuRow =
   "flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left text-[15px] outline-none transition-colors focus:bg-black/[0.05] data-[highlighted]:bg-black/[0.05] active:bg-black/[0.06]";
 
-export function MenuTile({ icon, tone }: { icon: LucideIcon; tone: SectionTone }) {
-  return <IconTile icon={icon} tone={tone} size="sm" />;
+/** A menu item's icon. Sign out passes `destructive`, which also colours its words (see `menuRow`'s callers). */
+export function MenuIcon({ icon, destructive = false }: { icon: LucideIcon; destructive?: boolean }) {
+  return <RowIcon icon={icon} destructive={destructive} />;
 }

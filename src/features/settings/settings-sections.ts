@@ -19,29 +19,25 @@ export type SectionKey =
 /** "panel" opens in place; "link" is an existing page elsewhere in the app (Settings has no controls for it). */
 export type SectionKind = "panel" | "link";
 
-/** The colour of a section's icon tile, as iOS Settings gives every row its own. A name here; the shade is the page's. */
-export type SectionTone = "blue" | "red" | "indigo" | "green" | "orange" | "pink" | "gray";
-
 export type SectionDef = {
   key: SectionKey;
   title: string;
   kind: SectionKind;
   /** Which rounded list the row sits in on the index (1-based, in order). Presentation only. */
   group: number;
-  tone: SectionTone;
   /** For links: the page key whose route it opens, and who may see the row (the server's list decides). */
   page?: string;
 };
 
 export const sectionDefs: SectionDef[] = [
-  { key: "basics", title: "Basics", kind: "panel", group: 1, tone: "blue" },
-  { key: "schedule", title: "Schedule & location", kind: "panel", group: 1, tone: "red" },
-  { key: "pages", title: "Pages & access", kind: "panel", group: 1, tone: "indigo" },
-  { key: "team", title: "Team & permissions", kind: "panel", group: 1, tone: "green" },
-  { key: "registration", title: "Registration", kind: "link", page: "registration", group: 2, tone: "orange" },
-  { key: "appearance", title: "Appearance", kind: "panel", group: 2, tone: "pink" },
-  { key: "notifications", title: "Notifications", kind: "link", page: "communications", group: 2, tone: "red" },
-  { key: "advanced", title: "Advanced", kind: "panel", group: 3, tone: "gray" },
+  { key: "basics", title: "Basics", kind: "panel", group: 1 },
+  { key: "schedule", title: "Schedule & location", kind: "panel", group: 1 },
+  { key: "pages", title: "Pages & access", kind: "panel", group: 1 },
+  { key: "team", title: "Team & permissions", kind: "panel", group: 1 },
+  { key: "registration", title: "Registration", kind: "link", page: "registration", group: 2 },
+  { key: "appearance", title: "Appearance", kind: "panel", group: 2 },
+  { key: "notifications", title: "Notifications", kind: "link", page: "communications", group: 2 },
+  { key: "advanced", title: "Advanced", kind: "panel", group: 3 },
 ];
 
 const keys = new Set<string>(sectionDefs.map((section) => section.key));

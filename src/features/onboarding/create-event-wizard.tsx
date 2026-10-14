@@ -8,7 +8,6 @@ import { IosPage } from "@/components/ui/ios-page";
 import { enabledModuleCount, eventTemplates, type EventTemplate } from "@/data/event-templates";
 import { BlockRow, FieldRow, ListGroup, ListRow } from "@/features/settings/ios-list";
 import { fieldInput } from "@/features/settings/ios-styles";
-import type { SectionTone } from "@/features/settings/settings-sections";
 import { DuplicateEventForm } from "@/features/settings/duplicate-event-form";
 import { ModuleEditor, type ModuleDraft } from "@/features/settings/module-editor";
 import { moduleLabelFor } from "@/lib/module-labels";
@@ -41,16 +40,6 @@ const templateIcons: Record<string, typeof Flame> = {
   cultural: Music,
   mixed: PartyPopper,
   blank: Plus,
-};
-
-/** Each kind of event gets its own icon colour in the list, as iOS gives every row one. */
-const templateTones: Record<string, SectionTone> = {
-  garba: "pink",
-  festival: "orange",
-  sports: "green",
-  cultural: "indigo",
-  mixed: "blue",
-  blank: "gray",
 };
 
 type Step = 1 | 2 | 3;
@@ -235,7 +224,6 @@ export function CreateEventWizard() {
                   <ListRow
                     key={item.key}
                     icon={templateIcons[item.key] ?? Flame}
-                    tone={templateTones[item.key] ?? "gray"}
                     title={item.name}
                     sub={item.examples}
                     subWrap
@@ -251,7 +239,6 @@ export function CreateEventWizard() {
                   <ListGroup>
                     <ListRow
                       icon={Copy}
-                      tone="blue"
                       title="Running one of your events again?"
                       sub="Copy it instead"
                       onClick={() => setShowCopy((value) => !value)}
@@ -442,7 +429,6 @@ export function CreateEventWizard() {
               <ListGroup>
                 <ListRow
                   icon={SlidersHorizontal}
-                  tone="gray"
                   title="Customise modules"
                   sub="Optional"
                   onClick={() => setShowModules((value) => !value)}

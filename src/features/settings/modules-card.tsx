@@ -103,7 +103,7 @@ export function ModulesCard() {
             </Button>
           </div>
           <ListGroup>
-            <ListRow icon={LayoutDashboard} tone="indigo" title="Arrange the dashboard" href={eventPath("/customise-dashboard")} />
+            <ListRow icon={LayoutDashboard} title="Arrange the dashboard" href={eventPath("/customise-dashboard")} />
           </ListGroup>
         </>
       )}

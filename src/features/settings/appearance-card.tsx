@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, ImageUp, Trash2 } from "lucide-react";
 import { ChangeEvent, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { BlockRow, IconTile, ListGroup, ListRow } from "@/features/settings/ios-list";
+import { BlockRow, ListGroup, ListRow, RowIcon } from "@/features/settings/ios-list";
 import { HeroOptionsForm } from "@/features/settings/hero-options-form";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
@@ -177,20 +177,20 @@ export function AppearanceCard() {
             </span>
           )}
         </BlockRow>
-        <li style={{ ["--ios-inset" as string]: "3.5rem" } as React.CSSProperties}>
+        <li style={{ ["--ios-inset" as string]: "2.875rem" } as React.CSSProperties}>
           <label
             className={cn(
               "flex min-h-12 w-full cursor-pointer items-center gap-3 px-4 py-2 transition-colors focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring active:bg-black/[0.05]",
               busy && "pointer-events-none opacity-50",
             )}
           >
-            <IconTile icon={ImageUp} tone="blue" />
+            <RowIcon icon={ImageUp} />
             <span className="flex-1 text-[15px]">{heroImageUrl ? "Replace photograph" : "Upload a photograph"}</span>
             <input type="file" accept="image/*" className="sr-only" onChange={chooseHero} disabled={busy} />
           </label>
         </li>
         {heroImageUrl ? (
-          <ListRow icon={Trash2} tone="red" title="Remove photograph" chevron={false} disabled={busy} onClick={() => void clearHero()} />
+          <ListRow icon={Trash2} title="Remove photograph" destructive chevron={false} disabled={busy} onClick={() => void clearHero()} />
         ) : null}
       </ListGroup>
 

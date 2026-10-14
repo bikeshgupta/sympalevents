@@ -22,7 +22,7 @@ import { menuHidesPage } from "@/lib/resident-view";
 import { useViewMode } from "@/lib/view-mode";
 import { navItems } from "./nav-items";
 import { menuGlass } from "@/lib/glass";
-import { MenuIdentity, MenuList, MenuTile, menuRow } from "@/components/layout/menu-list";
+import { MenuIdentity, MenuList, MenuIcon, menuRow } from "@/components/layout/menu-list";
 import { titleCase } from "@/lib/title-case";
 import { cn } from "@/lib/utils";
 import { pageKeyFromPath } from "@/lib/page-access";
@@ -281,22 +281,22 @@ export function AppLayout() {
                   <MenuList>
                     <DropdownMenu.Item asChild>
                       <button type="button" className={menuRow} onClick={() => navigate("/profile")}>
-                        <MenuTile icon={UserPen} tone="blue" />
+                        <MenuIcon icon={UserPen} />
                         My profile
                       </button>
                     </DropdownMenu.Item>
                     {canRequestCommitteeAccess && residentMenu ? (
                       <DropdownMenu.Item asChild>
                         <button type="button" className={menuRow} onClick={() => void requestCommitteeAccess()}>
-                          <MenuTile icon={UserPlus} tone="green" />
+                          <MenuIcon icon={UserPlus} />
                           Request committee access
                         </button>
                       </DropdownMenu.Item>
                     ) : null}
                     <DropdownMenu.Item asChild>
                       <button type="button" className={menuRow} onClick={() => void signOut()}>
-                        <MenuTile icon={LogOut} tone="red" />
-                        Sign out
+                        <MenuIcon icon={LogOut} destructive />
+                        <span className="text-destructive">Sign out</span>
                       </button>
                     </DropdownMenu.Item>
                   </MenuList>

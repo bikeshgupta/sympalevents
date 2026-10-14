@@ -128,12 +128,11 @@ function GoodToKnowEditor({ saved }: { saved: GoodToKnow | null }) {
       {items.length < MAX_ITEMS || !items.length ? (
         <ListGroup>
           {items.length < MAX_ITEMS ? (
-            <ListRow icon={Plus} tone="blue" title="Add an entry" chevron={false} onClick={() => setItems((all) => [...all, { title: "", text: "" }])} />
+            <ListRow icon={Plus} title="Add an entry" chevron={false} onClick={() => setItems((all) => [...all, { title: "", text: "" }])} />
           ) : null}
           {!items.length ? (
             <ListRow
               icon={Sparkles}
-              tone="orange"
               title="Add suggestions"
               chevron={false}
               onClick={() => setItems(suggestedTitles.map((title) => ({ title, text: "" })))}

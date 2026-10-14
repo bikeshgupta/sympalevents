@@ -38,7 +38,6 @@ import {
   readinessTarget,
   sectionDefs,
   sectionGroups,
-  type SectionTone,
   type SectionKey,
 } from "@/features/settings/settings-sections";
 import { ListGroup, ListRow } from "@/features/settings/ios-list";
@@ -216,11 +215,11 @@ function SettingsShell() {
     registration: registrationItem ? (registrationItem.status === "complete" ? "On" : "Off") : undefined,
     appearance: themeByKey(event.theme).name,
   };
-  const gapIcons: Record<string, { icon: LucideIcon; tone: SectionTone }> = {
-    details: { icon: CalendarDays, tone: "red" },
-    hero: { icon: Palette, tone: "pink" },
-    registration: { icon: Ticket, tone: "orange" },
-    programme: { icon: CalendarDays, tone: "blue" },
+  const gapIcons: Record<string, LucideIcon> = {
+    details: CalendarDays,
+    hero: Palette,
+    registration: Ticket,
+    programme: CalendarDays,
   };
   const shownTitle = teamPerson
     ? teamPerson === "new"
@@ -312,12 +311,10 @@ function SettingsShell() {
               >
                 {gaps.map((gap) => {
                   const target = readinessTarget(gap);
-                  const look = gapIcons[gap.key] ?? { icon: AlertCircle, tone: "orange" as SectionTone };
                   return (
                     <ListRow
                       key={gap.key}
-                      icon={look.icon}
-                      tone={look.tone}
+                      icon={gapIcons[gap.key] ?? AlertCircle}
                       sideNav
                       title={gap.label}
                       sub={gap.detail}
@@ -329,7 +326,7 @@ function SettingsShell() {
               </ListGroup>
             ) : headline.tone === "ready" ? (
               <ListGroup footer="Every check passes.">
-                <ListRow icon={Check} tone="green" title={headline.text} value="Publish" href={path("/dashboard")} />
+                <ListRow icon={Check} title={headline.text} value="Publish" href={path("/dashboard")} />
               </ListGroup>
             ) : null}
 
@@ -340,7 +337,6 @@ function SettingsShell() {
                     key={section.key}
                     sideNav
                     icon={sectionIcons[section.key]}
-                    tone={section.tone}
                     title={section.title}
                     value={values[section.key]}
                     selected={section.kind === "panel" && shown === section.key}
@@ -513,7 +509,7 @@ function CreateEventBlock({ signedIn }: { signedIn: boolean }) {
         </>
       }
     >
-      <ListRow icon={Plus} tone="green" title="New event" href="/new-event" disabled={!signedIn} />
+      <ListRow icon={Plus} title="New event" href="/new-event" disabled={!signedIn} />
     </ListGroup>
   );
 }
