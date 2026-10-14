@@ -2178,8 +2178,8 @@ thumbnails and the role badge. Headings, tab labels and the hero title use `.fon
   edge on a phone, `-mx-4`) -> Events (Upcoming / Live / Past text tabs, editorial rows with hairlines) -> From your
   community. Behaviour is unchanged: `getEventStatus` is the status authority, one read feeds the page, permissions
   are `canManage` + the viewer's society role, drafts stay out of the lists.
-- **The page sits outside AppLayout**, so it has its own account line (`SocietyAccount`: avatar, name, role in THIS
-  society, My profile / Sign out; a Sign in row when signed out). The role is a label, never a permission.
+- **The page sits outside AppLayout**, so it has its own account control (`SocietyAccount`: the avatar in the top right; name, role in THIS
+  society and My profile / Sign out are in its menu; a Sign in button when signed out). The role is a label, never a permission.
 - **Greeting** (`greeting.ts`, pure): "Good morning/afternoon/evening, <first name>" from the device's hour; a visitor
   gets the society's name as the heading. Nothing about any society or person is written into the components.
 - **Actions live in the account menu** (`SocietyAccount`), not on the page: Create event, Manage society (society admin)
