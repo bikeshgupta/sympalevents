@@ -1,9 +1,8 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Eye, LogIn, LogOut, Menu, UserPen, X } from "lucide-react";
+import { Eye, LogIn, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { NavList } from "@/components/layout/nav-list";
-import { Button } from "@/components/ui/button";
+import { ListGroup, ListRow } from "@/features/settings/ios-list";
 import { signOut, type AuthSession } from "@/lib/auth";
 import type { navItems } from "./nav-items";
 import { overlayGlass } from "@/lib/glass";
@@ -81,111 +80,97 @@ export function NavDrawer({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className={`fixed inset-0 z-50 ${overlayGlass}`} />
         <DialogPrimitive.Content
-          className="fixed inset-y-0 right-0 z-50 flex w-[min(20rem,85vw)] flex-col border-l glass-panel duration-300 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
+          className="fixed inset-y-0 right-0 z-50 flex w-[min(21rem,88vw)] flex-col bg-[hsl(42_26%_94%)] shadow-[-12px_0_32px_-16px_hsl(var(--foreground)/0.35)] outline-none duration-300 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
         >
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <DialogPrimitive.Title className="text-[15px] font-semibold">Menu</DialogPrimitive.Title>
+          {/* The same grouped lists as Event Settings: who you are, then the pages, then sign out. */}
+          <div className="flex h-14 shrink-0 items-center justify-between px-4">
+            <DialogPrimitive.Title className="font-display text-xl">Menu</DialogPrimitive.Title>
             <DialogPrimitive.Close
               aria-label="Close menu"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="glass glass-press relative inline-flex h-10 w-10 items-center justify-center rounded-full text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <X className="h-5 w-5" aria-hidden="true" />
+              <X className="relative z-10 h-5 w-5" aria-hidden="true" />
             </DialogPrimitive.Close>
           </div>
           <DialogPrimitive.Description className="sr-only">
             Your account, and every page you have access to.
           </DialogPrimitive.Description>
 
-          {/* Who you are, first. */}
-          {session ? (
-            <div className="flex items-center gap-3 border-b px-4 py-3">
-              {session.user.avatarUrl ? (
-                <img
-                  src={session.user.avatarUrl}
-                  alt=""
-                  className="h-10 w-10 shrink-0 rounded-full border object-cover"
-                  referrerPolicy="no-referrer"
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+            {/* Who you are, first. */}
+            {session ? (
+              <ListGroup>
+                <ListRow
+                  big
+                  lead={
+                    session.user.avatarUrl ? (
+                      <img
+                        src={session.user.avatarUrl}
+                        alt=""
+                        className="h-12 w-12 shrink-0 rounded-full border object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border bg-muted text-base font-semibold"
+                      >
+                        {(userName[0] ?? "U").toUpperCase()}
+                      </span>
+                    )
+                  }
+                  title={userName}
+                  sub={session.user.email ?? undefined}
+                  onClick={() => {
+                    close();
+                    onEditName();
+                  }}
                 />
-              ) : (
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-muted text-sm font-semibold">
-                  {(userName[0] ?? "U").toUpperCase()}
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-medium">{userName}</p>
-                {session.user.email ? (
-                  <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                aria-label="My profile"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => {
-                  close();
-                  onEditName();
-                }}
-              >
-                <UserPen className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2 border-b px-4 py-3">
-              <p className="text-sm text-muted-foreground">
-                You are browsing as a guest. Sign in to see the pages the committee has given you.
-              </p>
-              <Button asChild className="w-full">
-                <Link to="/login" onClick={close}>
-                  <LogIn className="h-4 w-4" aria-hidden="true" />
-                  Sign in with Google
-                </Link>
-              </Button>
-            </div>
-          )}
-
-          {viewSwitch ? (
-            <div className="border-b px-3 py-2">
-              <button
-                type="button"
-                aria-pressed={viewSwitch.isPreview}
-                onClick={() => {
-                  close();
-                  viewSwitch.onToggle();
-                }}
-                className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-[15px] font-medium text-muted-foreground active:bg-muted [@media(hover:hover)]:hover:bg-muted [@media(hover:hover)]:hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Eye className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                {viewSwitch.isPreview ? "Exit resident view" : "View as resident"}
-              </button>
-            </div>
-          ) : null}
-
-          <nav aria-label="Pages" className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
-            {items.length ? (
-              <NavList items={items} grouped={grouped} variant="drawer" onNavigate={close} />
+              </ListGroup>
             ) : (
-              <p className="px-3 py-2 text-sm text-muted-foreground">
-                No pages are open to you on this event yet.
-              </p>
+              <ListGroup footer="You are browsing as a guest. Sign in to see the pages the committee has given you.">
+                <ListRow icon={LogIn} tone="blue" title="Sign in with Google" href="/login" onLinkClick={close} />
+              </ListGroup>
             )}
-          </nav>
 
-          {session ? (
-            <div className="border-t p-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  close();
-                  void signOut();
-                }}
-              >
-                <LogOut className="h-4 w-4" aria-hidden="true" />
-                Sign out
-              </Button>
-            </div>
-          ) : null}
+            {viewSwitch ? (
+              <ListGroup>
+                <ListRow
+                  icon={Eye}
+                  tone="gray"
+                  title={viewSwitch.isPreview ? "Exit resident view" : "View as resident"}
+                  chevron={false}
+                  onClick={() => {
+                    close();
+                    viewSwitch.onToggle();
+                  }}
+                />
+              </ListGroup>
+            ) : null}
+
+            <nav aria-label="Pages" className="mt-6">
+              {items.length ? (
+                <NavList items={items} grouped={grouped} onNavigate={close} />
+              ) : (
+                <p className="mt-6 px-2 text-sm text-muted-foreground">No pages are open to you on this event yet.</p>
+              )}
+            </nav>
+
+            {session ? (
+              <ListGroup>
+                <ListRow
+                  icon={LogOut}
+                  tone="red"
+                  title="Sign out"
+                  chevron={false}
+                  onClick={() => {
+                    close();
+                    void signOut();
+                  }}
+                />
+              </ListGroup>
+            ) : null}
+          </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

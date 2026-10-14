@@ -2332,9 +2332,14 @@ Anything that opens over the page, and the Event Settings section rows, share on
   arrive from the right; going back (the sheet closing, Team's list returning, the wizard's previous step) goes the
   other way (the list and the earlier step come in from the left). In-place reveals (copy-from, Customise modules)
   drop from the top instead, since they go nowhere. Page-to-page navigation from the menu is **not** animated.
-- **One row size.** Settings rows are 48px with 15px text and a 28px icon tile (`ListRow`, `FieldRow`); the phone drawer
-  uses the same 48px / 15px row with plain line icons (no tiles - a dozen coloured tiles stop meaning anything), and
-  highlights only the current page. Hover tints are `[@media(hover:hover)]` only, so a tapped row never stays tinted.
+- **One look for every menu.** The phone drawer and the desktop sidebar are the same iOS grouped lists as Event Settings
+  (`NavList` in nav-list.tsx draws both from `ListGroup` / `ListRow`): a warm grey ground, rounded white lists, a coloured
+  icon tile per page (the tile's colour belongs to the page's group - Finance is green, Programme red, and so on - so it
+  says "what kind of thing", not "which row"), the current page tinted at every width, and a fold (Registrations,
+  Programme, Team, Finance) is a row that opens its pages inside its own list. The drawer opens with who you are (a row
+  that opens the name editor), then "View as resident", the pages, and Sign out. Rows are 48px with 15px text everywhere.
+  Hover tints are `[@media(hover:hover)]` only, so a tapped row never stays tinted. Do not give the menu its own row style
+  again: change `ListRow` and every menu follows.
 - **Event Settings on a phone**: the open section is a `fixed` sheet under the app header that slides in from the right
   and back out to the right; the index stays mounted underneath and keeps its scroll position. It is `invisible` +
   `aria-hidden` while closed (visibility is transitioned with the transform so it stays visible for the whole slide out),

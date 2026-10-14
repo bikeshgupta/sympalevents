@@ -87,6 +87,9 @@ export function ListRow({
   href,
   onClick,
   selected = false,
+  current = false,
+  onLinkClick,
+  expanded,
   checked = false,
   unsaved = false,
   external = false,
@@ -108,6 +111,12 @@ export function ListRow({
   href?: string;
   onClick?: () => void;
   selected?: boolean;
+  /** The page being looked at, in a menu: tinted at every width (`selected` only tints from lg, for the side navigation). */
+  current?: boolean;
+  /** Runs when a link row is followed (the drawer closes itself with it). */
+  onLinkClick?: () => void;
+  /** For a row that folds a list open and shut: announces its state. */
+  expanded?: boolean;
   checked?: boolean;
   unsaved?: boolean;
   external?: boolean;
@@ -131,6 +140,7 @@ export function ListRow({
             big ? "font-display text-lg font-semibold leading-tight" : "text-[15px]",
             destructive && "text-destructive",
             selected && "lg:font-semibold",
+            current && "font-semibold",
           )}
         >
           {title}
@@ -165,16 +175,17 @@ export function ListRow({
       "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:bg-black/[0.05] [@media(hover:hover)]:hover:bg-black/[0.03]",
     disabled && "pointer-events-none opacity-50",
     selected && "lg:bg-primary/10",
+    current && "bg-primary/10",
   );
   const inset: CSSProperties = { ["--ios-inset" as string]: big ? "5rem" : lead ? "4rem" : icon ? "3.5rem" : "1rem" } as CSSProperties;
   return (
     <li style={inset}>
       {href ? (
-        <Link to={href} aria-current={selected ? "true" : undefined} className={cls}>
+        <Link to={href} onClick={onLinkClick} aria-current={selected || current ? "true" : undefined} className={cls}>
           {body}
         </Link>
       ) : onClick ? (
-        <button type="button" onClick={onClick} disabled={disabled} className={cls}>
+        <button type="button" onClick={onClick} disabled={disabled} aria-expanded={expanded} className={cls}>
           {body}
         </button>
       ) : (

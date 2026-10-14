@@ -177,7 +177,7 @@ export function AppLayout() {
         accent in the app is already reading these. A default-themed event sets
         nothing at all, so it inherits globals.css untouched. See lib/themes.ts. */}
     <div className={cn("min-h-screen", ios ? "bg-[hsl(42_26%_94%)]" : "bg-background")} style={themeVariables(event?.theme)}>
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-card lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-[hsl(42_26%_94%)] lg:block">
         {/* The society's own name and logo, when it has them. A deployment
             with no society yet falls back to the app's name, which is what
             this always said.
@@ -188,8 +188,8 @@ export function AppLayout() {
             society there is nowhere to go back to, so it stays a plain block
             rather than a link that leads nowhere. */}
         <SocietyBrand society={society} eventName={event?.name} resident={residentMenu} />
-        <nav aria-label="Pages" className="space-y-1 p-3">
-          <NavList items={visibleNavItems} grouped={groupMenu} variant="sidebar" />
+        <nav aria-label="Pages" className="max-h-[calc(100vh-5rem)] overflow-y-auto px-3 pb-6 pt-1">
+          <NavList items={visibleNavItems} grouped={groupMenu} />
         </nav>
       </aside>
 
