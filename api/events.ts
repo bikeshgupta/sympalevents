@@ -17,6 +17,7 @@ import { handleOpportunities } from "./_lib/opportunities.js";
 import { handleCommunications } from "./_lib/communications.js";
 import { handleDuplicateEvent } from "./_lib/duplicate-event.js";
 import { handleSocieties } from "./_lib/societies.js";
+import { handlePlatform } from "./_lib/platform.js";
 import {
   cleanModuleLabel,
   eventPageKeys,
@@ -180,6 +181,10 @@ export default async function handler(req: any, res: any) {
       return handleApiError(res, error);
     }
   }
+
+  // The owner-only Platform Control Center. Read-only, and the same 404 for everybody who is not on the
+  // platform list, whatever the reason - see api/_lib/platform.ts.
+  if (resource === "platform") return handlePlatform(req, res);
 
   try {
     if (req.method !== "POST") {

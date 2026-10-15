@@ -2431,6 +2431,30 @@ audited). Settings -> Event details edits name, venue, dates and hours.
   and transition. Because animations use `both` fill mode they still settle at their
   final state. **Never bypass it with inline styles or `!important`.**
 
+## Platform Control Center (owner-only)
+
+`/platform/analytics/<section>` ([src/features/platform/](src/features/platform/), API
+[api/_lib/platform.ts](api/_lib/platform.ts) on `/api/events?resource=platform&part=...`, no new serverless function).
+Plan, data contracts and phases: [docs/platform-control-center.md](docs/platform-control-center.md).
+
+- **Reached by typing the address. Nothing in the app links to it** (tested). The protection is the server:
+  `checkPlatformAccess` ([shared/platform-access.ts](shared/platform-access.ts), tested) admits only a verified
+  Firebase token whose `app_users.id` is in `PLATFORM_ADMIN_USER_IDS` (server-only env var; empty admits nobody).
+  No society or event role counts. Every refusal is the same `404 {"error":"Not found"}`; the reason goes to the
+  server log as one JSON line (`platform_access_denied`), never the token or an IP.
+- **Read-only, and never `requireAppUser`** (which upserts `app_users` on every call). Every select names its
+  columns; phone, flat, tokens, contact names and payment references are never selected (tested).
+- **The page decides nothing.** `PlatformGate` (main bundle, tiny) asks `part=session`; a 404 draws a plain "Page not
+  found" with no mention of analytics. Only an admitted owner downloads the `platform-app` chunk (`React.lazy`).
+  Platform queries are keyed `"platform"`, which is not in `persistedRoots` (tested).
+- **Honest data.** Every response carries `observedAt`; a missing table is reported as missing (naming its
+  migration), never as zero. `part=sources` probes every table the area reads on each request, because which
+  migrations production has is exactly what drifts. Windows are IST calendar days from
+  [shared/platform-range.ts](shared/platform-range.ts), shared by the page and the API. Event status comes from
+  `shared/event-status.ts` only.
+- Phase 1 (this) is the shell, the guard, the date range, the data states and System. The other six sections show
+  what they will contain and, live, which of their data exists.
+
 ## Working agreement (production app)
 
 1. **No database changes** unless the user has asked for something that genuinely

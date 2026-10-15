@@ -34,7 +34,7 @@ export async function getRequestBody(req: any) {
   return req.body;
 }
 
-async function verifyFirebaseIdToken(token: string) {
+export async function verifyFirebaseIdToken(token: string) {
   if (!firebaseProjectId) {
     throw new Error("Firebase project id is not configured. Missing FIREBASE_PROJECT_ID.");
   }

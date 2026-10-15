@@ -30,6 +30,7 @@ import { ProfilePage } from "@/features/profile/profile-page";
 import { VolunteersPage } from "@/features/volunteers/volunteers-page";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
+import { PlatformGate } from "@/features/platform/platform-gate";
 import { SponsorsPage } from "@/features/sponsors/sponsors-page";
 import { TasksPage } from "@/features/tasks/tasks-page";
 import { TeamsPage } from "@/features/teams/teams-page";
@@ -97,6 +98,11 @@ export function App() {
         {/* Private to society admins; the server decides, this only draws. */}
         <Route path="/society/:societySlug/admin" element={<SocietyAdminPage />} />
       </Route>
+
+      {/* The owner-only Platform Control Center. Reached by typing the address: nothing links here. The server
+          decides who may read it; everybody else gets "Page not found". Outside the page turn, because moving
+          between its sections should not slide its sidebar. See src/features/platform/platform-gate.tsx. */}
+      <Route path="/platform/analytics/*" element={<PlatformGate />} />
 
       {/* The readable address. The `society` and `events` segments are what
           make it collision-proof: a society slugged "login" or "dashboard" can
