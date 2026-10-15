@@ -32,12 +32,7 @@ export const platformSections: PlatformSection[] = [
     icon: LayoutDashboard,
     rangeAware: true,
     uses: ["people", "societies", "memberships", "events", "visits", "audit"],
-    plan: [
-      "Registered users, active societies, events and active people, each against the previous period",
-      "Platform activity over time, with festivals marked",
-      "Events by status, and how many are created and published",
-      "The most active societies, recent actions and anything that needs attention",
-    ],
+    plan: [],
     phase: 2,
   },
   {
@@ -47,11 +42,7 @@ export const platformSections: PlatformSection[] = [
     icon: Users,
     rangeAware: true,
     uses: ["people", "memberships", "event_roles", "visits", "last_seen"],
-    plan: [
-      "A searchable directory: joined, societies, event roles, last recorded visit",
-      "A read-only person view with memberships, roles and recorded activity",
-      "No phone numbers or flat numbers, ever",
-    ],
+    plan: [],
     phase: 2,
   },
   {
@@ -61,11 +52,7 @@ export const platformSections: PlatformSection[] = [
     icon: Building2,
     rangeAware: true,
     uses: ["societies", "memberships", "events", "visits"],
-    plan: [
-      "Total and active societies, using one written activity rule",
-      "New societies and memberships over time",
-      "A ranked, searchable society list with a read-only detail view",
-    ],
+    plan: [],
     phase: 2,
   },
   {
@@ -75,11 +62,7 @@ export const platformSections: PlatformSection[] = [
     icon: CalendarDays,
     rangeAware: true,
     uses: ["events", "bookings", "visits", "audit"],
-    plan: [
-      "The lifecycle right now: draft, upcoming, live, completed, cancelled",
-      "Events created over time, and published once the audit log records it",
-      "A searchable event list with bookings and visits per event",
-    ],
+    plan: [],
     phase: 2,
   },
   {

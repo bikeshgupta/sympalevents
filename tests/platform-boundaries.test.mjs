@@ -15,7 +15,7 @@ const walk = (dir) =>
     return statSync(path).isDirectory() ? walk(path) : [path];
   });
 
-const platformApi = readFileSync('api/_lib/platform.ts', 'utf8');
+const platformApi = readFileSync('api/_lib/platform.ts', 'utf8') + readFileSync('api/_lib/platform-reads.ts', 'utf8');
 const platformCode = platformApi.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 const platformFolder = join('src', 'features', 'platform') + sep;
 
@@ -40,7 +40,7 @@ test('only the route table touches the platform folder, and only through the sma
 
 test('the platform API is read-only and never upserts the caller', () => {
   for (const call of ['.insert(', '.update(', '.upsert(', '.delete(', '.rpc(', 'requireAppUser(']) {
-    assert.ok(!platformCode.includes(call), `api/_lib/platform.ts must not call ${call}`);
+    assert.ok(!platformCode.includes(call), `the platform API must not call ${call}`);
   }
 });
 
@@ -49,6 +49,7 @@ test('the platform API names its columns and never selects private ones', () => 
   const literals = [
     ...[...platformCode.matchAll(/\.select\(\s*"([^"]*)"/g)].map((m) => m[1]),
     ...[...platformCode.matchAll(/(?:timeColumn|column):\s*"([^"]*)"/g)].map((m) => m[1]),
+    ...[...platformCode.matchAll(/Columns = \[([^\]]*)\]/g)].map((m) => m[1].replace(/["\s]/g, '')),
   ];
   assert.ok(literals.length > 5, 'found the selected columns');
   const forbidden = /\b(phone|flat|share_token|pass_token|contact_name|payment_reference)\b/;

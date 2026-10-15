@@ -5,6 +5,7 @@ import {
   platformNotFoundBody,
 } from "../../shared/platform-access.js";
 import { assertServiceSupabase, sendJson, verifyFirebaseIdToken } from "./server.js";
+import { readEvent, readEvents, readOverview, readSocieties, readSociety, readUser, readUsers } from "./platform-reads.js";
 
 /**
  * The owner-only Platform Control Center - `/api/events?resource=platform&part=<part>`.
@@ -21,7 +22,7 @@ import { assertServiceSupabase, sendJson, verifyFirebaseIdToken } from "./server
  *   checks). In particular it never calls `requireAppUser`, which upserts `app_users` on every request; the
  *   owner's visits here must not touch the operational tables.
  * - **Minimum data.** Every select names its columns. Phone, flat, tokens, contact names and payment references
- *   are never selected.
+ *   are never selected. The Phase 2 reads live in platform-reads.ts under the same rules.
  * - **Honest answers.** Every response carries `observedAt`. A source that does not exist is reported as missing,
  *   never as zero.
  * - **Bounded.** Every query shares one 5-second limit; a request that hits it answers 500 and the page says so.
@@ -41,7 +42,7 @@ type ApiResponse = {
 };
 
 type Supabase = ReturnType<typeof assertServiceSupabase>;
-type PartContext = { supabase: Supabase; userId: string; signal: AbortSignal };
+type PartContext = { supabase: Supabase; userId: string; signal: AbortSignal; query: Record<string, unknown> };
 
 const queryLimitMs = 5000;
 
@@ -172,6 +173,13 @@ async function readSources({ supabase, signal }: PartContext) {
 const parts: Record<string, (context: PartContext) => Promise<unknown>> = {
   session: readSession,
   sources: readSources,
+  overview: readOverview,
+  users: readUsers,
+  user: readUser,
+  societies: readSocieties,
+  society: readSociety,
+  events: readEvents,
+  event: readEvent,
 };
 
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -210,10 +218,12 @@ export async function handlePlatform(req: ApiRequest, res: ApiResponse) {
 
   try {
     const supabase = assertServiceSupabase();
-    const body = await parts[part]({ supabase, userId, signal: AbortSignal.timeout(queryLimitMs) });
+    const body = await parts[part]({ supabase, userId, signal: AbortSignal.timeout(queryLimitMs), query: req.query ?? {} });
     return sendJson(res, 200, body);
   } catch (error) {
-    const item = error as { name?: string; message?: string; code?: string };
+    const item = error as { name?: string; message?: string; code?: string; statusCode?: number };
+    // A record that does not exist (or an id that is not one) is a plain 404, like everything else unknown.
+    if (item?.statusCode === 404) return sendJson(res, 404, platformNotFoundBody);
     const timedOut = item?.name === "AbortError" || item?.name === "TimeoutError";
     log("platform_part_failed", { part, timedOut, code: item?.code ?? null, message: item?.message ?? null });
     return sendJson(res, 500, {

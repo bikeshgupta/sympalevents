@@ -2,6 +2,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { CircleDashed, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { isNotFound } from "./platform-api";
 
 /**
  * The four states every data surface in the Control Center has (UI rules §3), plus a fifth this area needs:
@@ -65,7 +66,7 @@ export function UnavailableState({ title, reason, className }: { title: string; 
 /**
  * Draws a query's states. Loading shows the skeleton it is given (the shape of what is coming, never a zero);
  * an error is shown in place with a retry that refetches this query; `isEmpty` decides when loaded data counts as
- * empty.
+ * empty. `notFound` replaces the retry for a 404 - a record that is not there, where trying again cannot help.
  */
 export function QueryState<T>({
   query,
@@ -73,6 +74,7 @@ export function QueryState<T>({
   isEmpty,
   empty,
   errorMessage = "This could not be loaded.",
+  notFound,
   children,
 }: {
   query: UseQueryResult<T, unknown>;
@@ -80,9 +82,11 @@ export function QueryState<T>({
   isEmpty?: (data: T) => boolean;
   empty?: ReactNode;
   errorMessage?: string;
+  notFound?: ReactNode;
   children: (data: T) => ReactNode;
 }) {
   if (query.isPending) return <>{skeleton}</>;
+  if (query.isError && notFound && isNotFound(query.error)) return <>{notFound}</>;
   if (query.isError) {
     const detail = query.error instanceof Error && query.error.message ? ` ${query.error.message}` : "";
     return <ErrorState message={`${errorMessage}${detail}`} onRetry={() => void query.refetch()} retrying={query.isFetching} />;

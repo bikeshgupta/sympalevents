@@ -1,9 +1,23 @@
+import type { ComponentType } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { PlatformSession } from "./platform-api";
-import { platformSections, sectionPath } from "./platform-sections";
+import { platformSections, sectionPath, type PlatformSection, type PlatformSectionKey } from "./platform-sections";
 import { PlatformShell } from "./platform-shell";
+import { EventsSection } from "./sections/events-section";
+import { OverviewSection } from "./sections/overview-section";
 import { PendingSection } from "./sections/pending-section";
+import { SocietiesSection } from "./sections/societies-section";
 import { SystemSection } from "./sections/system-section";
+import { UsersSection } from "./sections/users-section";
+
+/** The built sections; any other section shows what it will hold and which of its data exists (PendingSection). */
+const built: Partial<Record<PlatformSectionKey, ComponentType<{ section: PlatformSection }>>> = {
+  overview: OverviewSection,
+  users: UsersSection,
+  societies: SocietiesSection,
+  events: EventsSection,
+  system: SystemSection,
+};
 
 /**
  * The Platform Control Center, loaded only after the server has confirmed the platform owner (platform-gate.tsx).
@@ -15,13 +29,10 @@ export function PlatformApp({ session }: { session: PlatformSession }) {
     <Routes>
       <Route element={<PlatformShell session={session} />}>
         <Route index element={<Navigate to={{ pathname: sectionPath("overview"), search }} replace />} />
-        {platformSections.map((section) => (
-          <Route
-            key={section.key}
-            path={section.key}
-            element={section.key === "system" ? <SystemSection section={section} /> : <PendingSection section={section} />}
-          />
-        ))}
+        {platformSections.map((section) => {
+          const Section = built[section.key] ?? PendingSection;
+          return <Route key={section.key} path={section.key} element={<Section section={section} />} />;
+        })}
         <Route path="*" element={<UnknownSection />} />
       </Route>
     </Routes>

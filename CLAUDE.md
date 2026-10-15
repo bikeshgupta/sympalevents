@@ -2452,8 +2452,11 @@ Plan, data contracts and phases: [docs/platform-control-center.md](docs/platform
   migrations production has is exactly what drifts. Windows are IST calendar days from
   [shared/platform-range.ts](shared/platform-range.ts), shared by the page and the API. Event status comes from
   `shared/event-status.ts` only.
-- Phase 1 (this) is the shell, the guard, the date range, the data states and System. The other six sections show
-  what they will contain and, live, which of their data exists.
+- Built: Overview, Users, Societies, Events (Phase 2) and System (Phase 1). Activity & Audit and Analytics still
+  show what they will contain and, live, which of their data exists. Society labels and "active people" are
+  written rules in [shared/platform-metrics.ts](shared/platform-metrics.ts) (tested); change them there, not in a
+  page. Server reads are in [api/_lib/platform-reads.ts](api/_lib/platform-reads.ts), bounded and flagged
+  partial when a cap is hit.
 
 ## Working agreement (production app)
 

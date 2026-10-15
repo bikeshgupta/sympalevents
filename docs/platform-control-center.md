@@ -69,16 +69,17 @@ Legend: **O** observed in a table, **D** derived from observed rows by a written
 | Section | Metric | Source and rule | Kind | Coverage notes |
 |---|---|---|---|---|
 | Overview | Registered users | `count(app_users)`; new = `created_at` in window | O | complete |
-| | Active societies | event created in window, or event live during window (not draft/cancelled), or member joined in window | D | joins carry the 023 backfill caveat |
+| | Active societies | event created in window, or an event on during window (not draft/cancelled), or a member joined, or an event page visited, in window. Labels: New (created in window), Active, Quiet (nothing in window, something in 90 days), Dormant (nothing for 90 days), Empty (no events, no members besides the creator). `societyFacts()` in `shared/platform-metrics.ts` | D | joins carry the 023 backfill caveat |
 | | Events | `count(events)`; status via `getEventStatus()` now | O/D | status is a snapshot; past status is never rebuilt |
-| | Active users | distinct `event_visits.user_id` whose visit overlaps the IST window (DAU 1 day, WAU 7, MAU 30) | O | event pages only; from the first `event_visits` row |
+| | Active people | distinct `event_visits.user_id` whose visit overlaps the IST window (DAU 1 day, WAU 7, MAU 30); per-day series counts each day separately and a week shows the daily average, never a sum | O | event pages only; days before the first `event_visits` row are blank, not 0 |
 | | Activity chart | sign-ups/day, visits/day, comparison = previous window | O | visits since first row |
 | | Publications trend | `audit_log` rows `action='publish'` | U | needs 030 |
 | | Recent activity | `audit_log` | U | needs 030 |
 | Users | Directory | `app_users` (id, full_name, email, photo_url, created_at); counts from `organization_members`, `event_members` | O | |
 | | Last activity | max `event_visits.last_seen_at` for the user | O | "No recorded visit" is unknown, not inactive |
 | Societies | Directory, members, events | `organizations`, `organization_members`, `events` | O | members = current; leavers not recorded until 046 |
-| Events | Directory, status, bookings, visits | `events`, `event_closing`, `event_registrations` (status active), `event_visits` | O/D | |
+| Events | Directory, status, bookings, visits | `events`, `event_closing`, `event_registrations` (status active), `event_visits` | O/D | bookings all time; visits in window |
+| | Event record | bookings by `payment_status` (counts only, no amounts), people (adults + children), visits by day and device | O | contributions are the society's, never platform revenue |
 | Activity & Audit | Actions | `audit_log` | U | needs 030 |
 | | Visits | `event_visits` | O | |
 | | Page sequence | `event_page_views` | U | needs 030 |
@@ -106,7 +107,18 @@ Legend: **O** observed in a table, **D** derived from observed rows by a written
   folder, platform API read-only, no forbidden columns, no `select("*")`, guard before dispatch, platform queries
   never persisted to `localStorage`).
 
-**Phase 2 - Overview, Users, Societies, Events** on the contracts above, with drill-downs and detail drawers.
+**Phase 2 - Overview, Users, Societies, Events** (built)
+- `shared/platform-metrics.ts` (pure, tested): IST day buckets, active people, comparisons, status tally, the
+  society labels, and validation of search text, page numbers, choices and ids.
+- `api/_lib/platform-reads.ts`: parts `overview`, `users`, `user`, `societies`, `society`, `events`, `event`.
+  Reads are bounded (pages of 1,000 up to a cap per table) and a capped read is reported as partial. One
+  5-second limit per request. Unknown or malformed ids answer the same 404 as everything else.
+- Pages: each figure opens its list with the filter applied; lists keep search, filters, sort and page in the
+  address; a person, society or event opens in a read-only drawer (`?user=`, `?society=`, `?event=`) that
+  survives a refresh and closes with Back or Escape. Charts compare with the previous period as a dashed line and
+  have a Table view; weeks replace days beyond 92 days.
+- Not built here: festival markers on the activity chart (no festival calendar in the data), events published
+  (needs 030), members leaving (needs 046).
 
 **Phase 3 - Activity & Audit, Analytics.** Audit and page views light up when 030 is confirmed. Prepared
 migration for `platform_access_log` (insert-only, no IP), delivered for manual review and not applied.
