@@ -95,13 +95,14 @@ function Directory({ rows, onOpen }: { rows: UserRow[]; onOpen: (id: string) => 
       {/* Wider screens: the table. */}
       <div className="mt-2 hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
+          <caption className="sr-only">People who have signed in, newest first. Choose a name to open their record.</caption>
           <thead>
             <tr className="border-b border-border/80 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
-              <th className="py-2.5 pr-4 font-semibold">Person</th>
-              <th className="px-4 py-2.5 font-semibold">Joined</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Societies</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Event roles</th>
-              <th className="py-2.5 pl-4 font-semibold">Last visit</th>
+              <th scope="col" className="py-2.5 pr-4 font-semibold">Person</th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">Joined</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-semibold">Societies</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-semibold">Event roles</th>
+              <th scope="col" className="py-2.5 pl-4 font-semibold">Last visit</th>
             </tr>
           </thead>
           <tbody>

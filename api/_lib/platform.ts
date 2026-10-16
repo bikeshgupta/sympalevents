@@ -5,6 +5,10 @@ import {
   platformNotFoundBody,
 } from "../../shared/platform-access.js";
 import { assertServiceSupabase, sendJson, verifyFirebaseIdToken } from "./server.js";
+import { recordPlatformAccess } from "./platform-access-log.js";
+import { readActivity, readAuditEntry } from "./platform-activity.js";
+import { readAnalytics } from "./platform-analytics.js";
+import { readMonitoring } from "./platform-monitoring.js";
 import { readEvent, readEvents, readOverview, readSocieties, readSociety, readUser, readUsers } from "./platform-reads.js";
 
 /**
@@ -20,7 +24,8 @@ import { readEvent, readEvents, readOverview, readSocieties, readSociety, readUs
  *   in the app's JavaScript; it was never meant to be a secret.
  * - **Read-only.** Nothing in this file inserts, updates, upserts, deletes or calls an rpc (tests/platform-boundaries
  *   checks). In particular it never calls `requireAppUser`, which upserts `app_users` on every request; the
- *   owner's visits here must not touch the operational tables.
+ *   owner's visits here must not touch the operational tables. The single exception is the access log
+ *   (platform-access-log.ts, migration 047): a signed-in person opening or being refused at this area.
  * - **Minimum data.** Every select names its columns. Phone, flat, tokens, contact names and payment references
  *   are never selected. The Phase 2 reads live in platform-reads.ts under the same rules.
  * - **Honest answers.** Every response carries `observedAt`. A source that does not exist is reported as missing,
@@ -180,11 +185,18 @@ const parts: Record<string, (context: PartContext) => Promise<unknown>> = {
   society: readSociety,
   events: readEvents,
   event: readEvent,
+  activity: readActivity,
+  audit: readAuditEntry,
+  analytics: readAnalytics,
+  monitoring: readMonitoring,
 };
 
 /* ------------------------------------------------------------------------------------------------------------ */
 /* The route                                                                                                     */
 /* ------------------------------------------------------------------------------------------------------------ */
+
+/** The part name if it is one of ours, else null - what is written to the log is never taken from the request raw. */
+const knownPart = (part: string) => (Object.prototype.hasOwnProperty.call(parts, part) ? part : null);
 
 export async function handlePlatform(req: ApiRequest, res: ApiResponse) {
   res.setHeader?.("X-Robots-Tag", "noindex");
@@ -206,6 +218,10 @@ export async function handlePlatform(req: ApiRequest, res: ApiResponse) {
     });
     if (!access.ok) {
       log("platform_access_denied", { reason: access.reason, part, userId: access.userId ?? null });
+      // Only a verified, signed-in account that is not on the list is worth a row; anybody else stays in the log.
+      if (access.reason === "not_listed" && access.userId) {
+        await recordPlatformAccess(assertServiceSupabase(), { outcome: "refused", reason: access.reason, part: knownPart(part), userId: access.userId }).catch(() => undefined);
+      }
       return sendJson(res, 404, platformNotFoundBody);
     }
     userId = access.userId;
@@ -218,6 +234,8 @@ export async function handlePlatform(req: ApiRequest, res: ApiResponse) {
 
   try {
     const supabase = assertServiceSupabase();
+    // The page asks "session" first on every load, so that is the one call that stands for "opened the area".
+    if (part === "session") await recordPlatformAccess(supabase, { outcome: "allowed", reason: "ok", part, userId });
     const body = await parts[part]({ supabase, userId, signal: AbortSignal.timeout(queryLimitMs), query: req.query ?? {} });
     return sendJson(res, 200, body);
   } catch (error) {

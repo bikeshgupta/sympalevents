@@ -1,0 +1,70 @@
+MIGRATION 047 - platform_access_log  (prepared for review; YOU run it by hand)
+File: supabase/migrations/047_platform_access_log.sql
+Status: PREPARED, NOT APPLIED. Nothing in the app needs it: until it is applied, the Control Center's
+"Attempts to open this area" list says it is not recorded yet, and the refusals stay in the Vercel function log.
+
+WHAT IT DOES (plain words)
+  Records each time a SIGNED-IN person opens, or is refused at, the owner-only Platform Control Center
+  (/platform/analytics), so the owner can see it inside the product. The owner opening the area is recorded as
+  allowed; a signed-in person who is not the owner is recorded as refused. At most one row per person per
+  outcome per five minutes, so refreshing cannot fill the table.
+
+WHAT IT ADDS (and only this)
+  - table public.platform_access_log  (row level security ON, no policies)
+  - 2 indexes
+  It changes no existing table, column or row.
+
+WHAT IS KEPT, AND WHAT IS NOT
+  Kept: when, allowed or refused, a short reason word, which part was asked for, and the account id.
+  Not kept, in any form: IP address, browser/user agent, token, email. The account's name is looked up when the
+  page is read. A request with no token, or a token that does not verify, writes NOTHING - so a stranger
+  hammering the address cannot fill the table. Those requests are in the Vercel function log only.
+
+------------------------------------------------------------------------------------
+1. PRE-CHECKS  (Supabase SQL editor)
+------------------------------------------------------------------------------------
+
+-- A. The table must not exist yet (expect 0 rows).
+select table_name from information_schema.tables where table_schema = 'public' and table_name = 'platform_access_log';
+
+-- B. app_users exists with an id column (expect one row: id).
+select column_name from information_schema.columns where table_schema = 'public' and table_name = 'app_users' and column_name = 'id';
+
+------------------------------------------------------------------------------------
+2. RUN
+------------------------------------------------------------------------------------
+Paste supabase/migrations/047_platform_access_log.sql into the SQL editor and run it once
+(begin ... commit; all or nothing).
+
+------------------------------------------------------------------------------------
+3. VERIFICATION SQL
+------------------------------------------------------------------------------------
+
+-- V1. Table exists, row level security on (expect relrowsecurity = true), and no policies (expect 0 rows).
+select c.relname, c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relname = 'platform_access_log';
+select policyname from pg_policies where schemaname = 'public' and tablename = 'platform_access_log';
+
+-- V2. Exactly these six columns (expect id, occurred_at, outcome, reason, part, user_id - no ip, agent or email).
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'platform_access_log' order by ordinal_position;
+
+-- V3. The shape checks refuse a free-form reason (expect an error, check_violation, on each of the two).
+insert into public.platform_access_log (outcome, reason) values ('refused', '203.0.113.7');
+insert into public.platform_access_log (outcome, reason) values ('maybe', 'ok');
+
+-- V4. Nothing was left behind by V3 (expect 0).
+select count(*) from public.platform_access_log;
+
+------------------------------------------------------------------------------------
+4. AFTER IT IS APPLIED
+------------------------------------------------------------------------------------
+Open /platform/analytics once; Activity & Audit -> "Attempts to open this area" should show one allowed entry
+for you. Nothing else changes.
+
+------------------------------------------------------------------------------------
+5. ROLLBACK
+------------------------------------------------------------------------------------
+Safe at any time; the app then goes back to "not recorded yet":
+
+  drop table if exists public.platform_access_log;

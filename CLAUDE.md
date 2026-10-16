@@ -37,6 +37,8 @@ Supabase). 043 now also replaces `create_event_draft` so the event-creation limi
 function and approval obeys it. 044 does not exist. 045 generalises `event_visits` / `event_page_views` (names kept; surface +
 organization_id, both ids ON DELETE SET NULL; scope = surface + organization + event) and adds
 `app_users.last_seen_at` (seeded once from `updated_at`, approximate). No application code reads 043, 045 or 046 yet.
+**047_platform_access_log is PREPARED, not applied** (note in `docs/migration-notes/`; tested on a scratch PostgreSQL,
+not Supabase). Only the Platform Control Center reads or writes it, and both degrade to "not recorded yet" without it.
 
 ## Commands
 
@@ -2452,8 +2454,13 @@ Plan, data contracts and phases: [docs/platform-control-center.md](docs/platform
   migrations production has is exactly what drifts. Windows are IST calendar days from
   [shared/platform-range.ts](shared/platform-range.ts), shared by the page and the API. Event status comes from
   `shared/event-status.ts` only.
-- Built: Overview, Users, Societies, Events (Phase 2) and System (Phase 1). Activity & Audit and Analytics still
-  show what they will contain and, live, which of their data exists. Society labels and "active people" are
+- Built: all seven sections. Activity & Audit and Analytics (Phase 3) read `audit_log`, `event_visits`,
+  `event_page_views` and the prepared `platform_access_log`; each says "not recorded yet" for a table that is
+  absent. Audit before/after values go through `scrubChanges`; device, browser and place groups under five are
+  folded into "Other". **Migration 047 (`platform_access_log`) is PREPARED, NOT APPLIED**; the one write in this
+  area is `api/_lib/platform-access-log.ts` (signed-in accounts only, throttled, no-op without the table).
+  System can show Vercel deployments if `PLATFORM_VERCEL_TOKEN` and `PLATFORM_VERCEL_PROJECT_ID` are set
+  (untested against the real API). Society labels and "active people" are
   written rules in [shared/platform-metrics.ts](shared/platform-metrics.ts) (tested); change them there, not in a
   page. Server reads are in [api/_lib/platform-reads.ts](api/_lib/platform-reads.ts), bounded and flagged
   partial when a cap is hit.

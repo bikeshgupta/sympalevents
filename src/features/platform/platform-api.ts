@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import type { Deployment } from "../../../shared/platform-monitoring";
 
 /**
  * Reads from `/api/events?resource=platform&part=<part>` - the owner-only Platform Control Center.
@@ -224,3 +225,144 @@ export const useSocieties = (range: string) => usePart<SocietiesData>("societies
 export const useSociety = (id: string | null, range: string) => usePart<SocietyData>("society", { id: id ?? "", range }, { enabled: Boolean(id) });
 export const useEvents = (params: { range: string; q: string; status: string; society: string; page: string }) => usePart<EventsData>("events", params, { keepPrevious: true });
 export const useEvent = (id: string | null, range: string) => usePart<EventData>("event", { id: id ?? "", range }, { enabled: Boolean(id) });
+
+/* -------------------------------------------------------------------------------------------------------- */
+/* Phase 3 contracts - mirrors api/_lib/platform-activity.ts and platform-analytics.ts                         */
+/* -------------------------------------------------------------------------------------------------------- */
+
+export type Facet = { value: string; count: number };
+export type LabelCount = { label: string; count: number };
+type ActivityBase = { observedAt: string; window: WindowJson; days: string[] };
+
+export type ActionEntry = {
+  id: string;
+  at: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  summary: string | null;
+  societyId: string | null;
+  society: string | null;
+  eventId: string | null;
+  event: string | null;
+};
+export type ActionsData = ActivityBase & {
+  view: "actions";
+  available: true;
+  since: string | null;
+  partial: boolean;
+  summary: { total: Comparison; people: Comparison; byAction: Facet[]; byEntity: Facet[]; topActors: { id: string; name: string | null; count: number }[] };
+  series: Series;
+  societies: { id: string; name: string }[];
+  filters: { action: string; entity: string; society: string | null; event: string | null; q: string };
+  page: number;
+  pageSize: number;
+  total: number;
+  entries: ActionEntry[];
+};
+export type VisitEntry = {
+  id: string;
+  eventId: string | null;
+  event: string | null;
+  society: string | null;
+  person: string | null;
+  startedAt: string | null;
+  seconds: number | null;
+  pages: number | null;
+  device: string | null;
+  browser: string | null;
+};
+export type VisitLength = { medianSeconds: number | null; measured: number; total: number };
+export type VisitsData = ActivityBase & {
+  view: "visits";
+  available: true;
+  since: string | null;
+  partial: boolean;
+  summary: { visits: Comparison; people: number; guests: number; length: VisitLength };
+  series: Series;
+  events: { id: string; name: string }[];
+  filters: { who: "all" | "signed_in" | "guests"; event: string | null };
+  page: number;
+  pageSize: number;
+  total: number;
+  visits: VisitEntry[];
+};
+export type AccessAttempt = { id: string; at: string | null; outcome: string; reason: string; part: string | null; person: string | null };
+export type AccessData = ActivityBase & {
+  view: "access";
+  available: true;
+  since: string | null;
+  summary: { allowed: number; refused: number; refusedPeople: number };
+  filters: { outcome: "all" | "allowed" | "refused" };
+  page: number;
+  pageSize: number;
+  total: number;
+  attempts: AccessAttempt[];
+};
+export type ActivityUnavailable = ActivityBase & { view: "actions" | "visits" | "access"; available: false; since: null };
+export type ActivityData = ActionsData | VisitsData | AccessData | ActivityUnavailable;
+
+export type AuditEntryData = {
+  observedAt: string;
+  entry: {
+    id: string;
+    at: string | null;
+    actorId: string | null;
+    actorName: string | null;
+    actorEmail: string | null;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    summary: string | null;
+    societyId: string | null;
+    society: string | null;
+    eventId: string | null;
+    event: string | null;
+    requestId: string | null;
+  };
+  changes: unknown;
+  hiddenValues: number;
+  sameRequest: { id: string; at: string | null; action: string; entityType: string; summary: string | null }[];
+};
+
+export type AnalyticsData = {
+  observedAt: string;
+  window: WindowJson;
+  days: string[];
+  coverage: { visitsAvailable: boolean; visitsSince: string | null; visitsPartial: boolean; pagesAvailable: boolean; bookingsAvailable: boolean; moneyAvailable: boolean };
+  levels: { dau: Comparison; wau: Comparison; mau: Comparison; stickiness: number | null } | null;
+  traffic: { visits: Comparison; people: Comparison; guests: number; length: VisitLength; series: { visits: Series; people: Series } } | null;
+  devices: LabelCount[] | null;
+  browsers: LabelCount[] | null;
+  countries: LabelCount[] | null;
+  cities: LabelCount[] | null;
+  pages: { page: string; views: number; medianSeconds: number | null }[] | null;
+  retention: { cohorts: { month: string; people: number; active: number; share: number | null }[]; activeDays: number } | null;
+  bookings: { bookings: Comparison; people: Comparison; payments: Record<string, number>; series: Series; top: { id: string; name: string; society: string; bookings: number; people: number }[]; partial: boolean } | null;
+  money: { byStatus: { status: string; count: number; received: number }[]; top: { id: string; name: string; society: string; count: number; received: number }[]; partial: boolean } | null;
+};
+
+export const useActivity = (params: Record<string, string>) => usePart<ActivityData>("activity", params, { keepPrevious: true });
+export const useAuditEntry = (id: string | null) => usePart<AuditEntryData>("audit", { id: id ?? "" }, { enabled: Boolean(id) });
+export const useAnalytics = (range: string) => usePart<AnalyticsData>("analytics", { range });
+
+/* -------------------------------------------------------------------------------------------------------- */
+/* Phase 4 - hosting monitoring (optional; "not connected" until the owner adds server secrets)                */
+/* -------------------------------------------------------------------------------------------------------- */
+
+export type VercelMonitoring =
+  | { connected: false }
+  | { connected: true; ok: false; status: number | null }
+  | { connected: true; ok: true; deployments: Deployment[]; latestProduction: Deployment | null; newestFailed: boolean };
+export type MonitoringData = { observedAt: string; vercel: VercelMonitoring };
+
+export function usePlatformMonitoring() {
+  return useQuery({
+    queryKey: ["platform", "monitoring"],
+    queryFn: () => apiFetch<MonitoringData>(platformPath("monitoring")),
+    retry: retryOnce,
+    staleTime: 60_000,
+  });
+}

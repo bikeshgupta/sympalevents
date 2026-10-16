@@ -3,6 +3,8 @@ import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { PlatformSession } from "./platform-api";
 import { platformSections, sectionPath, type PlatformSection, type PlatformSectionKey } from "./platform-sections";
 import { PlatformShell } from "./platform-shell";
+import { ActivitySection } from "./sections/activity-section";
+import { AnalyticsSection } from "./sections/analytics-section";
 import { EventsSection } from "./sections/events-section";
 import { OverviewSection } from "./sections/overview-section";
 import { PendingSection } from "./sections/pending-section";
@@ -16,6 +18,8 @@ const built: Partial<Record<PlatformSectionKey, ComponentType<{ section: Platfor
   users: UsersSection,
   societies: SocietiesSection,
   events: EventsSection,
+  activity: ActivitySection,
+  analytics: AnalyticsSection,
   system: SystemSection,
 };
 

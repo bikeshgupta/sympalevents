@@ -52,3 +52,14 @@ export function sourceDetail(source: PlatformTableSource | PlatformColumnSource)
   const since = formatInstantDate(source.firstAt);
   return `${formatCount(source.rows)} ${source.rows === 1 ? "record" : "records"}${since ? ` since ${since}` : ""}`;
 }
+
+/** "45 s", "3 min", "1 h 05 min" - for how long a visit lasted. */
+export function formatDuration(seconds: number | null | undefined) {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return "—";
+  const total = Math.round(seconds);
+  if (total < 60) return `${total} s`;
+  const minutes = Math.floor(total / 60);
+  if (minutes < 60) return total % 60 ? `${minutes} min ${total % 60} s` : `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} h ${String(minutes % 60).padStart(2, "0")} min`;
+}

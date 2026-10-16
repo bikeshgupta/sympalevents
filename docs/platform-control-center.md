@@ -120,11 +120,35 @@ Legend: **O** observed in a table, **D** derived from observed rows by a written
 - Not built here: festival markers on the activity chart (no festival calendar in the data), events published
   (needs 030), members leaving (needs 046).
 
-**Phase 3 - Activity & Audit, Analytics.** Audit and page views light up when 030 is confirmed. Prepared
-migration for `platform_access_log` (insert-only, no IP), delivered for manual review and not applied.
+**Phase 3 - Activity & Audit, Analytics** (built)
+- `api/_lib/platform-activity.ts`: parts `activity` (views `actions`, `visits`, `access`) and `audit` (one entry).
+  Three records kept apart: what people changed (`audit_log`, 030), who opened event pages (`event_visits`, 028),
+  and who opened or was refused at this area (`platform_access_log`, 047). A missing table is "unavailable".
+- Before/after values pass through `scrubChanges` (shared/platform-metrics.ts, tested): fields named phone,
+  flat, contact, payment reference, token, email or address are replaced with `[hidden]`; emails and phone-like
+  numbers inside text are masked; depth and length are bounded. The page says how many values were withheld.
+- `api/_lib/platform-analytics.ts`: part `analytics`. Active people (daily/weekly/monthly) are distinct signed-in
+  people counted from visit records (`activityLevels`, tested to nest); traffic; devices, browsers and places with
+  groups under five folded into "Other" (`mergeSmall`); pages (needs 030); sign-up-month retention; bookings; and
+  contributions by status and event, labelled as societies' money, never Sympal revenue.
+- **Migration 047 `platform_access_log` is PREPARED, NOT APPLIED** (`supabase/migrations/047_platform_access_log.sql`,
+  note in `docs/migration-notes/`). Insert-only, no IP, user agent, token or email; RLS on, no policies. Tested on a
+  scratch PostgreSQL 16 (apply, re-apply, check constraints, user deletion), not on Supabase.
+  `api/_lib/platform-access-log.ts` is the **one** write in the area: only for a verified signed-in account (the
+  owner opening the area, or a signed-in non-owner refused), at most one row per person per outcome per five
+  minutes, never in the way of the answer, and a no-op while the table is absent. Strangers are not recorded.
 
-**Phase 4 - System monitoring and quality.** Vercel and Supabase APIs only if tokens are provided, plus a
-responsive, accessibility, pagination and query-cost pass.
+**Phase 4 - System monitoring and quality** (built)
+- Optional Vercel connection (`PLATFORM_VERCEL_TOKEN`, `PLATFORM_VERCEL_PROJECT_ID`, `PLATFORM_VERCEL_TEAM_ID`,
+  server secrets; part `monitoring`): a GET of the deployment list; the token is never returned or logged and a
+  failure reports only the HTTP status. Without it System says "Not connected". **The Vercel call has not been
+  exercised against the real API** - only its response mapping is tested. Supabase platform metrics are not
+  connected; System keeps measuring what it can observe (round trip, row counts, data sources).
+- Query cost: a page of Users made about 75 queries and a page of Events about 50; each is now two or three
+  (batched `in` reads). A capped read shows a dash, never a number that may be too low.
+- Accessibility: `Choices` is a real radio group (one tab stop, arrow keys, Home/End); tables have captions and
+  column scopes; windows compare instants rather than text (a row exactly on an IST midnight was misplaced).
+- Not done: festival markers (no festival calendar); Supabase metrics; a pass with a screen reader.
 
 ## 5. Setting it up (owner)
 
@@ -132,5 +156,8 @@ responsive, accessibility, pagination and query-cost pass.
    `select id, email from public.app_users where email = '<your Google email>';`
 2. Add `PLATFORM_ADMIN_USER_IDS=<that id>` to `.env` locally and as a Secret in Vercel.
 3. Sign in to Sympal Events as usual, then type `/platform/analytics` in the address bar.
+4. Optional: to see deployments on System, add `PLATFORM_VERCEL_TOKEN` (read access to deployments for this
+   project only) and `PLATFORM_VERCEL_PROJECT_ID` (plus `PLATFORM_VERCEL_TEAM_ID` for a team project) as Secrets.
+5. Optional: to record who tries the area, review and run migration 047 by hand (see its note).
 
 Anyone else, signed in or not, sees "Page not found", and the API answers 404.

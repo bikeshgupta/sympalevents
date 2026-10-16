@@ -183,13 +183,14 @@ function EventList({ rows, onOpen }: { rows: EventRow[]; onOpen: (id: string) =>
       </ul>
       <div className="mt-2 hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
+          <caption className="sr-only">Events with their status, dates, bookings and visits. Choose a name to open its record.</caption>
           <thead>
             <tr className="border-b border-border/80 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
-              <th className="py-2.5 pr-4 font-semibold">Event</th>
-              <th className="px-4 py-2.5 font-semibold">Status</th>
-              <th className="px-4 py-2.5 font-semibold">Dates</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Bookings</th>
-              <th className="py-2.5 pl-4 text-right font-semibold">Visits</th>
+              <th scope="col" className="py-2.5 pr-4 font-semibold">Event</th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">Status</th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">Dates</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-semibold">Bookings</th>
+              <th scope="col" className="py-2.5 pl-4 text-right font-semibold">Visits</th>
             </tr>
           </thead>
           <tbody>

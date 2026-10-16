@@ -34,8 +34,15 @@ export function daysIn(window: Window): string[] {
   return days;
 }
 
-export const inWindow = (value: string | null | undefined, window: Window) =>
-  Boolean(value) && value! >= window.from && value! < window.to;
+/**
+ * Compared as instants, not as text: the database writes `…18:30:00+00:00` and the windows are `…18:30:00.000Z`, and
+ * as text those order wrongly for a row exactly on an IST midnight.
+ */
+export const inWindow = (value: string | null | undefined, window: Window) => {
+  if (!value) return false;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && time >= Date.parse(window.from) && time < Date.parse(window.to);
+};
 
 /** How many instants fall on each IST day of the window. Days with none are 0: a counted absence, not a gap. */
 export function countByDay(values: (string | null | undefined)[], window: Window): { day: string; value: number }[] {
@@ -51,7 +58,7 @@ export function countByDay(values: (string | null | undefined)[], window: Window
 export type VisitRow = { event_id: string | null; user_id: string | null; started_at: string; last_seen_at: string | null };
 
 const overlaps = (visit: VisitRow, window: Window) =>
-  visit.started_at < window.to && (visit.last_seen_at ?? visit.started_at) >= window.from;
+  Date.parse(visit.started_at) < Date.parse(window.to) && Date.parse(visit.last_seen_at ?? visit.started_at) >= Date.parse(window.from);
 
 /** Distinct signed-in people with a visit overlapping the window. */
 export function activePeople(visits: VisitRow[], window: Window): Set<string> {
@@ -193,6 +200,138 @@ export function societyFacts(
     else fact.label = "dormant";
   }
   return facts;
+}
+
+/* ---------------------------------------------------------------------------------------------------------- */
+/* Activity levels, retention and small groups (Phase 3)                                                        */
+/* ---------------------------------------------------------------------------------------------------------- */
+
+/**
+ * DAU, WAU and MAU: distinct signed-in people with a visit overlapping the last 1, 7 and 30 IST days ending at
+ * `to`, each against the span of the same length before it. Counted from the visit records, never estimated from
+ * visit totals, so a person who visits ten times is one person. Event pages only (that is all that is recorded).
+ */
+export function activityLevels(visits: VisitRow[], to: string) {
+  const span = (days: number) => {
+    const end = Date.parse(to);
+    const current = { from: new Date(end - days * dayMs).toISOString(), to };
+    const previous = { from: new Date(end - 2 * days * dayMs).toISOString(), to: current.from };
+    return compare(activePeople(visits, current).size, activePeople(visits, previous).size);
+  };
+  const dau = span(1);
+  const wau = span(7);
+  const mau = span(30);
+  return { dau, wau, mau, stickiness: mau.current > 0 ? dau.current / mau.current : null };
+}
+
+/** Sign-up months (IST) with how many of that month's sign-ups are in `active`, oldest first, last `months` only. */
+export function signupCohorts(users: { id: string; created_at: string | null }[], active: Set<string>, months = 12) {
+  const cohorts = new Map<string, { people: number; active: number }>();
+  for (const user of users) {
+    const day = istDayOf(user.created_at);
+    if (!day) continue;
+    const month = day.slice(0, 7);
+    const cohort = cohorts.get(month) ?? { people: 0, active: 0 };
+    cohort.people += 1;
+    if (active.has(user.id)) cohort.active += 1;
+    cohorts.set(month, cohort);
+  }
+  return [...cohorts]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-months)
+    .map(([month, cohort]) => ({ month, people: cohort.people, active: cohort.active, share: cohort.people ? cohort.active / cohort.people : null }));
+}
+
+export function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+/**
+ * The median length of the visits that lasted at least a second, with how many that was out of all of them. A
+ * visit with a single heartbeat has no measurable length (there is no close-out beat), so it is left out of the
+ * median and said so, rather than pulling the figure towards zero.
+ */
+export function visitLength(visits: { started_at: string; last_seen_at: string | null }[]) {
+  const seconds = visits
+    .map((visit) => (Date.parse(visit.last_seen_at ?? visit.started_at) - Date.parse(visit.started_at)) / 1000)
+    .filter((value) => Number.isFinite(value) && value >= 1);
+  return { medianSeconds: median(seconds), measured: seconds.length, total: visits.length };
+}
+
+/** Counts of labels; an empty or missing label is "Unknown". */
+export function tallyLabels(values: (string | null | undefined)[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const value of values) {
+    const label = String(value ?? "").trim() || "Unknown";
+    counts[label] = (counts[label] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Groups smaller than `min` are folded into "Other", so a group of one or two (a single person's phone or town)
+ * is never shown by itself. Sorted largest first, "Other" last.
+ */
+export function mergeSmall(counts: Record<string, number>, min = 5): { label: string; count: number }[] {
+  const kept: { label: string; count: number }[] = [];
+  let other = 0;
+  for (const [label, count] of Object.entries(counts)) {
+    if (count >= min) kept.push({ label, count });
+    else other += count;
+  }
+  kept.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  if (other > 0) kept.push({ label: "Other", count: other });
+  return kept;
+}
+
+/* ---------------------------------------------------------------------------------------------------------- */
+/* Audit values                                                                                                 */
+/* ---------------------------------------------------------------------------------------------------------- */
+
+/** Field names whose values are never shown: contact details, flats, payment references, credentials, addresses. */
+const hiddenField = /(^|_)(phone|mobile|whatsapp|flat|flat_no|unit|contact|reference|utr|upi|token|secret|password|email|address)(_|$)/i;
+const emailPattern = /[^\s@]+@[^\s@]+\.[^\s@]+/g;
+const phonePattern = /(?:\+?\d[\s-]?){9,}\d/g;
+const hiddenText = "[hidden]";
+
+/** Masks an email address or phone-number-like run inside free text. */
+export function maskPersonal(text: string): string {
+  return text.replace(emailPattern, hiddenText).replace(phonePattern, hiddenText);
+}
+
+/**
+ * Makes an audit entry's before-and-after values safe to show the platform owner: values under contact, flat,
+ * payment-reference, token, email or address fields are replaced, emails and phone-like numbers inside any text
+ * are masked, long text is cut, and depth and length are bounded. `hidden` says how many values were withheld so
+ * the page can say so instead of silently dropping them.
+ */
+export function scrubChanges(value: unknown): { value: unknown; hidden: number } {
+  let hidden = 0;
+  const walk = (node: unknown, depth: number): unknown => {
+    if (node === null || typeof node === "number" || typeof node === "boolean") return node;
+    if (typeof node === "string") {
+      const masked = maskPersonal(node);
+      if (masked !== node) hidden += 1;
+      return masked.length > 200 ? `${masked.slice(0, 200)}…` : masked;
+    }
+    if (depth >= 4) return "…";
+    if (Array.isArray(node)) return node.slice(0, 20).map((item) => walk(item, depth + 1));
+    if (typeof node === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [key, inner] of Object.entries(node as Record<string, unknown>).slice(0, 40)) {
+        if (hiddenField.test(key)) {
+          hidden += 1;
+          out[key] = hiddenText;
+        } else out[key] = walk(inner, depth + 1);
+      }
+      return out;
+    }
+    return String(node);
+  };
+  return { value: walk(value, 0), hidden };
 }
 
 /* ---------------------------------------------------------------------------------------------------------- */

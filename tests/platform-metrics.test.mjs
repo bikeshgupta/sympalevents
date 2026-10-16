@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   activePeople, activePeopleByDay, cleanSearch, compare, countByDay, daysIn, isUuid, istDayOf, readChoice, readPage,
-  societyFacts, tallyStatuses,
+  societyFacts, tallyStatuses, inWindow, activityLevels, signupCohorts, median, visitLength, tallyLabels, mergeSmall, scrubChanges, maskPersonal,
 } from '../shared/platform-metrics.ts';
 import { platformWindow } from '../shared/platform-range.ts';
 
@@ -96,4 +96,92 @@ test('request parameters are cleaned before they reach a query', () => {
   assert.equal(readChoice('drop table', ['all', 'live'], 'all'), 'all');
   assert.equal(isUuid('6f1c2a90-3b7e-4d1a-9c55-0e2f4a1b7c11'), true);
   assert.equal(isUuid("1' or 1=1"), false);
+});
+
+test('DAU, WAU and MAU are distinct people in nested windows, not visit counts', () => {
+  const to = w7.to;
+  const visits = [
+    visit('a', ist('2026-10-15', '09:00')), visit('a', ist('2026-10-15', '10:00')), visit('a', ist('2026-10-15', '10:20')),
+    visit('b', ist('2026-10-12')),
+    visit('c', ist('2026-10-01')),
+    visit(null, ist('2026-10-15', '09:30')),
+    visit('d', ist('2026-09-27')),
+  ];
+  const levels = activityLevels(visits, to);
+  assert.equal(levels.dau.current, 1, 'one person visited three times today');
+  assert.equal(levels.wau.current, 2);
+  assert.equal(levels.mau.current, 4);
+  assert.ok(levels.dau.current <= levels.wau.current && levels.wau.current <= levels.mau.current);
+  assert.equal(levels.stickiness, 0.25);
+  assert.equal(activityLevels([], to).stickiness, null, 'no stickiness without anyone active');
+});
+
+test('sign-up cohorts count how many of each month are active, oldest first', () => {
+  const users = [
+    { id: '1', created_at: ist('2026-08-03') }, { id: '2', created_at: ist('2026-08-20') },
+    { id: '3', created_at: ist('2026-09-02') }, { id: '4', created_at: null },
+  ];
+  const cohorts = signupCohorts(users, new Set(['1', '3']));
+  assert.deepEqual(cohorts, [
+    { month: '2026-08', people: 2, active: 1, share: 0.5 },
+    { month: '2026-09', people: 1, active: 1, share: 1 },
+  ]);
+  assert.equal(signupCohorts(users, new Set(), 1).length, 1);
+});
+
+test('visit length leaves out visits too short to measure and says how many it measured', () => {
+  assert.equal(median([]), null);
+  assert.equal(median([3, 1, 2]), 2);
+  assert.equal(median([1, 2, 3, 4]), 2.5);
+  const result = visitLength([
+    { started_at: ist('2026-10-15', '10:00'), last_seen_at: ist('2026-10-15', '10:02') },
+    { started_at: ist('2026-10-15', '10:00'), last_seen_at: ist('2026-10-15', '10:04') },
+    { started_at: ist('2026-10-15', '10:00'), last_seen_at: ist('2026-10-15', '10:00') },
+    { started_at: ist('2026-10-15', '10:00'), last_seen_at: null },
+  ]);
+  assert.deepEqual(result, { medianSeconds: 180, measured: 2, total: 4 });
+});
+
+test('small groups are folded into Other so nobody is shown alone', () => {
+  const counts = tallyLabels(['iPhone', 'iPhone', 'iPhone', 'iPhone', 'iPhone', 'Android', 'Android', 'Android', 'Android', 'Android', 'Android', 'Pixel', 'Nokia', '', null]);
+  assert.equal(counts.Unknown, 2);
+  assert.deepEqual(mergeSmall(counts), [
+    { label: 'Android', count: 6 }, { label: 'iPhone', count: 5 }, { label: 'Other', count: 4 },
+  ]);
+  assert.deepEqual(mergeSmall({ a: 9 }), [{ label: 'a', count: 9 }], 'no Other when nothing is small');
+});
+
+test('audit values never show contact details, flats, references, tokens or addresses', () => {
+  const { value, hidden } = scrubChanges({
+    amount: { from: 5000, to: 500 },
+    phone: '9876543210',
+    flat_no: 'B-402',
+    payment_reference: 'UTR123',
+    share_token: '[redacted]',
+    contact: { name: 'x' },
+    note: 'call me on +91 98765 43210 or a@b.co',
+    nested: { deep: { deeper: { deepest: { too: 'far' } } } },
+    items: Array.from({ length: 30 }, (_, index) => index),
+    long: 'x'.repeat(500),
+  });
+  assert.deepEqual(value.amount, { from: 5000, to: 500 });
+  for (const key of ['phone', 'flat_no', 'payment_reference', 'share_token', 'contact']) assert.equal(value[key], '[hidden]', key);
+  assert.equal(value.note, 'call me on [hidden] or [hidden]');
+  assert.equal(value.items.length, 20);
+  assert.equal(value.long.length, 201);
+  assert.equal(value.nested.deep.deeper.deepest, '…');
+  assert.equal(hidden, 6, 'five hidden fields and one masked text value');
+  assert.equal(maskPersonal('plain words'), 'plain words');
+  assert.equal(scrubChanges(null).value, null);
+});
+
+test('windows compare instants, so the database and window spellings of one moment agree', () => {
+  const edge = { from: '2026-10-08T18:30:00.000Z', to: '2026-10-15T18:30:00.000Z' };
+  assert.equal(inWindow('2026-10-08T18:30:00+00:00', edge), true, 'a row exactly on the start is inside');
+  assert.equal(inWindow('2026-10-15T18:30:00+00:00', edge), false, 'a row exactly on the end is outside');
+  assert.equal(inWindow('2026-10-08T18:29:59.999999+00:00', edge), false);
+  assert.equal(inWindow(null, edge), false);
+  assert.equal(inWindow('garbage', edge), false);
+  const seen = activePeople([{ event_id: 'e', user_id: 'u', started_at: '2026-10-08T17:00:00+00:00', last_seen_at: '2026-10-08T18:30:00+00:00' }], edge);
+  assert.equal(seen.size, 1, 'a visit that ended exactly at the start still overlaps');
 });

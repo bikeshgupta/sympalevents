@@ -11,7 +11,7 @@ const zone = "Asia/Kolkata";
 
 /** "▲ 29% vs the 30 days before" - or a plain sentence when there is nothing earlier to compare with. */
 export function changeText(value: Comparison, days: number) {
-  const span = days === 365 ? "12 months" : `${days} days`;
+  const span = days === 365 ? "12 months" : days === 1 ? "day" : `${days} days`;
   if (value.change === null) return value.current > 0 ? `None in the ${span} before` : `Same as the ${span} before`;
   if (Math.abs(value.change) < 0.005) return `Same as the ${span} before`;
   const pct = Math.abs(value.change * 100);

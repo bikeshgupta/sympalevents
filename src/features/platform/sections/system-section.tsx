@@ -3,7 +3,8 @@ import { cn } from "@/lib/utils";
 import { QueryState, Skeleton } from "../data-states";
 import { formatCount, formatInstantDate, sourceDetail } from "../format";
 import { PageHeader, SectionHeading } from "../page-header";
-import { usePlatformSources, type PlatformSources } from "../platform-api";
+import { usePlatformMonitoring, usePlatformSources, type PlatformSources } from "../platform-api";
+import { sinceText } from "../platform-helpers";
 import type { PlatformSection } from "../platform-sections";
 import { SourceStatusLabel } from "../source-status";
 
@@ -17,6 +18,8 @@ import { SourceStatusLabel } from "../source-status";
  */
 export function SystemSection({ section }: { section: PlatformSection }) {
   const sources = usePlatformSources();
+  const monitoring = usePlatformMonitoring();
+  const refreshing = sources.isFetching || monitoring.isFetching;
   return (
     <div>
       <PageHeader
@@ -27,12 +30,12 @@ export function SystemSection({ section }: { section: PlatformSection }) {
         actions={
           <button
             type="button"
-            onClick={() => void sources.refetch()}
-            disabled={sources.isFetching}
+            onClick={() => void Promise.all([sources.refetch(), monitoring.refetch()])}
+            disabled={refreshing}
             className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border bg-card px-3 text-sm hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
           >
-            <RefreshCw className={cn("h-4 w-4", sources.isFetching && "animate-spin")} aria-hidden="true" />
-            {sources.isFetching ? "Reading" : "Read again"}
+            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} aria-hidden="true" />
+            {refreshing ? "Reading" : "Read again"}
           </button>
         }
       />
@@ -113,12 +116,81 @@ function SystemReadings({ data }: { data: PlatformSources }) {
           <SectionHeading title="Hosting monitoring" />
         </div>
         <ul className="divide-y divide-border/70">
-          <Monitor name="Vercel" covers="Deployments, failed requests and response times" needs="Needs a Vercel API token stored as a server secret." />
-          <Monitor name="Supabase" covers="Database load, connections and storage" needs="Needs a Supabase management token stored as a server secret." />
+          <VercelRow />
+          <Monitor
+            name="Supabase"
+            covers="Database load, connections and storage"
+            needs="Not connected. The database response time and row counts above are measured directly; use the Supabase dashboard for load and storage."
+          />
         </ul>
-        <p className="mt-3 text-sm text-muted-foreground">Until these are connected, this page shows no error rates or response times rather than guessing them.</p>
+        <p className="mt-3 text-sm text-muted-foreground">This page shows no error rates or response times it cannot measure, rather than guessing them.</p>
       </section>
     </div>
+  );
+}
+
+const deploymentWords: Record<string, string> = { ready: "Ready", error: "Failed", building: "Building", queued: "Queued", canceled: "Canceled", unknown: "Unknown" };
+
+/** Vercel, if the owner connected it: the newest production deployment and the recent ones. A GET; changes nothing. */
+function VercelRow() {
+  const monitoring = usePlatformMonitoring();
+  const covers = "Deployments and whether they succeeded";
+  if (monitoring.isPending) {
+    return (
+      <li className="py-3.5" role="status" aria-label="Checking Vercel">
+        <p className="font-medium">Vercel</p>
+        <Skeleton className="mt-2 h-4 w-48" />
+      </li>
+    );
+  }
+  if (monitoring.isError) {
+    return <Monitor name="Vercel" covers={covers} status="error" label="Could not be read" needs="The monitoring read failed. Try again." />;
+  }
+  const vercel = monitoring.data.vercel;
+  if (!vercel.connected) {
+    return <Monitor name="Vercel" covers={covers} needs="Not connected. Set PLATFORM_VERCEL_TOKEN and PLATFORM_VERCEL_PROJECT_ID as server secrets, then redeploy." />;
+  }
+  if (!vercel.ok) {
+    return (
+      <Monitor
+        name="Vercel"
+        covers={covers}
+        status="error"
+        label="Could not be read"
+        needs={vercel.status ? `Vercel answered ${vercel.status}. Check the token's access and the project id.` : "Vercel could not be reached."}
+      />
+    );
+  }
+  const latest = vercel.latestProduction;
+  return (
+    <li className="py-3.5">
+      <div className="grid gap-x-6 gap-y-1 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.3fr)] sm:items-center">
+        <div>
+          <p className="font-medium">Vercel</p>
+          <p className="text-xs text-muted-foreground">{covers}</p>
+        </div>
+        <div className="text-sm">
+          <SourceStatusLabel status={vercel.newestFailed ? "error" : "available"} label={vercel.newestFailed ? "Newest deployment failed" : "Connected"} />
+        </div>
+        <p className="text-sm text-muted-foreground sm:text-right">
+          {latest ? `Live: ${deploymentWords[latest.state]}${latest.commit ? ` · ${latest.commit}` : ""}${latest.createdAt ? ` · ${sinceText(latest.createdAt)}` : ""}` : "No production deployment in the latest eight"}
+        </p>
+      </div>
+      <ul className="mt-3 divide-y divide-border/50 rounded-lg border border-border/70 px-3">
+        {vercel.deployments.map((deployment) => (
+          <li key={deployment.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2 text-sm">
+            <span className="min-w-0">
+              <span className={cn("font-medium", deployment.state === "error" && "text-destructive")}>{deploymentWords[deployment.state]}</span>
+              {deployment.production ? <span className="text-muted-foreground"> · Production</span> : <span className="text-muted-foreground"> · Preview</span>}
+              {deployment.message ? <span className="block truncate text-xs text-muted-foreground">{deployment.message}</span> : null}
+            </span>
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {[deployment.commit, deployment.createdAt ? sinceText(deployment.createdAt) : null].filter(Boolean).join(" · ")}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </li>
   );
 }
 
@@ -132,7 +204,7 @@ function Reading({ label, value, note, tone }: { label: string; value: string; n
   );
 }
 
-function Monitor({ name, covers, needs }: { name: string; covers: string; needs: string }) {
+function Monitor({ name, covers, needs, status = "missing", label = "Not connected" }: { name: string; covers: string; needs: string; status?: "missing" | "error"; label?: string }) {
   return (
     <li className="grid gap-x-6 gap-y-1 py-3.5 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1.3fr)] sm:items-center">
       <div>
@@ -140,7 +212,7 @@ function Monitor({ name, covers, needs }: { name: string; covers: string; needs:
         <p className="text-xs text-muted-foreground">{covers}</p>
       </div>
       <div className="text-sm">
-        <SourceStatusLabel status="missing" label="Not connected" />
+        <SourceStatusLabel status={status} label={label} />
       </div>
       <p className="text-sm text-muted-foreground sm:text-right">{needs}</p>
     </li>

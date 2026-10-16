@@ -15,7 +15,8 @@ const walk = (dir) =>
     return statSync(path).isDirectory() ? walk(path) : [path];
   });
 
-const platformApi = readFileSync('api/_lib/platform.ts', 'utf8') + readFileSync('api/_lib/platform-reads.ts', 'utf8');
+const readOnlyFiles = ['platform.ts', 'platform-reads.ts', 'platform-activity.ts', 'platform-analytics.ts', 'platform-monitoring.ts'].map((name) => join('api', '_lib', name));
+const platformApi = readOnlyFiles.map((file) => readFileSync(file, 'utf8')).join('\n');
 const platformCode = platformApi.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 const platformFolder = join('src', 'features', 'platform') + sep;
 
@@ -61,7 +62,10 @@ test('access is decided before any part runs, and refusals are a plain 404', () 
   const check = platformCode.indexOf('checkPlatformAccess(');
   const run = platformCode.indexOf('parts[part](');
   assert.ok(check > 0 && run > check, 'checkPlatformAccess must come before the part is run');
-  assert.match(platformCode, /if \(!access\.ok\)[\s\S]{0,200}sendJson\(res, 404, platformNotFoundBody\)/);
+  const refusal = platformCode.match(/if \(!access\.ok\) \{([\s\S]*?)\n    \}\n/);
+  assert.ok(refusal, 'found the refusal block');
+  assert.match(refusal[1], /return sendJson\(res, 404, platformNotFoundBody\);\s*$/, 'the block ends in the one plain 404');
+  assert.doesNotMatch(refusal[1], /sendJson\(res, (?!404)/, 'no other answer is sent from a refusal');
   assert.match(readFileSync('api/events.ts', 'utf8'), /resource === "platform"\) return handlePlatform\(req, res\)/);
 });
 
@@ -70,4 +74,37 @@ test('platform answers are never kept in localStorage', () => {
   const api = readFileSync('src/features/platform/platform-api.ts', 'utf8');
   const keys = [...api.matchAll(/queryKey: \[\s*"([^"]+)"/g)].map((m) => m[1]);
   assert.ok(keys.length >= 2 && keys.every((key) => key === 'platform'), `platform query keys: ${keys.join(', ')}`);
+});
+
+test('the access log is the only thing the platform area writes, and only to its own table', () => {
+  const writer = readFileSync('api/_lib/platform-access-log.ts', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.equal([...writer.matchAll(/\.insert\(/g)].length, 1, 'exactly one insert');
+  for (const call of ['.update(', '.upsert(', '.delete(', '.rpc(', 'requireAppUser(']) assert.ok(!writer.includes(call), `the access log must not call ${call}`);
+  const tables = new Set([...writer.matchAll(/\.from\("([^"]+)"\)/g)].map((m) => m[1]));
+  assert.deepEqual([...tables], ['platform_access_log']);
+  assert.doesNotMatch(writer, /ip|user_agent|authorization|token|email/i, 'nothing identifying is written');
+  const importers = walk('api').filter((file) => file !== join('api', '_lib', 'platform-access-log.ts') && readFileSync(file, 'utf8').includes('platform-access-log'));
+  assert.deepEqual(importers, [join('api', '_lib', 'platform.ts')], 'only the platform handler records access');
+  // It only ever records a verified, signed-in account: both calls pass a user id, never a request value raw.
+  const handler = platformCode;
+  assert.equal([...handler.matchAll(/recordPlatformAccess\(/g)].length, 2, 'one allowed, one refused');
+  assert.match(handler, /reason === "not_listed" && access\.userId/);
+});
+
+test('migration 047 keeps nothing identifying and is closed to browsers', () => {
+  const sql = readFileSync('supabase/migrations/047_platform_access_log.sql', 'utf8').replace(/--.*$/gm, '');
+  assert.match(sql, /alter table public\.platform_access_log enable row level security/);
+  assert.doesNotMatch(sql, /create policy/i, 'RLS on with zero policies');
+  const columns = sql.slice(sql.indexOf('create table'), sql.indexOf(');', sql.indexOf('create table')));
+  assert.doesNotMatch(columns, /\b(ip|ip_address|user_agent|agent|email|token|authorization)\b/i);
+  assert.match(columns, /reason text not null check \(reason ~ /, 'reason is held to a fixed shape');
+  assert.match(sql, /begin;[\s\S]*commit;/);
+});
+
+test('the monitoring client only reads, and never exposes its token', () => {
+  const file = 'api/_lib/platform-monitoring.ts';
+  let code;
+  try { code = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, ''); } catch { return; }
+  assert.doesNotMatch(code, /method:\s*["'](POST|PUT|PATCH|DELETE)/i, 'GET only');
+  assert.doesNotMatch(code, /console\.(log|warn|error)\([^)]*(token|TOKEN)/, 'the token is never logged');
 });

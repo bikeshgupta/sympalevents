@@ -153,14 +153,15 @@ function SocietyList({ rows, onOpen }: { rows: SocietyRow[]; onOpen: (id: string
       </ul>
       <div className="mt-2 hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
+          <caption className="sr-only">Societies with their label, members, events, visits and last activity. Choose a name to open its record.</caption>
           <thead>
             <tr className="border-b border-border/80 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
-              <th className="py-2.5 pr-4 font-semibold">Society</th>
-              <th className="px-4 py-2.5 font-semibold">Label</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Members</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Events</th>
-              <th className="px-4 py-2.5 text-right font-semibold">Visits</th>
-              <th className="py-2.5 pl-4 font-semibold">Last activity</th>
+              <th scope="col" className="py-2.5 pr-4 font-semibold">Society</th>
+              <th scope="col" className="px-4 py-2.5 font-semibold">Label</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-semibold">Members</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-semibold">Events</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-semibold">Visits</th>
+              <th scope="col" className="py-2.5 pl-4 font-semibold">Last activity</th>
             </tr>
           </thead>
           <tbody>

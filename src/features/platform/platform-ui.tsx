@@ -1,6 +1,6 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, Lock, Search, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, type To } from "react-router-dom";
 import { overlayGlass } from "@/lib/glass";
 import { cn } from "@/lib/utils";
@@ -197,14 +197,33 @@ export function SearchField({ value, onChange, placeholder, label }: { value: st
 
 /** Text choices in a row, the chosen one underlined in teal - the same treatment as Society Management's tabs. */
 export function Choices<T extends string>({ value, options, onChange, label }: { value: T; options: { value: T; label: string }[]; onChange: (value: T) => void; label: string }) {
+  // A radio group is one tab stop, moved with the arrow keys; Home and End jump to the ends.
+  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const selected = Math.max(0, options.findIndex((option) => option.value === value));
+  function move(to: number) {
+    const next = (to + options.length) % options.length;
+    onChange(options[next].value);
+    buttons.current[next]?.focus();
+  }
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const target = { ArrowRight: index + 1, ArrowDown: index + 1, ArrowLeft: index - 1, ArrowUp: index - 1, Home: 0, End: options.length - 1 }[event.key];
+    if (target === undefined) return;
+    event.preventDefault();
+    move(target);
+  }
   return (
     <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-x-1 gap-y-1">
-      {options.map((option) => (
+      {options.map((option, index) => (
         <button
           key={option.value}
+          ref={(node) => {
+            buttons.current[index] = node;
+          }}
           type="button"
           role="radio"
           aria-checked={value === option.value}
+          tabIndex={index === selected ? 0 : -1}
+          onKeyDown={(event) => onKeyDown(event, index)}
           onClick={() => onChange(option.value)}
           className={cn(
             "min-h-10 rounded-lg px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -274,5 +293,33 @@ export function DrawerSection({ title, children }: { title: string; children: Re
       <h3 className="border-b border-border/80 pb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</h3>
       <div className="mt-1">{children}</div>
     </section>
+  );
+}
+
+/* ---------------------------------------------------------------------------------------------------------- */
+/* Breakdowns                                                                                                   */
+/* ---------------------------------------------------------------------------------------------------------- */
+
+/**
+ * A short list of labelled counts, each with a bar in proportion to the largest. For breakdowns of one thing
+ * (devices, browsers, kinds of action). The number is always printed; the bar only helps the eye compare.
+ */
+export function BarList({ rows, format = formatCount, empty = "Nothing recorded in this period." }: { rows: { label: string; count: number }[]; format?: (value: number) => string; empty?: string }) {
+  if (!rows.length) return <p className="py-3 text-sm text-muted-foreground">{empty}</p>;
+  const most = Math.max(...rows.map((row) => row.count), 1);
+  return (
+    <ul className="space-y-3">
+      {rows.map((row) => (
+        <li key={row.label}>
+          <div className="flex items-baseline justify-between gap-4 text-sm">
+            <span className="min-w-0 truncate">{row.label}</span>
+            <span className="shrink-0 font-medium tabular-nums">{format(row.count)}</span>
+          </div>
+          <div aria-hidden="true" className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary" style={{ width: `${(row.count / most) * 100}%` }} />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

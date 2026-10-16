@@ -34,21 +34,22 @@ import type { assertServiceSupabase } from "./server.js";
 
 type Supabase = ReturnType<typeof assertServiceSupabase>;
 export type ReadContext = { supabase: Supabase; userId: string; signal: AbortSignal; query: Record<string, unknown> };
-type DbError = { code?: string; message?: string } | null;
-type Row = Record<string, unknown>;
+export type DbError = { code?: string; message?: string } | null;
+export type Row = Record<string, unknown>;
 
 const pageSize = 1000;
-const listPageSize = 25;
+export const listPageSize = 25;
+const lastVisitCap = 2000;
 const dayMs = 24 * 60 * 60 * 1000;
 
-const isMissing = (error: DbError) => Boolean(error && ["42P01", "PGRST205", "42703", "PGRST204"].includes(error.code ?? ""));
+export const isMissing = (error: DbError) => Boolean(error && ["42P01", "PGRST205", "42703", "PGRST204"].includes(error.code ?? ""));
 
-function notFound(): never {
+export function notFound(): never {
   throw Object.assign(new Error("Not found"), { statusCode: 404 });
 }
 
 /** Reads every row a query returns, a page at a time, up to `cap` rows. */
-async function readAll(
+export async function readAll(
   build: (from: number, to: number) => PromiseLike<{ data: unknown; error: DbError }>,
   cap: number,
 ): Promise<{ rows: Row[]; truncated: boolean; missing: boolean }> {
@@ -66,7 +67,7 @@ async function readAll(
   return { rows, truncated: true, missing: false };
 }
 
-const str = (value: unknown) => (value === null || value === undefined ? null : String(value));
+export const str = (value: unknown) => (value === null || value === undefined ? null : String(value));
 
 /* ---------------------------------------------------------------------------------------------------------- */
 /* Shared loaders                                                                                               */
@@ -119,7 +120,7 @@ function toEvent(row: Row, closed: Set<string>, now: number): EventRecord {
 }
 
 /** Per-request memoised reads, so a part that needs the same table twice reads it once. */
-function loaders({ supabase, signal }: ReadContext) {
+export function loaders({ supabase, signal }: ReadContext) {
   const memo = new Map<string, Promise<unknown>>();
   const once = <T>(key: string, load: () => Promise<T>) => {
     if (!memo.has(key)) memo.set(key, load());
@@ -194,13 +195,13 @@ function loaders({ supabase, signal }: ReadContext) {
   return { societies, memberships, events, visits, visitsSince, audit };
 }
 
-type Loaders = ReturnType<typeof loaders>;
+export type Loaders = ReturnType<typeof loaders>;
 
-function windowFrom(ctx: ReadContext) {
+export function windowFrom(ctx: ReadContext) {
   return platformWindow(readPlatformRange(ctx.query.range));
 }
 
-function windowJson(window: PlatformWindow) {
+export function windowJson(window: PlatformWindow) {
   return { preset: window.preset, days: window.days, from: window.from, to: window.to, firstDay: window.firstDay, lastDay: window.lastDay, previous: window.previous };
 }
 
@@ -210,7 +211,7 @@ function visitsFromFor(window: PlatformWindow) {
   return window.previous.from < ninety ? window.previous.from : ninety;
 }
 
-async function headCount(build: () => PromiseLike<{ count: number | null; error: DbError }>) {
+export async function headCount(build: () => PromiseLike<{ count: number | null; error: DbError }>) {
   const { count, error } = await build();
   if (error) throw error;
   return count ?? 0;
@@ -254,7 +255,7 @@ async function recentAudit(ctx: ReadContext, l: Loaders, filter: { column: "acto
   }));
 }
 
-async function namesOfUsers(ctx: ReadContext, ids: string[]) {
+export async function namesOfUsers(ctx: ReadContext, ids: string[]) {
   const unique = [...new Set(ids.filter(isUuid))].slice(0, 200);
   if (!unique.length) return new Map<string, string>();
   const { data, error } = await ctx.supabase.from("app_users").select("id,full_name").in("id", unique).abortSignal(ctx.signal);
@@ -418,18 +419,25 @@ export async function readUsers(ctx: ReadContext) {
   const societiesOf = new Map<string, number>();
   for (const row of memberships.rows) societiesOf.set(String(row.user_id), (societiesOf.get(String(row.user_id)) ?? 0) + 1);
 
-  const [roles, lastVisits] = await Promise.all([
+  // One query each for the whole page of people, not one per person: this page used to make about 75 small queries.
+  // Newest first, so the first row seen for a person is their latest visit. If the cap is reached, a person with
+  // no row may still have an older visit; they show as "no recorded visit", which already means unknown.
+  const [roles, lastVisitRows] = await Promise.all([
     ids.length ? supabase.from("event_members").select("user_id").in("user_id", ids).abortSignal(signal) : Promise.resolve({ data: [], error: null }),
-    Promise.all(
-      ids.map(async (id) => {
-        if (visits.missing) return [id, null] as const;
-        const { data, error } = await supabase.from("event_visits").select("last_seen_at").eq("user_id", id).order("last_seen_at", { ascending: false }).limit(1).abortSignal(signal);
-        if (error) throw error;
-        return [id, str((data as Row[] | null)?.[0]?.last_seen_at)] as const;
-      }),
-    ),
+    ids.length && !visits.missing
+      ? supabase.from("event_visits").select("user_id,last_seen_at").in("user_id", ids).order("last_seen_at", { ascending: false }).limit(lastVisitCap).abortSignal(signal)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (roles.error) throw roles.error;
+  if (lastVisitRows.error) throw lastVisitRows.error;
+  const lastVisits: (readonly [string, string | null])[] = [];
+  const seenUsers = new Set<string>();
+  for (const row of (lastVisitRows.data as Row[] | null) ?? []) {
+    const id = String(row.user_id);
+    if (seenUsers.has(id)) continue;
+    seenUsers.add(id);
+    lastVisits.push([id, str(row.last_seen_at)] as const);
+  }
   const rolesOf = new Map<string, number>();
   for (const row of (roles.data as Row[] | null) ?? []) rolesOf.set(String(row.user_id), (rolesOf.get(String(row.user_id)) ?? 0) + 1);
   const lastVisitOf = new Map(lastVisits);
@@ -692,18 +700,32 @@ export async function readEvents(ctx: ReadContext) {
   const start = (page - 1) * listPageSize;
   const slice = filtered.slice(start, start + listPageSize);
 
-  const perEvent = await Promise.all(
-    slice.map(async (event) => {
-      const [bookings, visits] = await Promise.all([
-        supabase.from("event_registrations").select("id", { count: "exact", head: true }).eq("event_id", event.id).eq("status", "active").abortSignal(signal),
-        supabase.from("event_visits").select("id", { count: "exact", head: true }).eq("event_id", event.id).gte("last_seen_at", window.from).lt("started_at", window.to).abortSignal(signal),
-      ]);
-      if (bookings.error && !isMissing(bookings.error)) throw bookings.error;
-      if (visits.error && !isMissing(visits.error)) throw visits.error;
-      return [event.id, { bookings: bookings.error ? null : bookings.count ?? 0, visits: visits.error ? null : visits.count ?? 0 }] as const;
-    }),
+  // Two queries for the whole page of events, not two per event (about 50 before). A read that hits its cap, or a
+  // table that does not exist, shows a dash for that column rather than a number that may be too low.
+  const sliceIds = slice.map((event) => event.id);
+  const none = { rows: [] as Row[], truncated: false, missing: false };
+  const [bookingRows, visitRows] = sliceIds.length
+    ? await Promise.all([
+        readAll((a, b) => supabase.from("event_registrations").select("event_id").in("event_id", sliceIds).eq("status", "active").order("id").range(a, b).abortSignal(signal), 20_000),
+        readAll((a, b) => supabase.from("event_visits").select("event_id").in("event_id", sliceIds).gte("last_seen_at", window.from).lt("started_at", window.to).order("id").range(a, b).abortSignal(signal), 20_000),
+      ])
+    : [none, none];
+  const tallyBy = (rows: Row[]) => {
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(String(row.event_id), (counts.get(String(row.event_id)) ?? 0) + 1);
+    return counts;
+  };
+  const bookingCounts = tallyBy(bookingRows.rows);
+  const visitCounts = tallyBy(visitRows.rows);
+  const counts = new Map(
+    sliceIds.map((id) => [
+      id,
+      {
+        bookings: bookingRows.missing || bookingRows.truncated ? null : bookingCounts.get(id) ?? 0,
+        visits: visitRows.missing || visitRows.truncated ? null : visitCounts.get(id) ?? 0,
+      },
+    ]),
   );
-  const counts = new Map(perEvent);
 
   let published: { current: number[]; previous: number[] } | null = null;
   if (audit.available) {

@@ -72,11 +72,7 @@ export const platformSections: PlatformSection[] = [
     icon: ScrollText,
     rangeAware: true,
     uses: ["audit", "visits", "page_views"],
-    plan: [
-      "Recorded actions with read-only before-and-after values",
-      "Visits to event pages, kept apart from recorded actions",
-      "Attempts to open this area, allowed and refused",
-    ],
+    plan: [],
     phase: 3,
   },
   {
@@ -86,11 +82,7 @@ export const platformSections: PlatformSection[] = [
     icon: ChartLine,
     rangeAware: true,
     uses: ["visits", "page_views", "visit_surfaces", "bookings", "contributions"],
-    plan: [
-      "Visits, signed-in people and browsers, kept as separate measures",
-      "Pages and features opened, once page views are recorded",
-      "Retention of people who signed in, and bookings and contributions per event",
-    ],
+    plan: [],
     phase: 3,
   },
   {
