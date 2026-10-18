@@ -12,6 +12,9 @@ import { describeEventHours } from "@/lib/event-hours";
 import { eventStartInstant } from "@/lib/event-status";
 import { heroPhotoStyle } from "@/lib/hero";
 import { artworkKeyFor, heroArtworkUrl, usesBundledPhoto } from "@/lib/hero-artwork";
+import { useCallback, useRef } from "react";
+import { clamp01, useDashboardMotion, useScrollFrame } from "@/lib/dashboard-motion";
+import { HeroAurora, HeroEmbers } from "@/components/shared/dashboard-fx";
 
 const fallbackHeroStyle = {
   background:
@@ -61,8 +64,33 @@ export function EventHero({
   // everyone for would read as a bug.
   const displayPhase: EventPhase = isClosed ? "after" : phase;
 
+  // As the hero scrolls away its picture sinks and grows a little while the
+  // words fade, so the page appears to move past it. At rest (nothing
+  // scrolled) no style is set at all and the hero is exactly as it was.
+  const motion = useDashboardMotion();
+  const sectionRef = useRef<HTMLElement>(null);
+  const pictureRef = useRef<HTMLDivElement>(null);
+  const copyRef = useRef<HTMLDivElement>(null);
+  const onFrame = useCallback((box: DOMRect) => {
+    const progress = clamp01(-box.top / box.height);
+    const picture = pictureRef.current;
+    const copy = copyRef.current;
+    if (!picture || !copy) return;
+    if (progress === 0) {
+      picture.style.transform = "";
+      copy.style.transform = "";
+      copy.style.opacity = "";
+      return;
+    }
+    picture.style.transform = `translateY(${progress * 30}px) scale(${1 + progress * 0.2})`;
+    copy.style.transform = `translateY(${progress * 24}px)`;
+    copy.style.opacity = String(1 - progress * 0.8);
+  }, []);
+  useScrollFrame(sectionRef, motion, onFrame);
+
   return (
     <section
+      ref={sectionRef}
       className="relative flex min-h-[440px] flex-col overflow-hidden rounded-lg p-4 pb-7 text-white shadow-lg sm:min-h-[420px] sm:p-6 sm:pb-9"
       style={fallbackHeroStyle}
     >
@@ -72,6 +100,7 @@ export function EventHero({
        * where the copy only occupies the left half.
        */}
       <div
+        ref={pictureRef}
         className="absolute inset-0 bg-cover bg-center bg-no-repeat md:bg-right md:bg-[length:auto_100%]"
         style={
           artwork
@@ -80,6 +109,9 @@ export function EventHero({
         }
         aria-hidden="true"
       />
+      {/* Drifting light, only where there is no photograph to tint. */}
+      {motion && !event.heroImageUrl && !bundledPhoto ? <HeroAurora /> : null}
+      {motion ? <HeroEmbers /> : null}
       {/*
        * Scrims are weighted to where the copy actually sits - the top band on
        * mobile, the left edge on desktop - leaving the middle of the frame almost
@@ -105,7 +137,7 @@ export function EventHero({
       {/* The section is a flex column and this fills it, so the countdown is
           pinned to the bottom padding at every breakpoint without hard-coding a
           height that has to be kept in sync with the section's own padding. */}
-      <div className="relative z-10 flex flex-1 flex-col justify-between gap-6 md:grid md:grid-cols-[minmax(0,0.54fr)_minmax(0,0.46fr)]">
+      <div ref={copyRef} className="relative z-10 flex flex-1 flex-col justify-between gap-6 md:grid md:grid-cols-[minmax(0,0.54fr)_minmax(0,0.46fr)]">
         <div className="flex flex-1 flex-col justify-between gap-6">
           {/* Top block: status, name, where and when. Nothing sits below it until
               the countdown, so the middle of the hero stays open. */}
@@ -122,13 +154,14 @@ export function EventHero({
                 (`.font-display`) as the society's front door, so an event reads as the same place you
                 just came from. */}
             <h1
+              aria-label={motion && !hideTitle ? event.name : undefined}
               className={
                 hideTitle
                   ? "sr-only"
                   : "font-display mt-3 text-3xl font-semibold leading-[1.1] [text-shadow:0_2px_4px_rgba(0,0,0,0.9),0_6px_24px_rgba(0,0,0,0.85)] sm:text-4xl lg:text-5xl"
               }
             >
-              {event.name}
+              {motion && !hideTitle ? <RisingWords text={event.name} /> : event.name}
             </h1>
 
             {subtitle ? (
@@ -181,6 +214,22 @@ export function EventHero({
         </div>
       </div>
     </section>
+  );
+}
+
+/** The event name, a word at a time. The heading carries the name for screen readers. */
+function RisingWords({ text }: { text: string }) {
+  return (
+    <span aria-hidden="true">
+      {text.split(/\s+/).map((word, index) => (
+        <span key={`${word}-${index}`}>
+          {index > 0 ? " " : null}
+          <span className="dfx-word" style={{ ["--i" as string]: index }}>
+            {word}
+          </span>
+        </span>
+      ))}
+    </span>
   );
 }
 

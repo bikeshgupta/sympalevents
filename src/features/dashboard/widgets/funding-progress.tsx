@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useCountUp } from "@/lib/motion";
 import { useEventAccess } from "@/lib/event-access";
 import { useMemo, useState } from "react";
+import { tiltHandlers, useDashboardMotion } from "@/lib/dashboard-motion";
 
 /**
  * Contributor tiles. No rank numbers or medals - every contributor gets an
@@ -87,6 +88,11 @@ function TileGrid({
   moreHref?: string;
   moreLabel?: string;
 }) {
+  // With motion on the tiles pop in, largest first, and lean towards the mouse.
+  const motion = useDashboardMotion();
+  const tilt = tiltHandlers(motion, 1.4);
+  const entrance = motion ? "dfx-pop" : "animate-fade-up";
+
   if (!visible.length) {
     return <p className="mt-2 text-sm text-muted-foreground">Nothing recorded yet.</p>;
   }
@@ -97,8 +103,9 @@ function TileGrid({
         <div
           key={entry.key}
           title={`${formatCurrency(entry.amount)} from ${entry.who}`}
-          className={`animate-fade-up rounded-lg border px-2 py-1.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tileTints[index % tileTints.length]}`}
-          style={{ animationDelay: `${index * 45}ms` }}
+          {...tilt}
+          className={`${entrance} dfx-spot relative overflow-hidden rounded-lg border px-2 py-1.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tileTints[index % tileTints.length]}`}
+          style={{ animationDelay: `${index * (motion ? 70 : 45)}ms` }}
         >
           <p className="text-[13px] font-semibold leading-tight tabular-nums text-foreground">
             {formatCurrency(entry.amount)}

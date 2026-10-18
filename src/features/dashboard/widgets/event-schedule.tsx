@@ -1,7 +1,7 @@
 import type { WidgetVariant } from "@/lib/widgets";
 import type { EventPhase, TimelineStatus } from "@/features/dashboard/dashboard-utils";
 import type { EventPlanRow } from "@/lib/event-data";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BellPlus, Check, ChevronDown, Clock3, ListChecks, MapPin, Star } from "lucide-react";
 import { formatEventDate, formatEventTime, getDateInEventZone, getDayWindow, getTimelineItemStatus, getWindowProgress, toEventZoneTimestamp } from "@/features/dashboard/dashboard-utils";
@@ -9,6 +9,7 @@ import { gapLabel } from "@/lib/announcements";
 import { parseAgenda } from "@/lib/agenda";
 import { itemKey } from "@/lib/picks";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clamp01, useDashboardMotion, useScrollFrame, useScrollReveal } from "@/lib/dashboard-motion";
 
 export type SchedulePicks = {
   isPicked: (item: EventPlanRow) => boolean;
@@ -182,7 +183,7 @@ export function EventSchedule({
 
           {/* The day's full list is the other half of "detailed". */}
           {variant === "detailed" && items.length ? (
-            <div className="space-y-0">
+            <TimelineList>
               {items.map((item, index) => (
                 <TimelineItem
                   key={item.id ?? `${item.date}-${item.activity}-${index}`}
@@ -194,7 +195,7 @@ export function EventSchedule({
                   picks={picks}
                 />
               ))}
-            </div>
+            </TimelineList>
           ) : variant === "detailed" ? (
             <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
               No activities planned for this day yet. Add them on the Events page, along with the agenda inside
@@ -323,6 +324,39 @@ function StatusPill({ status }: { status: TimelineStatus }) {
   }
 
   return null;
+}
+
+/**
+ * The day's items. With motion on, they slide in from the left as they are
+ * reached, and a coloured line draws itself down the timeline's rail as the
+ * page scrolls - over the grey connectors, which stay underneath.
+ */
+function TimelineList({ children }: { children: ReactNode }) {
+  const motion = useDashboardMotion();
+  const listRef = useRef<HTMLDivElement>(null);
+  const lineRef = useRef<HTMLSpanElement>(null);
+  useScrollReveal(listRef, motion, "left");
+  const onFrame = useCallback((box: DOMRect) => {
+    const progress = clamp01((window.innerHeight * 0.65 - box.top) / box.height);
+    if (lineRef.current) lineRef.current.style.transform = `translateX(-50%) scaleY(${progress})`;
+  }, []);
+  useScrollFrame(listRef, motion, onFrame);
+
+  return (
+    <div className="relative">
+      {motion ? (
+        <span
+          ref={lineRef}
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-8 left-[4.5rem] top-3 w-0.5 origin-top rounded-full bg-gradient-to-b from-primary to-amber-400 sm:left-[5.5rem]"
+          style={{ transform: "translateX(-50%) scaleY(0)" }}
+        />
+      ) : null}
+      <div ref={listRef} className="space-y-0">
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function TimelineItem({

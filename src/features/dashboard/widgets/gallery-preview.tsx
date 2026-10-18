@@ -3,6 +3,8 @@ import type { GalleryPhoto } from "@/lib/closing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Image } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useRef } from "react";
+import { useDashboardMotion, useScrollReveal } from "@/lib/dashboard-motion";
 
 /**
  * The first few celebration photographs, with the rest on the closing page.
@@ -18,6 +20,9 @@ export function GalleryPreview({
 }) {
   // One row of three on a phone-width dashboard, two rows on a roomy one.
   const preview = photos.slice(0, variant === "detailed" ? 6 : 3);
+  // Each photograph opens out from its centre as it is scrolled to.
+  const gridRef = useRef<HTMLDivElement>(null);
+  useScrollReveal(gridRef, useDashboardMotion(), "clip");
 
   return (
     <Card>
@@ -33,7 +38,7 @@ export function GalleryPreview({
       </CardHeader>
       <CardContent>
         {preview.length ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div ref={gridRef} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {preview.map((photo) => (
               <Link
                 key={photo.id}

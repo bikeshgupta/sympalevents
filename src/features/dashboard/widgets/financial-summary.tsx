@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, CircleAlert, HandCoins, HeartHandshake, Landmark, ReceiptIndianRupee, Users } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { formatCurrencyCompact } from "@/features/dashboard/dashboard-utils";
+import { tiltHandlers, useDashboardMotion } from "@/lib/dashboard-motion";
 
 type SummaryCard = {
   label: string;
@@ -42,6 +43,8 @@ export function FinancialSummary({
   variant?: WidgetVariant;
 }) {
   const isSettledGap = fundingGap === 0;
+  // The tiles lean towards the mouse and light up under it (mouse only).
+  const tilt = tiltHandlers(useDashboardMotion());
 
   const budgetCard: SummaryCard = {
     label: "Planned Budget",
@@ -118,7 +121,8 @@ export function FinancialSummary({
             return (
               <div
                 key={card.label}
-                className={`relative overflow-hidden rounded-lg border bg-gradient-to-br from-background to-muted/40 p-3 pl-4 transition-all hover:-translate-y-0.5 hover:shadow-md before:absolute before:inset-y-0 before:left-0 before:w-1 ${card.edge}`}
+                {...tilt}
+                className={`dfx-spot relative overflow-hidden rounded-lg border bg-gradient-to-br from-background to-muted/40 p-3 pl-4 transition-all hover:-translate-y-0.5 hover:shadow-md before:absolute before:inset-y-0 before:left-0 before:w-1 ${card.edge}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-xs font-medium leading-tight text-muted-foreground">{card.label}</p>

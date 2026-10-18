@@ -1,7 +1,7 @@
 import type { ClosingFacts } from "@/features/closing/closing-copy";
 import { getDefaultEventDay, getEventDays, getEventPhase, getNextEvent, sortTimelineItems } from "@/features/dashboard/dashboard-utils";
 import { Settings2 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useEventClosing } from "@/lib/closing";
 import { useEventData } from "@/lib/event-data";
@@ -27,6 +27,8 @@ import { GoodToKnowCard } from "@/features/dashboard/good-to-know-card";
 import { GetInvolvedCard } from "@/features/dashboard/get-involved-card";
 import { PreviousEditionCard } from "@/features/dashboard/previous-edition-card";
 import { CommunityCard } from "@/features/dashboard/community-card";
+import { useDashboardMotion, useScrollReveal } from "@/lib/dashboard-motion";
+import { BackToTop, ScrollProgressBar } from "@/components/shared/dashboard-fx";
 
 export function DashboardPage() {
   const { data, isFetching } = useEventData({ includeTasks: false });
@@ -57,6 +59,12 @@ export function DashboardPage() {
   );
   const nextEvent = getNextEvent(timeline, now);
   const closing = useEventClosing(event.id);
+  // Decoration only (src/lib/dashboard-motion.ts): widgets below the first
+  // screen slide in as they are reached, and a bar along the top shows how far
+  // down the page you are. Off for anyone who asks their device for less motion.
+  const motion = useDashboardMotion();
+  const stackRef = useRef<HTMLDivElement>(null);
+  useScrollReveal(stackRef, motion && !view.isLoading);
   // Being past the last day is not the same as being finished: the committee
   // decides when the celebration is closed, because that is when the note and
   // the photographs are ready to lead the page.
@@ -192,7 +200,13 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
+    <div ref={stackRef} className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
+      {motion ? (
+        <>
+          <ScrollProgressBar />
+          <BackToTop />
+        </>
+      ) : null}
       {/* An organiser's door, not part of the page: shown only to somebody who
           can edit the dashboard, so a resident's view is exactly what it was.
           It is where an admin hides or reorders widgets and decides whether

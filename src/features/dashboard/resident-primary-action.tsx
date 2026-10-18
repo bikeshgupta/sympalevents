@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { fireConfetti, magneticHandlers, useDashboardMotion } from "@/lib/dashboard-motion";
 import { formatEventDate, formatEventTime } from "@/features/dashboard/dashboard-utils";
 import type { AppEvent, EventPlanRow } from "@/lib/event-data";
 import type { EventStatus } from "@/lib/event-status";
@@ -44,6 +45,7 @@ export function ResidentPrimaryAction({
   nextEvent?: EventPlanRow;
 }) {
   const path = useEventPath();
+  const motion = useDashboardMotion();
   const canOpen = (page: ResidentActionPage) => openPageKeys === null || openPageKeys.has(page);
   const registrationVisible = Boolean(event.id) && openPageKeys !== null && openPageKeys.has("registration");
   const { query } = useRegistration(registrationVisible ? event.id : undefined);
@@ -90,7 +92,14 @@ export function ResidentPrimaryAction({
         </div>
         {action.label && action.page ? (
           <Button asChild className="h-11 w-full shrink-0 sm:w-auto">
-            <Link to={path(`/${action.page}`)}>
+            <Link
+              to={path(`/${action.page}`)}
+              {...magneticHandlers(motion)}
+              // A small celebration for the one action that is a commitment.
+              // The confetti lives on <body>, so it keeps falling on the
+              // registration page this link opens.
+              onClick={motion && action.page === "registration" && action.label === "Register now" ? (event) => fireConfetti(event.currentTarget) : undefined}
+            >
               {action.label}
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
