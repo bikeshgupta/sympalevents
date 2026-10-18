@@ -50,7 +50,8 @@ type ApiRequest = Parameters<typeof requireAppUser>[0] & Parameters<typeof getRe
 
 export default async function handler(req: ApiRequest, res: Parameters<typeof sendJson>[0]) {
   try {
-    const { appUser } = await requireAppUser(req);
+    // Fresh, never the remembered copy: this is where a person reads their own name back.
+    const { appUser } = await requireAppUser(req, { fresh: true });
 
     if (req.method === "GET") {
       const profile = await readProfile(appUser.id);

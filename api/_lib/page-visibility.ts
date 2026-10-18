@@ -1,3 +1,4 @@
+import { inflight } from "./inflight.js";
 import { isSocietyAdminForEvent } from "./authority.js";
 import { publicationAccess } from "./publication.js";
 import { assertServiceSupabase } from "./server.js";
@@ -155,7 +156,11 @@ function isMissingVisibilityTable(error: { code?: string; message?: string } | n
  * and who may look at it". `fetchPageVisibility` below is now a thin view over
  * it, kept because several callers only ever wanted the visibility map.
  */
-export async function fetchEventModules(eventId: string): Promise<Record<string, EventModule>> {
+export function fetchEventModules(eventId: string): Promise<Record<string, EventModule>> {
+  return inflight(`modules:${eventId}`, () => readEventModules(eventId));
+}
+
+async function readEventModules(eventId: string): Promise<Record<string, EventModule>> {
   const supabase = assertServiceSupabase();
 
   let stored = new Map<
@@ -322,7 +327,9 @@ export async function resolvePageAccess(eventId: string, userId: string | null, 
   const supabase = assertServiceSupabase();
   const [{ data: member, error: memberError }, { data: permission, error: permissionError }, societyAdmin] =
     await Promise.all([
-      supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
+      inflight(`member:${eventId}:${userId}`, async () =>
+        supabase.from("event_members").select("role").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
+      ),
       supabase
         .from("event_page_permissions")
         .select("access_level")

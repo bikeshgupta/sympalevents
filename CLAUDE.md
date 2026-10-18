@@ -118,9 +118,33 @@ expenses, eventPlan, financials, source, fallbackReason }`.
   instead, and `<DataSourceBadge>` surfaces it. **Every screen must stay readable and
   correct in both modes.**
 
-Writes go straight to Supabase from the feature page (`supabase.from(...)`), then
-`queryClient.invalidateQueries({ queryKey: ["event-data"] })`. Privileged reads/writes
-that need the service role go through `/api/*` via `apiFetch`.
+Every read and write goes through `/api/*` via `apiFetch`, then
+`queryClient.invalidateQueries({ queryKey: ["event-data"] })`. **The browser has no Supabase client
+any more** - `src/lib/supabase.ts` only answers `isSupabaseConfigured` (demo mode). The client was
+created there unused and was the largest library in the bundle; do not bring it back for a direct
+`supabase.from(...)` call.
+
+### Load time
+
+- **Pages load on demand** (`lazyPage` in `src/app.tsx`), except the dashboard and the society home,
+  the two front doors. Each lazy page draws `PageSkeleton` while its chunk arrives, and `warmPages()`
+  fetches them all once the first page is up, so navigation stays immediate. A new page is added the
+  same way; keep a front door eager.
+- **Query defaults** (`src/main.tsx`): fresh for 30s, and a 4xx is never retried (it is an answer).
+  The old defaults refetched on every mount and retried a 401/403/404 three times with backoff
+  (~7s of skeleton). Writes still refetch at once - they invalidate.
+- **`useEventData` waits for the session** before it reads: keyed "guest" until then, it used to read
+  the event twice on every first load.
+- **Server:** Google's sign-in keys are fetched once per warm instance (`firebaseJwks` in
+  `api/_lib/server.ts`); `requireAppUser` skips its `app_users` write for 2 minutes when the email and
+  photo are unchanged (`/api/me` always reads fresh, so a corrected name never appears to revert);
+  `inflight()` (`api/_lib/inflight.ts`) shares concurrent identical reads, which is what the seven
+  page checks in `?resource=data` were doing seven times; `?resource=data` and `society-home` start
+  every read that needs only the event or society id alongside sign-in and the access checks, and
+  return nothing until those pass.
+- **The function region is not set in `vercel.json`.** Vercel's default is Washington (iad1). If the
+  Supabase project is in Mumbai or Singapore, every database round trip crosses the world; setting
+  the function region to the Supabase region is the largest single latency fix left.
 
 `ContributionRow.createdAt` comes from the table's existing `created_at` column and is
 what the Contributions list sorts by (newest first) so the most recent entry is on top.

@@ -34,14 +34,37 @@ export async function getRequestBody(req: any) {
   return req.body;
 }
 
+/**
+ * Google's signing keys, fetched once per warm instance and refreshed by jose
+ * itself when they rotate (it re-fetches on an unknown key id). This used to be
+ * built inside verifyFirebaseIdToken, which threw jose's cache away and sent
+ * every signed-in request to Google for the keys before it could do anything.
+ */
+let jwksPromise: Promise<ReturnType<typeof import("jose").createRemoteJWKSet>> | null = null;
+function firebaseJwks() {
+  jwksPromise ??= import("jose").then(({ createRemoteJWKSet }) => createRemoteJWKSet(firebaseJwksUrl));
+  return jwksPromise;
+}
+
+/**
+ * The app_users row each signed-in person last synced to, per warm instance.
+ * requireAppUser wrote to app_users on every request; when the Google email and
+ * photo are the ones already stored, a few minutes' old answer is the same
+ * answer, without the write. A changed email or photo still syncs at once.
+ * `/api/me` - where a person sees their own name - always reads fresh
+ * (`{ fresh: true }`), so a corrected name can never appear to revert.
+ */
+const appUserMemo = new Map<string, { at: number; email: string; photo: string | null; row: AppUserRow }>();
+const appUserMemoMs = 2 * 60 * 1000;
+type AppUserRow = { id: string; firebase_uid: string; email: string; full_name: string | null; photo_url: string | null };
+
 export async function verifyFirebaseIdToken(token: string) {
   if (!firebaseProjectId) {
     throw new Error("Firebase project id is not configured. Missing FIREBASE_PROJECT_ID.");
   }
 
-  const { createRemoteJWKSet, jwtVerify } = await import("jose");
-  const jwks = createRemoteJWKSet(firebaseJwksUrl);
-  const { payload } = await jwtVerify(token, jwks, {
+  const { jwtVerify } = await import("jose");
+  const { payload } = await jwtVerify(token, await firebaseJwks(), {
     audience: firebaseProjectId,
     issuer: `https://securetoken.google.com/${firebaseProjectId}`,
   });
@@ -61,7 +84,7 @@ export async function verifyFirebaseIdToken(token: string) {
   };
 }
 
-export async function requireAppUser(req: any) {
+export async function requireAppUser(req: any, options: { fresh?: boolean } = {}) {
   const supabase = assertServiceSupabase();
   const authHeader = String(req.headers.authorization ?? "");
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
@@ -96,6 +119,17 @@ export async function requireAppUser(req: any) {
 
   const columns = "id,firebase_uid,email,full_name,photo_url";
 
+  const remembered = appUserMemo.get(decoded.uid);
+  if (
+    remembered &&
+    !options.fresh &&
+    Date.now() - remembered.at < appUserMemoMs &&
+    remembered.email === email &&
+    remembered.photo === (decoded.picture ?? null)
+  ) {
+    return { firebaseUser: decoded, appUser: remembered.row };
+  }
+
   let result = await supabase
     .from("app_users")
     .upsert(profile, { onConflict: "firebase_uid" })
@@ -120,6 +154,9 @@ export async function requireAppUser(req: any) {
     if (seeded.error) throw seeded.error;
     result = seeded;
   }
+
+  if (appUserMemo.size > 1000) appUserMemo.clear();
+  appUserMemo.set(decoded.uid, { at: Date.now(), email, photo: decoded.picture ?? null, row: result.data as AppUserRow });
 
   return {
     firebaseUser: decoded,

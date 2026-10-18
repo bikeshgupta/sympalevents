@@ -1,7 +1,12 @@
 import { assertServiceSupabase } from "./server.js";
+import { inflight } from "./inflight.js";
 
 /** Draft access is enforced independently of module visibility, including direct links. */
-export async function publicationAccess(
+export function publicationAccess(eventId: string, userId: string | null) {
+  return inflight(`publication:${eventId}:${userId ?? ""}`, () => readPublicationAccess(eventId, userId));
+}
+
+async function readPublicationAccess(
   eventId: string,
   userId: string | null,
 ) {

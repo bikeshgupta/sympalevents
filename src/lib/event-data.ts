@@ -309,7 +309,7 @@ type EventDataResponse = {
  */
 export function useEventData(options: UseEventDataOptions = {}) {
   const { selectedEventId } = useEventContext();
-  const {data:session} = useSession();
+  const { data: session, isLoading: isSessionLoading } = useSession();
   const includeTasks = options.includeTasks ?? true;
 
   const queryClient = useQueryClient();
@@ -317,6 +317,10 @@ export function useEventData(options: UseEventDataOptions = {}) {
   const queryKey = ["event-data", selectedEventId, { includeTasks }, viewerKey];
   const query = useQuery({
     queryKey,
+    // Wait for sign-in to settle. Before it does the viewer is keyed "guest",
+    // so the event was read once under that key, thrown away when the session
+    // arrived, and read again - a whole second request on every first load.
+    enabled: !isSessionLoading,
     // Start from this same event, for this same person, if another screen has already read it.
     // The layout reads the event (with tasks) before any page mounts, and a page that asks for
     // a different variant (the dashboard leaves the tasks out) would otherwise be pending on

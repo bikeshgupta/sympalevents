@@ -1,39 +1,73 @@
-import { CommandCentrePage } from "@/features/command/command-centre-page";
-import { CommunicationsPage } from "@/features/communications/communications-page";
-import { GatePage } from "@/features/gate/gate-page";
-import { UpdatesPage } from "@/features/updates/updates-page";
-import { PassPage } from "@/features/registration/pass-page";
 import { EventIndex } from "@/features/command/event-index";
-import { RegistrationPage } from "@/features/registration/registration-page";
+import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { PageSkeleton } from "@/components/shared/event-loading";
 import { PageTurnOutlet } from "@/components/shared/page-turn";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RouteGuard } from "@/components/layout/route-guard";
 import { AccessDeniedPage } from "@/features/auth/access-denied-page";
 import { LoginPage } from "@/features/auth/login-page";
-import { AuctionsPage } from "@/features/auctions/auctions-page";
-import { BudgetPage } from "@/features/budget/budget-page";
-import { ClosingPage } from "@/features/closing/closing-page";
-import { ContributionsPage } from "@/features/contributions/contributions-page";
-import { CustomiseDashboardPage } from "@/features/dashboard/customise-dashboard";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
-import { EventPlanPage } from "@/features/event-plan/event-plan-page";
-import { ExpensesPage } from "@/features/expenses/expenses-page";
-import { FixturesPage } from "@/features/fixtures/fixtures-page";
-import { CreateEventWizard } from "@/features/onboarding/create-event-wizard";
 import { ShareLinkPage } from "@/features/onboarding/share-link";
 import { SocietyHomePage } from "@/features/society/society-home-page";
 import { SocietyRoot } from "@/features/society/society-root";
-import { SocietyAdminPage } from "@/features/society/admin/society-admin-page";
-import { PrasadPage } from "@/features/prasad/prasad-page";
-import { ProfilePage } from "@/features/profile/profile-page";
-import { VolunteersPage } from "@/features/volunteers/volunteers-page";
-import { SettingsPage } from "@/features/settings/settings-page";
 import { PlaceholderPage } from "@/features/shared/placeholder-page";
 import { PlatformGate } from "@/features/platform/platform-gate";
-import { SponsorsPage } from "@/features/sponsors/sponsors-page";
-import { TasksPage } from "@/features/tasks/tasks-page";
-import { TeamsPage } from "@/features/teams/teams-page";
+
+
+/*
+ * Pages other than the two front doors (the dashboard and the society home)
+ * load on demand. Every route used to be imported up front, so opening the
+ * dashboard on a phone also downloaded and parsed Settings, the closing page,
+ * registrations and the rest before anything could draw. Once the first page is
+ * up they are fetched quietly in the background (see `warmPages`), so moving to
+ * one is still immediate.
+ */
+const pageLoaders: Array<() => Promise<unknown>> = [];
+function lazyPage<M>(load: () => Promise<M>, pick: (module: M) => ComponentType) {
+  pageLoaders.push(load);
+  return lazy(() => load().then((module) => ({ default: pick(module) })));
+}
+
+const CommandCentrePage = lazyPage(() => import("@/features/command/command-centre-page"), (m) => m.CommandCentrePage);
+const CommunicationsPage = lazyPage(() => import("@/features/communications/communications-page"), (m) => m.CommunicationsPage);
+const GatePage = lazyPage(() => import("@/features/gate/gate-page"), (m) => m.GatePage);
+const UpdatesPage = lazyPage(() => import("@/features/updates/updates-page"), (m) => m.UpdatesPage);
+const PassPage = lazyPage(() => import("@/features/registration/pass-page"), (m) => m.PassPage);
+const RegistrationPage = lazyPage(() => import("@/features/registration/registration-page"), (m) => m.RegistrationPage);
+const AuctionsPage = lazyPage(() => import("@/features/auctions/auctions-page"), (m) => m.AuctionsPage);
+const BudgetPage = lazyPage(() => import("@/features/budget/budget-page"), (m) => m.BudgetPage);
+const ClosingPage = lazyPage(() => import("@/features/closing/closing-page"), (m) => m.ClosingPage);
+const ContributionsPage = lazyPage(() => import("@/features/contributions/contributions-page"), (m) => m.ContributionsPage);
+const CustomiseDashboardPage = lazyPage(() => import("@/features/dashboard/customise-dashboard"), (m) => m.CustomiseDashboardPage);
+const EventPlanPage = lazyPage(() => import("@/features/event-plan/event-plan-page"), (m) => m.EventPlanPage);
+const ExpensesPage = lazyPage(() => import("@/features/expenses/expenses-page"), (m) => m.ExpensesPage);
+const FixturesPage = lazyPage(() => import("@/features/fixtures/fixtures-page"), (m) => m.FixturesPage);
+const CreateEventWizard = lazyPage(() => import("@/features/onboarding/create-event-wizard"), (m) => m.CreateEventWizard);
+const SocietyAdminPage = lazyPage(() => import("@/features/society/admin/society-admin-page"), (m) => m.SocietyAdminPage);
+const PrasadPage = lazyPage(() => import("@/features/prasad/prasad-page"), (m) => m.PrasadPage);
+const ProfilePage = lazyPage(() => import("@/features/profile/profile-page"), (m) => m.ProfilePage);
+const VolunteersPage = lazyPage(() => import("@/features/volunteers/volunteers-page"), (m) => m.VolunteersPage);
+const SettingsPage = lazyPage(() => import("@/features/settings/settings-page"), (m) => m.SettingsPage);
+const SponsorsPage = lazyPage(() => import("@/features/sponsors/sponsors-page"), (m) => m.SponsorsPage);
+const TasksPage = lazyPage(() => import("@/features/tasks/tasks-page"), (m) => m.TasksPage);
+const TeamsPage = lazyPage(() => import("@/features/teams/teams-page"), (m) => m.TeamsPage);
+
+let warmed = false;
+/** Fetch every on-demand page while the browser is idle, once. */
+function warmPages() {
+  if (warmed || typeof window === "undefined") return;
+  warmed = true;
+  const run = () => pageLoaders.forEach((load) => void load().catch(() => undefined));
+  const idle = (window as Window & { requestIdleCallback?: (callback: () => void) => number }).requestIdleCallback;
+  if (idle) idle(run);
+  else window.setTimeout(run, 2000);
+}
+
+/** A page that may still be loading draws the page skeleton meanwhile, like any other wait in an event. */
+function Page({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
+}
 
 /**
  * Every page of an event, defined once and mounted twice.
@@ -49,34 +83,35 @@ function eventRoutes(indexElement = <EventIndex />) {
   return (
     <Route element={<RouteGuard />}>
       <Route index element={indexElement} />
-      <Route path="command" element={<CommandCentrePage />} />
-      <Route path="communications" element={<CommunicationsPage />} />
-      <Route path="registration" element={<RegistrationPage />} />
-      <Route path="pass" element={<PassPage />} />
-      <Route path="updates" element={<UpdatesPage />} />
-      <Route path="gate" element={<GatePage />} />
+      <Route path="command" element={<Page><CommandCentrePage /></Page>} />
+      <Route path="communications" element={<Page><CommunicationsPage /></Page>} />
+      <Route path="registration" element={<Page><RegistrationPage /></Page>} />
+      <Route path="pass" element={<Page><PassPage /></Page>} />
+      <Route path="updates" element={<Page><UpdatesPage /></Page>} />
+      <Route path="gate" element={<Page><GatePage /></Page>} />
       <Route path="dashboard" element={<DashboardPage />} />
-      <Route path="customise-dashboard" element={<CustomiseDashboardPage />} />
-      <Route path="contributions" element={<ContributionsPage />} />
-      <Route path="sponsors" element={<SponsorsPage />} />
-      <Route path="budget" element={<BudgetPage />} />
-      <Route path="tasks" element={<TasksPage />} />
-      <Route path="expenses" element={<ExpensesPage />} />
-      <Route path="auctions" element={<AuctionsPage />} />
-      <Route path="closing" element={<ClosingPage />} />
-      <Route path="prasad" element={<PrasadPage />} />
-      <Route path="volunteers" element={<VolunteersPage />} />
+      <Route path="customise-dashboard" element={<Page><CustomiseDashboardPage /></Page>} />
+      <Route path="contributions" element={<Page><ContributionsPage /></Page>} />
+      <Route path="sponsors" element={<Page><SponsorsPage /></Page>} />
+      <Route path="budget" element={<Page><BudgetPage /></Page>} />
+      <Route path="tasks" element={<Page><TasksPage /></Page>} />
+      <Route path="expenses" element={<Page><ExpensesPage /></Page>} />
+      <Route path="auctions" element={<Page><AuctionsPage /></Page>} />
+      <Route path="closing" element={<Page><ClosingPage /></Page>} />
+      <Route path="prasad" element={<Page><PrasadPage /></Page>} />
+      <Route path="volunteers" element={<Page><VolunteersPage /></Page>} />
       <Route path="events" element={<Navigate to="../event-plan" replace />} />
-      <Route path="event-plan" element={<EventPlanPage />} />
-      <Route path="teams" element={<TeamsPage />} />
-      <Route path="fixtures" element={<FixturesPage />} />
+      <Route path="event-plan" element={<Page><EventPlanPage /></Page>} />
+      <Route path="teams" element={<Page><TeamsPage /></Page>} />
+      <Route path="fixtures" element={<Page><FixturesPage /></Page>} />
       <Route path="contacts" element={<PlaceholderPage title="Contacts" />} />
-      <Route path="settings" element={<SettingsPage />} />
+      <Route path="settings" element={<Page><SettingsPage /></Page>} />
     </Route>
   );
 }
 
 export function App() {
+  useEffect(warmPages, []);
   return (
     <Routes>
       {/* The pages outside AppLayout slide in on a page turn like every event page does. See page-turn.tsx. */}
@@ -85,8 +120,8 @@ export function App() {
         <Route path="/access-denied" element={<AccessDeniedPage />} />
         {/* Outside AppLayout: no event is selected yet, so the sidebar and the
             route guard have nothing to be about. */}
-        <Route path="/new-event" element={<CreateEventWizard />} />
-        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/new-event" element={<Page><CreateEventWizard /></Page>} />
+        <Route path="/profile" element={<Page><ProfilePage /></Page>} />
         {/* The permanent link. Resolves a token and hands over to the path form. */}
         <Route path="/s/:token" element={<ShareLinkPage />} />
 
@@ -96,7 +131,7 @@ export function App() {
         <Route path="/society" element={<SocietyHomePage />} />
         <Route path="/society/:societySlug" element={<SocietyHomePage />} />
         {/* Private to society admins; the server decides, this only draws. */}
-        <Route path="/society/:societySlug/admin" element={<SocietyAdminPage />} />
+        <Route path="/society/:societySlug/admin" element={<Page><SocietyAdminPage /></Page>} />
       </Route>
 
       {/* The owner-only Platform Control Center. Reached by typing the address: nothing links here. The server

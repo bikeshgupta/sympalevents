@@ -150,8 +150,14 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
   }
 
   const supabase = assertServiceSupabase();
-  const viewer = await optionalAppUser(req);
   const slug = queryValue(req, "slug").trim().toLowerCase();
+  const societyColumns = "id,name,slug,city,logo_url";
+  // A society named by its address is public and needs nothing from sign-in,
+  // so it is read at the same time as the viewer rather than after.
+  const societyBySlug = slug
+    ? Promise.resolve(supabase.from("organizations").select(societyColumns).eq("slug", slug).maybeSingle())
+    : null;
+  const viewer = await optionalAppUser(req);
 
   // ---- the society -------------------------------------------------------
   //
@@ -159,11 +165,10 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
   // slug" to `limit(1)` would hand whoever asked the first society in the
   // table, which on a shared deployment is a stranger's. A request with no
   // slug and no session has no society to mean, so it is refused.
-  const societyColumns = "id,name,slug,city,logo_url";
   let societyResult;
 
-  if (slug) {
-    societyResult = await supabase.from("organizations").select(societyColumns).eq("slug", slug).maybeSingle();
+  if (societyBySlug) {
+    societyResult = await societyBySlug;
   } else {
     if (!viewer) throw fail("Sign in, or open a society by its address", 401);
 
@@ -200,24 +205,27 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
   if (!society) throw fail("That society does not exist", 404);
 
   // ---- may this viewer see it, and may they manage it? -------------------
-  let canManage = false;
-  if (viewer) {
-    const { data: membership, error } = await supabase
-      .from("organization_members")
-      .select("role")
-      .eq("organization_id", society.id)
-      .eq("user_id", viewer.id)
-      .maybeSingle();
-    if (error && !isMissingSchema(error)) throw error;
-    canManage = membership?.role === "admin" || membership?.role === "committee";
-  }
-
+  //
   // ---- its events --------------------------------------------------------
   //
   // Each optional column stands on its own: a database that has 029 but not 027
   // still gets slugs and statuses, just no hero photo - the old all-or-nothing
   // fallback threw the whole lot away for one absent column.
-  const eventsResult = await selectDegrading(
+  //
+  // The membership and the event list both need only the society, so they are
+  // read together.
+  const [membershipResult, eventsResult] = await Promise.all([
+    viewer
+      ? Promise.resolve(
+          supabase
+            .from("organization_members")
+            .select("role")
+            .eq("organization_id", society.id)
+            .eq("user_id", viewer.id)
+            .maybeSingle(),
+        )
+      : Promise.resolve(null),
+    selectDegrading(
     "events",
     [
       "id",
@@ -242,7 +250,14 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
         .select(select)
         .eq("organization_id", society.id)
         .order("start_date", { ascending: false }),
-  );
+    ),
+  ]);
+  let canManage = false;
+  if (membershipResult) {
+    const { data: membership, error } = membershipResult;
+    if (error && !isMissingSchema(error)) throw error;
+    canManage = membership?.role === "admin" || membership?.role === "committee";
+  }
   if (eventsResult.error) throw eventsResult.error;
 
   const rows = (eventsResult.data ?? []) as Record<string, unknown>[];
@@ -306,7 +321,22 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
   const ids = visibleRows.map((row) => String(row.id));
 
   // ---- the aggregates: one batched query each ----------------------------
-  const [closingRows, feedbackRows, photoRows, contributionRows, sponsorRows, teamRows] = await Promise.all([
+  // The viewer's own bookings, so the front door can say "you have a pass for
+  // this" - their rows only, never anybody else's. Quietly absent before 032.
+  // Read alongside the aggregates rather than after them.
+  const passesRead =
+    viewer && ids.length
+      ? Promise.resolve(
+          supabase
+            .from("event_registrations")
+            .select("event_id,adults,children,payment_status")
+            .eq("user_id", viewer.id)
+            .eq("status", "active")
+            .in("event_id", ids),
+        )
+      : Promise.resolve(null);
+  const [[closingRows, feedbackRows, photoRows, contributionRows, sponsorRows, teamRows], mine] = await Promise.all([
+    Promise.all([
     tally<{ event_id: string; is_closed: boolean | null }>(supabase, "event_closing", ["event_id", "is_closed"], ids),
     tally<{ event_id: string; rating: number | null; comment: string | null }>(
       supabase,
@@ -329,6 +359,8 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
     ),
     tally<{ event_id: string }>(supabase, "sponsors", ["event_id"], ids),
     tally<{ event_id: string }>(supabase, "event_teams", ["event_id"], ids),
+    ]),
+    passesRead,
   ]);
 
   const closedByEvent = new Map(closingRows.map((row) => [String(row.event_id), Boolean(row.is_closed)]));
@@ -343,16 +375,8 @@ export async function handleSocietyHome(req: ApiRequest, res: ApiResponse) {
     if (!held || order < held.order) coverByEvent.set(eventId, { url, order });
   }
 
-  // The viewer's own bookings, so the front door can say "you have a pass for
-  // this" - their rows only, never anybody else's. Quietly absent before 032.
   const passes: { eventId: string; people: number; paymentStatus: string }[] = [];
-  if (viewer && ids.length) {
-    const mine = await supabase
-      .from("event_registrations")
-      .select("event_id,adults,children,payment_status")
-      .eq("user_id", viewer.id)
-      .eq("status", "active")
-      .in("event_id", ids);
+  if (mine) {
     if (!mine.error) {
       for (const row of (mine.data ?? []) as Record<string, unknown>[]) {
         passes.push({

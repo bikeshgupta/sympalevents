@@ -1,6 +1,7 @@
 // Type-only: erased at compile time, so server.ts can import this module at
 // runtime without the two forming a cycle.
 import type { assertServiceSupabase } from "./server.js";
+import { inflight } from "./inflight.js";
 
 /**
  * Who outranks whom.
@@ -119,8 +120,10 @@ export async function isSocietyAdminForEvent(supabase: Supabase, eventId: string
   const hit = societyAdminMemo.get(key);
   if (hit && Date.now() - hit.at < societyAdminMemoMs) return hit.value;
 
-  const organizationId = await societyIdForEvent(supabase, eventId);
-  const value = await isSocietyAdmin(supabase, organizationId, userId);
+  // Concurrent first asks (seven page checks on one dashboard read) share one lookup.
+  const value = await inflight(`society-admin:${key}`, async () =>
+    isSocietyAdmin(supabase, await societyIdForEvent(supabase, eventId), userId),
+  );
 
   // Keep the map from growing for ever on a long-lived instance.
   if (societyAdminMemo.size > 500) {

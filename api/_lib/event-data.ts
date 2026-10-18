@@ -246,9 +246,50 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
   }
 
   const supabase = assertServiceSupabase();
+  const includeTasks = queryValue(req, "includeTasks") !== "false";
+
+  // The reads below need nothing but the event id, so they start now, at the
+  // same time as sign-in and the access checks, instead of one after another
+  // behind them. Nothing they return leaves this function until those checks
+  // have passed - a denied request throws away what was read. The empty
+  // catches only stop a failure from counting as unhandled while the checks
+  // run; each promise is still awaited, and still throws, below.
+  const eventRead = loadEvent(supabase, eventId);
+  const rowsRead = Promise.all([
+    supabase.from("residents").select("id,flat_no,resident_name,resident_type").eq("event_id", eventId),
+    supabase
+      .from("contributions")
+      .select(
+        "id,expected_amount,received_amount,received_date,payment_mode,status,resident_id,reference,created_at",
+      )
+      .eq("event_id", eventId),
+    supabase
+      .from("sponsors")
+      .select(
+        "id,sponsor_name,flat_no,contact,category,item_slot,committed_amount,received_amount,status,is_in_kind,payment_date,created_at",
+      )
+      .eq("event_id", eventId),
+    supabase
+      .from("budgets")
+      .select("id,category,item,estimated_qty,unit,unit_cost,actual_cost,funding_type,status")
+      .eq("event_id", eventId),
+    supabase
+      .from("expenses")
+      .select("id,expense_date,category,item,amount,paid_by,payment_mode,expense_type,sponsored,approved_by,notes")
+      .eq("event_id", eventId),
+    fetchSchedule(supabase, eventId),
+  ]);
+  // Tasks are read only when asked for; whether this viewer may see them is
+  // decided below, and the rows are dropped if not.
+  const tasksRead = includeTasks
+    ? Promise.resolve(supabase.from("tasks").select("id,task,owner_name,priority,due_date,status").eq("event_id", eventId))
+    : null;
+  eventRead.catch(() => undefined);
+  rowsRead.catch(() => undefined);
+  tasksRead?.catch(() => undefined);
+
   const viewer = await optionalAppUser(req);
   const viewerId = viewer?.id ?? null;
-  const includeTasks = queryValue(req, "includeTasks") !== "false";
 
   // One resolve per page whose data this read can carry. `resolvePageAccess`
   // is the same resolver api/page-access.ts answers the route guard with, so
@@ -284,39 +325,18 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
     );
   }
 
-  const event = await loadEvent(supabase, eventId);
+  const event = await eventRead;
   if (!event) {
     sendJson(res, 404, { error: "Event not found" });
     return;
   }
 
-  const [residentsResult, contributionsResult, sponsorsResult, budgetsResult, expensesResult, tasksResult, schedule] =
+  const [[residentsResult, contributionsResult, sponsorsResult, budgetsResult, expensesResult, schedule], tasksResult] =
     await Promise.all([
-      supabase.from("residents").select("id,flat_no,resident_name,resident_type").eq("event_id", eventId),
-      supabase
-        .from("contributions")
-        .select(
-          "id,expected_amount,received_amount,received_date,payment_mode,status,resident_id,reference,created_at",
-        )
-        .eq("event_id", eventId),
-      supabase
-        .from("sponsors")
-        .select(
-          "id,sponsor_name,flat_no,contact,category,item_slot,committed_amount,received_amount,status,is_in_kind,payment_date,created_at",
-        )
-        .eq("event_id", eventId),
-      supabase
-        .from("budgets")
-        .select("id,category,item,estimated_qty,unit,unit_cost,actual_cost,funding_type,status")
-        .eq("event_id", eventId),
-      supabase
-        .from("expenses")
-        .select("id,expense_date,category,item,amount,paid_by,payment_mode,expense_type,sponsored,approved_by,notes")
-        .eq("event_id", eventId),
-      includeTasks && tasksAccess.canView
-        ? supabase.from("tasks").select("id,task,owner_name,priority,due_date,status").eq("event_id", eventId)
+      rowsRead,
+      tasksRead && tasksAccess.canView
+        ? tasksRead
         : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
-      fetchSchedule(supabase, eventId),
     ]);
 
   const queryError =
@@ -474,21 +494,25 @@ export async function handleEventData(req: ApiRequest, res: ApiResponse) {
   // separate small read rather than a join: it is one row, it is cached by the
   // time anybody navigates, and `loadEvent` already has a legacy fallback that
   // a join would complicate.
-  let societySlug: string | null = null;
-  if ("organization_id" in event && event.organization_id) {
-    const { data: societyRow } = await supabase
-      .from("organizations")
-      .select("slug")
-      .eq("id", event.organization_id as string)
-      .maybeSingle();
-    societySlug = (societyRow?.slug as string | null) ?? null;
-  }
-
+  //
   // The notices on the dashboard card and in the header bell. Drafts go only
   // to somebody who can edit the dashboard; everybody else is sent what is
   // published. Never throws - see loadAnnouncements.
-  const announcements = await loadAnnouncements(supabase, eventId, dashboard.canEdit, viewerId);
-  const previousEdition = await loadPreviousEdition(supabase, "copied_from" in event ? event.copied_from : null, viewerId);
+  //
+  // These three depend on nothing but the event, so they are read together.
+  const organizationId = "organization_id" in event && event.organization_id ? (event.organization_id as string) : null;
+  const [societySlug, announcements, previousEdition] = await Promise.all([
+    organizationId
+      ? supabase
+          .from("organizations")
+          .select("slug")
+          .eq("id", organizationId)
+          .maybeSingle()
+          .then(({ data: societyRow }) => (societyRow?.slug as string | null) ?? null)
+      : Promise.resolve(null),
+    loadAnnouncements(supabase, eventId, dashboard.canEdit, viewerId),
+    loadPreviousEdition(supabase, "copied_from" in event ? event.copied_from : null, viewerId),
+  ]);
 
   sendJson(res, 200, {
     previousEdition,
