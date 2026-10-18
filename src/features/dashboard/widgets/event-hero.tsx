@@ -14,7 +14,7 @@ import { heroPhotoStyle } from "@/lib/hero";
 import { artworkKeyFor, heroArtworkUrl, usesBundledPhoto } from "@/lib/hero-artwork";
 import { useCallback, useRef } from "react";
 import { clamp01, useDashboardMotion, useScrollFrame } from "@/lib/dashboard-motion";
-import { HeroAurora, HeroEmbers } from "@/components/shared/dashboard-fx";
+import { HeroAurora, HeroEmbers, RisingWords } from "@/components/shared/dashboard-fx";
 
 const fallbackHeroStyle = {
   background:
@@ -214,22 +214,6 @@ export function EventHero({
         </div>
       </div>
     </section>
-  );
-}
-
-/** The event name, a word at a time. The heading carries the name for screen readers. */
-function RisingWords({ text }: { text: string }) {
-  return (
-    <span aria-hidden="true">
-      {text.split(/\s+/).map((word, index) => (
-        <span key={`${word}-${index}`}>
-          {index > 0 ? " " : null}
-          <span className="dfx-word" style={{ ["--i" as string]: index }}>
-            {word}
-          </span>
-        </span>
-      ))}
-    </span>
   );
 }
 

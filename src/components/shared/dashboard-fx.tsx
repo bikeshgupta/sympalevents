@@ -109,6 +109,25 @@ export function HeroAurora() {
   );
 }
 
+/**
+ * A heading's text, a word at a time (`.dfx-word`). The words are hidden from
+ * screen readers, so the heading itself must carry the text as `aria-label`.
+ */
+export function RisingWords({ text }: { text: string }) {
+  return (
+    <span aria-hidden="true">
+      {text.split(/\s+/).map((word, index) => (
+        <span key={`${word}-${index}`}>
+          {index > 0 ? " " : null}
+          <span className="dfx-word" style={{ ["--i" as string]: index }}>
+            {word}
+          </span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 type Ember = { x: number; y: number; speed: number; radius: number; alpha: number; wobble: number };
 
 /**

@@ -21,6 +21,8 @@ import {
 import { useEventContext } from "@/lib/event-context";
 import { useSocietyHome, type SocietyEvent } from "@/lib/society";
 import { cn } from "@/lib/utils";
+import { useDashboardMotion } from "@/lib/dashboard-motion";
+import { ScrollProgressBar } from "@/components/shared/dashboard-fx";
 
 /**
  * A society's front door - "a society's digital community space", not an event-management dashboard.
@@ -50,6 +52,9 @@ export function SocietyHomePage() {
   const now = useMemo(() => new Date(), []);
   const [managing, setManaging] = useState(false);
   const { societies, isLoading: contextLoading } = useEventContext();
+  // Decoration only (src/lib/dashboard-motion.ts): a scroll bar along the top,
+  // a tab underline that slides, and event rows that rise in when a tab opens.
+  const motion = useDashboardMotion();
 
   // Drafts never reach this page's lists, and a cancelled event only stays while its
   // date is still ahead - see residentVisibleEvents for why.
@@ -111,6 +116,7 @@ export function SocietyHomePage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
+      {motion ? <ScrollProgressBar /> : null}
       {/* The three lines start at the top, with the avatar in the corner beside them - the account has no row
           of its own, which is what this saves. */}
       <div className="flex items-start justify-between gap-3">
@@ -176,7 +182,18 @@ export function SocietyHomePage() {
           {/* Text tabs, equal thirds, with an underline under the chosen one: filled pills competed with
               the hero for weight, and a dimmed tab read as disabled. A tab with nothing in it looks like
               every other - it is as selectable as any - and says so when chosen. */}
-          <div role="tablist" aria-label="Events by when they happen" className="mt-1 grid grid-cols-3 border-b">
+          <div role="tablist" aria-label="Events by when they happen" className="relative mt-1 grid grid-cols-3 border-b">
+            {/* One underline that slides to the chosen tab. The tabs are equal thirds, so its place is
+                the tab's index - nothing to measure. */}
+            {motion ? (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -bottom-px left-0 h-0.5 w-1/3 px-3 transition-transform duration-500 ease-[cubic-bezier(0.3,1.3,0.5,1)]"
+                style={{ transform: `translateX(${tabs.findIndex((tab) => tab.key === current) * 100}%)` }}
+              >
+                <span className="block h-full rounded-full bg-primary" />
+              </span>
+            ) : null}
             {tabs.map((tab) => {
               const count = grouped[tab.key].length;
               const selected = tab.key === current;
@@ -197,13 +214,13 @@ export function SocietyHomePage() {
                 >
                   {tab.label}
                   {count ? <span className="ml-1.5 font-sans text-xs tabular-nums text-muted-foreground">{count}</span> : null}
-                  {selected ? <span aria-hidden className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary" /> : null}
+                  {selected && !motion ? <span aria-hidden className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary" /> : null}
                 </button>
               );
             })}
           </div>
 
-          <section role="tabpanel" id={`panel-${current}`} aria-labelledby={`tab-${current}`} className="mt-1">
+          <section key={current} role="tabpanel" id={`panel-${current}`} aria-labelledby={`tab-${current}`} className="mt-1">
             {grouped[current].length ? (
               // Months only once there is enough to scan - see groupByMonth.
               groupByMonth(grouped[current], now).map((group) => (
@@ -214,8 +231,12 @@ export function SocietyHomePage() {
                     </h3>
                   ) : null}
                   <ul className="divide-y">
-                    {group.events.map((event) => (
-                      <li key={event.id}>
+                    {group.events.map((event, index) => (
+                      <li
+                        key={event.id}
+                        className={motion ? "dfx-row" : undefined}
+                        style={motion ? { animationDelay: `${Math.min(index, 11) * 70}ms` } : undefined}
+                      >
                         <EventCard event={event} to={eventPath(event)} now={now} />
                       </li>
                     ))}

@@ -5,6 +5,9 @@ import { callToAction, eventEyebrow } from "@/features/society/event-presentatio
 import { getEventStatus } from "@/lib/event-status";
 import { hasModule, type SocietyEvent } from "@/lib/society";
 import { cn } from "@/lib/utils";
+import { useCallback, useRef } from "react";
+import { clamp01, useDashboardMotion, useScrollFrame } from "@/lib/dashboard-motion";
+import { HeroAurora, HeroEmbers, RisingWords } from "@/components/shared/dashboard-fx";
 
 /**
  * The strongest thing on the page: what is on now, or what is next.
@@ -29,6 +32,30 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
   const status = getEventStatus(event, now);
   const metric = headlineMetric(event);
 
+  // The same motion as the event hero (src/lib/dashboard-motion.ts): the name
+  // rises in, embers drift up the picture, and as it scrolls away the picture
+  // sinks and grows while the words fade. At rest nothing is set.
+  const motion = useDashboardMotion();
+  const frameRef = useRef<HTMLDivElement>(null);
+  const pictureRef = useRef<HTMLDivElement>(null);
+  const copyRef = useRef<HTMLDivElement>(null);
+  const onFrame = useCallback((box: DOMRect) => {
+    const progress = clamp01(-box.top / box.height);
+    const picture = pictureRef.current;
+    const copy = copyRef.current;
+    if (!picture || !copy) return;
+    if (progress === 0) {
+      picture.style.transform = "";
+      copy.style.transform = "";
+      copy.style.opacity = "";
+      return;
+    }
+    picture.style.transform = `translateY(${progress * 24}px) scale(${1 + progress * 0.18})`;
+    copy.style.transform = `translateY(${progress * 16}px)`;
+    copy.style.opacity = String(1 - progress * 0.8);
+  }, []);
+  useScrollFrame(frameRef, motion, onFrame);
+
   return (
     <Link
       to={to}
@@ -38,7 +65,8 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
       )}
     >
       
-      <div className="relative aspect-[16/10] w-full bg-primary/90 sm:aspect-[16/6]">
+      <div ref={frameRef} className="relative aspect-[16/10] w-full overflow-hidden bg-primary/90 sm:aspect-[16/6]">
+        <div ref={pictureRef} className="absolute inset-0">
         <EventArtwork
           eventType={event.eventType}
           imageUrl={event.heroImageUrl}
@@ -49,6 +77,9 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
           eager
           className="absolute inset-0 h-full w-full transition-transform duration-500 group-hover:scale-[1.02]"
         />
+        </div>
+        {motion && !event.heroImageUrl ? <HeroAurora /> : null}
+        {motion ? <HeroEmbers /> : null}
 
         {/* Dark at the foot, clear through the middle: the copy has to clear 4.5:1 without dimming the whole
             picture, which is content. */}
@@ -64,11 +95,13 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
           </span>
         ) : null}
 
-        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6">
+        <div ref={copyRef} className="absolute inset-x-0 bottom-0 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/90">{eventEyebrow(event)}</p>
 
-          <h2 className="font-display mt-1.5 text-2xl font-semibold leading-[1.15] text-white drop-shadow-sm sm:text-4xl">
-            {event.name}
+          <h2
+            aria-label={motion ? event.name : undefined}
+            className="font-display mt-1.5 text-2xl font-semibold leading-[1.15] text-white drop-shadow-sm sm:text-4xl">
+            {motion ? <RisingWords text={event.name} /> : event.name}
           </h2>
 
           {event.location || metric ? (

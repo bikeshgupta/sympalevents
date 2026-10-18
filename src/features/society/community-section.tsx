@@ -1,6 +1,8 @@
 import { Camera, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { CommunityEntry } from "@/features/society/community-feed";
+import { useRef } from "react";
+import { useDashboardMotion, useScrollReveal } from "@/lib/dashboard-motion";
 
 /**
  * "From your community" - the society's life between events, as a short list of rows.
@@ -10,6 +12,9 @@ import type { CommunityEntry } from "@/features/society/community-feed";
  * and what data announcements, edits and new-photo notices would need before they can appear here.
  */
 export function CommunitySection({ entries }: { entries: CommunityEntry[] }) {
+  // Rows below the first screen slide in as they are reached.
+  const listRef = useRef<HTMLUListElement>(null);
+  useScrollReveal(listRef, useDashboardMotion() && entries.length > 0);
   if (!entries.length) return null;
 
   return (
@@ -17,7 +22,7 @@ export function CommunitySection({ entries }: { entries: CommunityEntry[] }) {
       <h2 id="community-heading" className="font-display text-2xl font-semibold">
         From your community
       </h2>
-      <ul className="mt-1 divide-y">
+      <ul ref={listRef} className="mt-1 divide-y">
         {entries.map((entry) => (
           <li key={entry.key}>
             <Link
