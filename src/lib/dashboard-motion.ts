@@ -26,7 +26,13 @@ export type RevealStyle = "up" | "left" | "clip";
  * children added later (widgets arrive as their data does) are picked up by
  * the same rules. With motion off it does nothing at all.
  */
-export function useScrollReveal(ref: RefObject<HTMLElement>, enabled: boolean, style: RevealStyle = "up") {
+export function useScrollReveal(
+  ref: RefObject<HTMLElement>,
+  enabled: boolean,
+  style: RevealStyle = "up",
+  /** Change it to run the reveal again over a remounted container ("Relive it"). */
+  resetKey?: unknown,
+) {
   useEffect(() => {
     const container = ref.current;
     if (!enabled || !container || typeof IntersectionObserver === "undefined") return;
@@ -63,7 +69,7 @@ export function useScrollReveal(ref: RefObject<HTMLElement>, enabled: boolean, s
       // Never leave anything hidden behind when the effect goes away.
       Array.from(container.children).forEach((el) => el.classList.remove("dfx-pending"));
     };
-  }, [ref, enabled, style]);
+  }, [ref, enabled, style, resetKey]);
 }
 
 /**

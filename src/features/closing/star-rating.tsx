@@ -1,4 +1,6 @@
 import { Star } from "lucide-react";
+import { useState } from "react";
+import { useDashboardMotion } from "@/lib/dashboard-motion";
 import { cn } from "@/lib/utils";
 
 const sizeClass = {
@@ -60,6 +62,14 @@ export function StarRatingInput({
   onChange: (rating: number) => void;
   disabled?: boolean;
 }) {
+  // The star just chosen gives a small pop (motion only). Keyed on a counter so
+  // choosing the same star twice pops it again.
+  const motion = useDashboardMotion();
+  const [picked, setPicked] = useState<{ star: number; at: number } | null>(null);
+  const choose = (star: number) => {
+    setPicked({ star, at: Date.now() });
+    onChange(star);
+  };
   return (
     <div role="radiogroup" aria-label="Your rating" className="flex items-center gap-1">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -75,13 +85,18 @@ export function StarRatingInput({
             const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
             if (!offset) return;
             event.preventDefault();
-            onChange(Math.min(5, Math.max(1, (value || 1) + offset)));
+            choose(Math.min(5, Math.max(1, (value || 1) + offset)));
           }}
-          onClick={() => onChange(star)}
+          onClick={() => choose(star)}
           className="flex h-10 w-10 items-center justify-center rounded-md transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           <Star
-            className={cn("h-6 w-6", star <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground")}
+            key={picked?.star === star ? picked.at : "still"}
+            className={cn(
+              "h-6 w-6",
+              star <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground",
+              motion && picked?.star === star && "dfx-bump",
+            )}
             aria-hidden="true"
           />
         </button>

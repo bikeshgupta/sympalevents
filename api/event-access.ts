@@ -94,11 +94,17 @@ export default async function handler(req: any, res: any) {
     // The society's admin sees every page and Settings, whether or not they
     // were ever added to this event - see api/_lib/authority.ts.
     const role = societyAdmin ? "admin" : member?.role ?? null;
+    // The viewer's own role on THIS event, without the society admin's
+    // promotion above. A few things belong to the event's own admins and
+    // nobody else - the closing reminder and closing the event - and they
+    // read this, never `role`.
+    const eventRole = (member?.role as string | null | undefined) ?? null;
 
     if (role === "admin" || publication.canManage) {
       sendJson(res, 200, {
         ...vocabulary,
         role,
+        eventRole,
         pages: [
           // First: it is where an organiser starts. Not a module, so it is not
           // in the list above and cannot be reordered or switched off.
@@ -151,7 +157,7 @@ export default async function handler(req: any, res: any) {
       );
     }
 
-    sendJson(res, 200, { ...vocabulary, role, pages });
+    sendJson(res, 200, { ...vocabulary, role, eventRole, pages });
   } catch (error) {
     handleApiError(res, error);
   }

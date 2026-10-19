@@ -1,6 +1,7 @@
-import { CheckCircle2, Lock, Unlock } from "lucide-react";
-import { useMemo, useState } from "react";
+import { CheckCircle2, Lock, RotateCcw, Unlock } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { DataSourceBadge } from "@/components/shared/data-source-badge";
+import { ScrollProgressBar } from "@/components/shared/dashboard-fx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ClosingFacts } from "@/features/closing/closing-copy";
@@ -10,11 +11,13 @@ import { CreditsDialog } from "@/features/closing/credits-dialog";
 import { CreditsSection, type CreditPerson } from "@/features/closing/credits-section";
 import { FeedbackSection } from "@/features/closing/feedback-section";
 import { GallerySection } from "@/features/closing/gallery-section";
+import { MemoryHero } from "@/features/closing/memory-hero";
 import { formatEventWeekday, getEventDays } from "@/features/dashboard/dashboard-utils";
 import { useSession } from "@/lib/auth";
 import { emptyCredits, useEventClosing, usesSeedCredits, withSeedCredits } from "@/lib/closing";
 import { defaultCreditsSettings, visibleNames } from "../../../shared/credits-settings";
 import { useHashTarget } from "@/lib/scroll";
+import { useDashboardMotion, useScrollReveal } from "@/lib/dashboard-motion";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
 import { useEventData } from "@/lib/event-data";
@@ -53,8 +56,13 @@ function creditPeople(rows: Array<{ name: string; flat?: string }>): CreditPerso
  *
  * Public, like the dashboard - a resident should be able to open the link
  * and read the thank-you note without an account. Writing a review needs a
- * sign-in; editing the note, the photos and the closed/open switch needs
- * admin or committee, enforced server-side in api/_lib/closing.ts.
+ * sign-in; editing the note, the credits and the photos needs admin or
+ * committee, and closing or reopening it needs an admin of this event
+ * (not a society admin with no role here), all enforced in api/_lib/closing.ts.
+ *
+ * Once it is closed the page is the event's memory: a banner whose name rises
+ * in over embers, sections that slide in as they are reached, photographs that
+ * open out, a scroll bar along the top, and "Relive it from the top".
  */
 export function ClosingPage() {
   const vocab = useVocabulary();
@@ -63,9 +71,17 @@ export function ClosingPage() {
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
   const canManage = eventAccess?.role === "admin" || eventAccess?.role === "committee";
+  // Closing turns the event into a memory for everybody: the event's own
+  // admins only. `eventRole` leaves out a society admin's promotion to admin.
+  const canClose = eventAccess?.eventRole === "admin";
+  const motion = useDashboardMotion();
+  const stackRef = useRef<HTMLDivElement>(null);
+  const [replay, setReplay] = useState(0);
   const seedCredits = usesSeedCredits(data.event);
   const closing = useEventClosing(selectedEventId ?? data.event.id, { seedCredits });
   const [editingCredits, setEditingCredits] = useState(false);
+  const isClosed = Boolean(closing.data?.closing.is_closed);
+  useScrollReveal(stackRef, motion && isClosed, "up", replay);
 
   // Arriving from the dashboard's "All N reviews" or its gallery preview.
   // Gated on the query settling: the sections above the target grow as their
@@ -121,7 +137,8 @@ export function ClosingPage() {
   };
 
   return (
-    <div className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
+    <div key={replay} ref={stackRef} className="reveal-stack mx-auto max-w-5xl space-y-4 pb-3 sm:space-y-5">
+      {motion && isClosed ? <ScrollProgressBar /> : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold">{vocab.labelFor("closing")}</h2>
@@ -131,6 +148,8 @@ export function ClosingPage() {
         </div>
         <DataSourceBadge source={data.source} reason={data.fallbackReason} isLoading={isFetching} />
       </div>
+
+      {isClosed ? <MemoryHero event={data.event} /> : null}
 
       {closing.isError ? (
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -155,6 +174,7 @@ export function ClosingPage() {
 
       {canManage ? (
         <CloseEventControl
+          canClose={canClose}
           isClosed={Boolean(closing.data?.closing.is_closed)}
           isSaving={closing.setClosed.isPending}
           onToggle={(closed) => closing.setClosed.mutateAsync(closed)}
@@ -218,6 +238,22 @@ export function ClosingPage() {
           remove: () => closing.deleteReview.mutateAsync(),
         }}
       />
+
+      {isClosed ? (
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: motion ? "smooth" : "auto" });
+              // Once at the top, draw the page again so it rises in as it first did.
+              window.setTimeout(() => setReplay((count) => count + 1), motion ? 450 : 0);
+            }}
+          >
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            Relive it from the top
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -231,10 +267,13 @@ export function ClosingPage() {
  * they say it is ready. Reversible, for the same reason.
  */
 function CloseEventControl({
+  canClose,
   isClosed,
   isSaving,
   onToggle,
 }: {
+  /** An admin of this event. Committee members see the state and who decides it. */
+  canClose: boolean;
   isClosed: boolean;
   isSaving: boolean;
   onToggle: (closed: boolean) => Promise<unknown>;
@@ -277,6 +316,11 @@ function CloseEventControl({
             {error ? <p className="mt-1 text-sm text-destructive">{error}</p> : null}
           </div>
         </div>
+        {!canClose ? (
+          <p className="shrink-0 text-sm text-muted-foreground sm:max-w-[14rem] sm:text-right">
+            Only this event's admins can {isClosed ? "reopen" : "close"} it.
+          </p>
+        ) : (
         <Button variant={isClosed ? "outline" : "default"} onClick={toggle} disabled={isSaving} className="shrink-0">
           {isClosed ? (
             <>
@@ -290,6 +334,7 @@ function CloseEventControl({
             </>
           )}
         </Button>
+        )}
         {isSaving ? <span className="sr-only">Saving</span> : null}
       </CardContent>
     </Card>

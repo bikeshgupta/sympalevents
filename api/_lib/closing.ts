@@ -665,6 +665,21 @@ async function handleClosingWrite(
   if (body.message !== undefined) updates.message = String(body.message).slice(0, MAX_MESSAGE).trim();
 
   if (body.action === "close" || body.action === "reopen") {
+    // Closing turns the event into a memory for everybody, so it is the
+    // event's own admins' call: not a committee member, and not a society
+    // admin who holds no role on this event (requireEventCommittee above
+    // admits both for the note, the credits and the photos).
+    const { data: member, error: memberError } = await supabase
+      .from("event_members")
+      .select("role")
+      .eq("event_id", eventId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (memberError) throw memberError;
+    if (member?.role !== "admin") {
+      sendJson(res, 403, { error: "Only an admin of this event can close or reopen it." });
+      return;
+    }
     const closing = body.action === "close";
     updates.is_closed = closing;
     updates.closed_at = closing ? new Date().toISOString() : null;

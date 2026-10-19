@@ -1,5 +1,5 @@
 import { Images, MessageCircle, Pencil, Trash2, Upload } from "lucide-react";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,6 +9,7 @@ import { PhotoViewer, type PhotoSocialActions } from "@/features/closing/photo-v
 import { galleryReactions, groupByAlbum, type GalleryPhoto } from "@/lib/closing";
 import { prepareGalleryPhoto, formatFileSize } from "@/lib/images";
 import { useImageUpload } from "@/lib/uploads";
+import { useDashboardMotion, useScrollReveal } from "@/lib/dashboard-motion";
 
 type GalleryActions = PhotoSocialActions & {
   add: (input: { imageUrl: string; caption: string; album: string }) => Promise<unknown>;
@@ -105,7 +106,7 @@ export function GallerySection({
           albums.map((group) => (
             <section key={group.album} className="space-y-2.5">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.album}</h3>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <RevealGrid className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {group.items.map((photo) => (
                   <figure key={photo.id} className="group relative overflow-hidden rounded-lg border bg-muted">
                     <button
@@ -157,7 +158,7 @@ export function GallerySection({
                     <PhotoTally photo={photo} />
                   </figure>
                 ))}
-              </div>
+              </RevealGrid>
             </section>
           ))
         ) : (
@@ -463,5 +464,16 @@ function PhotoCaptionDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A grid whose photographs open out from their centres as they are scrolled to (motion only). */
+function RevealGrid({ className, children }: { className: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useScrollReveal(ref, useDashboardMotion(), "clip");
+  return (
+    <div ref={ref} className={className}>
+      {children}
+    </div>
   );
 }

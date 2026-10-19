@@ -1766,6 +1766,29 @@ naming it.
   not drag-and-drop, which is close to unusable on a phone. Volunteers are add/remove
   only - alphabetical, because no order there means anything.
 
+### The closing reminder, and closing is the event admin's
+
+- **A once-a-day popup for the event's own admins** while a finished event waits to be closed
+  ([closing-reminder.tsx](src/features/closing/closing-reminder.tsx), mounted once in `AppLayout`; rules pure and
+  tested in [src/lib/closing-reminder.ts](src/lib/closing-reminder.ts)): `eventRole === "admin"` only - **not a
+  society admin with no role on the event, not committee** - never in the resident preview or on `/closing`, from
+  the moment the event is completed by its dates (never draft or cancelled), on the first visit of each IST day
+  (remembered on the device in `localStorage`, no migration), and never again once `is_closed`. The closing row is
+  read only when every other rule says yes. **It closes nothing**: its one action opens `/closing`; "Remind me
+  tomorrow", the corner button, Escape and a tap outside mean "not today". Nothing on it claims to be finished - the
+  note and credits are drafts to review (the records may not hold everyone who helped) and there are no reviews on
+  it, because feedback comes once the event is a memory.
+- **`eventRole`** on `/api/event-access` is the viewer's own role on the event, without the society admin's
+  promotion that `role` carries. Use it only for what belongs to the event's own admins.
+- **Closing and reopening need an admin of this event** (`event_members.role = 'admin'`), enforced in
+  `handleClosingWrite` (403 as a sentence); the note, credits and photos still take admin or committee. Committee
+  members see the state with "Only this event's admins can close it".
+- **A closed event's closing page is its memory**: `MemoryHero` ([memory-hero.tsx](src/features/closing/memory-hero.tsx),
+  the hero's own picture and scrim, a "Memory" badge, the name rising over embers, parallax), sections sliding in,
+  photographs opening out (`RevealGrid` in gallery-section), a scroll bar, stars that pop when chosen, and "Relive
+  it from the top" (scrolls up and redraws via `useScrollReveal`'s `resetKey`). All of it follows
+  `useDashboardMotion()`.
+
 ### Client structure
 
 - `useEventClosing(eventId)` ([src/lib/closing.ts](src/lib/closing.ts)) - the one query

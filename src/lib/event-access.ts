@@ -14,6 +14,10 @@ export type PageAccess = {
 
 type EventAccess = {
   role: "admin" | "committee" | "read_only" | null;
+  /** The viewer's own role on this event, without a society admin's promotion
+   *  to "admin". Absent from an older server. Closing the event and the
+   *  closing reminder are for `eventRole === "admin"` only. */
+  eventRole?: "admin" | "committee" | "read_only" | null;
   pages: PageAccess[];
   /** festival | sports | cultural | mixed | custom. */
   eventType?: string;

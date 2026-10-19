@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { pageKeyFromPath } from "@/lib/page-access";
 import { IosPage } from "@/components/ui/ios-page";
 import { iosPageKeys } from "@/components/ui/ios-page-context";
+import { ClosingReminder } from "@/features/closing/closing-reminder";
 
 function pageKeyFromHref(href: string) {
   return href.split("/").filter(Boolean)[0] || "dashboard";
@@ -324,6 +325,10 @@ export function AppLayout() {
             the page content rather than after all of it. The dialog below is
             portalled, so where it sits makes no visual difference; it lives
             next to the drawer because the drawer is what opens it. */}
+        {/* The once-a-day "make it a memory" nudge for this event's own admins
+            (src/lib/closing-reminder.ts). Portalled, so its place here is only
+            about being mounted on every event page. */}
+        <ClosingReminder />
         <NavDrawer
           items={visibleNavItems}
           grouped={groupMenu}

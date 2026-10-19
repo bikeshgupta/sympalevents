@@ -590,3 +590,14 @@
 @media (prefers-reduced-motion: reduce) {
   .dfx-row { animation: none; }
 }
+
+/* The closing reminder rising into place (src/features/closing/closing-reminder.tsx). A wrapper animates,
+   never the Radix content box, so nothing fights the box's own positioning. */
+.dfx-sheet { animation: dfx-sheet 0.6s cubic-bezier(0.25, 1.25, 0.4, 1) both; }
+@keyframes dfx-sheet { from { opacity: 0; transform: translateY(48px) scale(0.96); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+/* A star on the review form popping as it is chosen. */
+.dfx-bump { animation: dfx-bump 0.4s cubic-bezier(0.3, 1.8, 0.5, 1); }
+@keyframes dfx-bump { 50% { transform: scale(1.3) rotate(-8deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .dfx-sheet, .dfx-bump { animation: none; }
+}
