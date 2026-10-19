@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * "My space | <society>": the switch at the top of the home. A two-option segmented control - one soft
- * track, the chosen half filled in the primary colour - 48px tall in all, so it is found at once and costs
+ * track, the chosen half filled in the primary colour - 52px tall in all (44px halves), so it is found at once and costs
  * little of the screen.
  *
  * They are links, not a `tablist`: each half is its own address (`?view=space`, or the society's), so a
@@ -51,18 +51,18 @@ export function HomeTabs({
 
   const half = (selected: boolean) =>
     cn(
-      "relative z-10 flex h-10 min-w-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors duration-300",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+      "relative z-10 flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-3 text-[15px] font-semibold transition-colors duration-300",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.98] motion-reduce:transform-none",
       selected ? "text-primary-foreground" : "text-muted-foreground [@media(hover:hover)]:hover:text-foreground",
     );
 
   return (
-    <nav aria-label="Your events" className="relative mt-4 grid grid-cols-2 rounded-2xl bg-muted p-1 sm:max-w-sm">
+    <nav aria-label="Your events" className="relative mt-3 grid grid-cols-2 rounded-2xl border border-border/60 bg-muted p-1 sm:max-w-sm">
       <span
         ref={thumbRef}
         aria-hidden="true"
         className={cn(
-          "pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-xl bg-primary shadow-sm",
+          "pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-xl bg-primary shadow-md shadow-primary/20",
           motion && "transition-transform duration-500 ease-[cubic-bezier(0.3,1.25,0.5,1)]",
         )}
       />

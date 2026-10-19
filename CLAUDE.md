@@ -2299,12 +2299,15 @@ shared `FilterTabs` ([filter-tabs.tsx](src/components/shared/filter-tabs.tsx), a
   a whole pasted link. Six characters (or `…/i/<code>`) opens a personal invitation at `/i/<code>` (no account
   needed; that page says when a code is wrong, cancelled or closed); eight (or `…/join/<code>`) is a society's
   invite code, joined in place (the existing `?resource=join`) and then opens that society. A link of the wrong
-  shape for its code, or any other URL, is not a code - nothing is fetched. Signed out, joining a society goes to
+  shape for its code, or any other URL, is not a code - nothing is fetched. "Paste link" reads the clipboard
+  where the browser allows it and otherwise just focuses the box. Signed out, joining a society goes to
   sign-in and comes back to the box with the code filled in (`?code=`). `variant="society"` is the same box worded
   for the society tab and its empty state.
 - **My space** ([my-space.tsx](src/features/society/my-space.tsx)) is **personal events only**: greeting, a compact
-  create banner (`CreateEventBanner`, artwork drawn in code), six kind tiles (`KindTiles`, each tinted from
-  `KIND_ACCENT`, one of the five presets), then **My events** with Hosting / Invited / Joined / Past
+  create banner (`CreateEventBanner` - its picture is the birthday artwork drawn in code, **not a photograph**; the
+  scrim is deliberately light, because a heavier one over the artwork's already-dark left edge turned the banner
+  nearly black on a phone; ~156px tall on a phone), "Start with an occasion" (`KindTiles`: six kinds tinted from
+  `KIND_ACCENT`, one of the five presets, plus See all into the form), then **My events** with Hosting / Invited / Joined / Past
   (`myEventLists`, pure and tested in `tests/personal-home.test.mjs`): Invited is upcoming invitations not yet a
   yes, a "maybe" first; Joined is the yeses; Past is anything whose day has gone. It opens on the first list with
   something in it. Cards are `PersonalEventCard` (picture with the date on it, title, time and place, what it means

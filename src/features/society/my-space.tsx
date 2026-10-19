@@ -34,15 +34,15 @@ export function MySpace({ greeting, canCreateSocietyEvent }: { greeting: string;
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
       <div className="min-w-0">
         <header className="mt-5">
-          <h1 className="font-display text-[26px] font-semibold leading-tight sm:text-3xl">{greeting}</h1>
-          <p className="mt-0.5 text-[15px] text-muted-foreground">Your celebrations, invitations and memories</p>
+          <h1 className="font-display text-2xl font-semibold leading-tight sm:text-3xl">{greeting}</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground sm:text-[15px]">Your celebrations, invitations and memories</p>
         </header>
         <CreateEventBanner ready={ready} motion={motion} />
         {ready ? <KindTiles /> : null}
         <MyEvents signedIn={Boolean(session)} query={personal} motion={motion} />
       </div>
 
-      <aside className="mt-8 space-y-4 lg:mt-5" aria-label="Join and quick actions">
+      <aside className="mt-7 space-y-3 lg:mt-5" aria-label="Join and quick actions">
         <JoinEventCard />
         {canCreateSocietyEvent ? (
           <Link
@@ -83,13 +83,13 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
 
   if (!signedIn) {
     return (
-      <section aria-labelledby="my-events" className="mt-8">
-        <h2 id="my-events" className="font-display text-2xl font-semibold">
+      <section aria-labelledby="my-events" className="mt-7">
+        <h2 id="my-events" className="font-display text-xl font-semibold">
           My events
         </h2>
-        <div className="mt-3 flex flex-col items-start gap-3 rounded-2xl border border-dashed p-5 sm:flex-row sm:items-center">
-          <p className="flex-1 text-[15px] text-muted-foreground">Sign in to see the events you host and the invitations you&rsquo;ve replied to.</p>
-          <Button asChild variant="outline">
+        <div className="mt-2 flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">Sign in to see what you host and the invitations you&rsquo;ve answered.</p>
+          <Button asChild variant="outline" className="h-10 shrink-0">
             <Link to="/login" state={{ from: `${location.pathname}${location.search}` }}>
               <LogIn className="h-4 w-4" aria-hidden="true" />
               Sign in
@@ -102,7 +102,7 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
 
   if (query.isLoading) {
     return (
-      <section aria-label="My events" aria-busy="true" className="mt-8">
+      <section aria-label="My events" aria-busy="true" className="mt-7">
         <div className="h-7 w-32 animate-pulse rounded bg-muted" />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {[0, 1].map((key) => (
@@ -122,7 +122,7 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
 
   if (query.error) {
     return (
-      <section aria-label="My events" className="mt-8">
+      <section aria-label="My events" className="mt-7">
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           {query.error instanceof Error ? query.error.message : "Could not load your events."}
         </p>
@@ -135,21 +135,26 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
   const total = lists.hosting.length + lists.invited.length + lists.joined.length + lists.past.length;
   if (!total) {
     return (
-      <section aria-labelledby="my-events" className="mt-8">
-        <h2 id="my-events" className="font-display text-2xl font-semibold">
+      <section aria-labelledby="my-events" className="mt-7">
+        <h2 id="my-events" className="font-display text-xl font-semibold">
           My events
         </h2>
-        <div className="mt-3 flex flex-col items-center gap-2 rounded-3xl border border-dashed px-5 py-8 text-center">
-          <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <CalendarHeart className="h-6 w-6" strokeWidth={1.75} />
+        <div className="mt-2 flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:flex-row sm:items-center">
+          <span aria-hidden="true" className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex">
+            <CalendarHeart className="h-5 w-5" strokeWidth={1.75} />
           </span>
-          <p className="font-display text-xl font-semibold">Nothing planned yet</p>
-          <p className="max-w-sm text-[15px] text-muted-foreground">
-            Create one for a birthday or a get-together, or open an invitation somebody sent you with its code or link.
-          </p>
-          <Button asChild className="mt-2">
-            <Link to="/my/new">Create my first event</Link>
-          </Button>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Nothing planned yet</p>
+            <p className="text-sm text-muted-foreground">Host a celebration, or open an invitation you were sent.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button asChild className="h-10">
+              <Link to="/my/new">Create event</Link>
+            </Button>
+            <Button type="button" variant="outline" className="h-10" onClick={() => document.getElementById("join-event-code")?.focus()}>
+              Join with a code
+            </Button>
+          </div>
         </div>
       </section>
     );
@@ -157,11 +162,11 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
 
   const current = chosen ?? firstFilledList(lists);
   return (
-    <section aria-labelledby="my-events" className="mt-8">
-      <h2 id="my-events" className="font-display text-2xl font-semibold">
+    <section aria-labelledby="my-events" className="mt-7">
+      <h2 id="my-events" className="font-display text-xl font-semibold">
         My events
       </h2>
-      <div className="mt-2">
+      <div className="mt-1">
         <FilterTabs
           label="My events"
           idPrefix="my-events"
@@ -218,10 +223,10 @@ function EventGrid({ lists, current, motion }: { lists: Lists; current: ListKey;
             going: event.counts.goingPeople as number | null,
           }));
 
-  if (!cards.length) return <p className="rounded-2xl border border-dashed p-5 text-[15px] text-muted-foreground">{emptyLine[current]}</p>;
+  if (!cards.length) return <p className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">{emptyLine[current]}</p>;
 
   return (
-    <ul className="grid gap-3 sm:grid-cols-2">
+    <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
       {cards.map((card, index) => (
         <li key={card.key} className={motion ? "dfx-row" : undefined} style={motion ? { animationDelay: `${Math.min(index, 11) * 60}ms` } : undefined}>
           <PersonalEventCard event={card.event} to={card.to} chip={card.chip} going={card.going} past={current === "past"} />

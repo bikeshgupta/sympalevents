@@ -62,7 +62,7 @@ export function FilterTabs<K extends string>({
             onClick={() => onChange(tab.key)}
             onKeyDown={onKeyDown}
             className={cn(
-              "relative min-h-11 flex-1 px-1 text-[15px] font-medium transition-colors",
+              "relative min-h-11 min-w-0 flex-1 whitespace-nowrap px-0.5 text-sm font-medium transition-colors sm:text-[15px]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               selected ? "text-foreground" : "text-muted-foreground [@media(hover:hover)]:hover:text-foreground",
             )}
@@ -71,7 +71,7 @@ export function FilterTabs<K extends string>({
             {tab.count ? (
               <span
                 className={cn(
-                  "ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs tabular-nums",
+                  "ml-1 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs tabular-nums sm:ml-1.5",
                   selected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
                 )}
               >
