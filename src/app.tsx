@@ -55,7 +55,6 @@ const TeamsPage = lazyPage(() => import("@/features/teams/teams-page"), (m) => m
 const PersonalEventFormPage = lazyPage(() => import("@/features/personal/personal-event-form"), (m) => m.PersonalEventFormPage);
 const HostEventPage = lazyPage(() => import("@/features/personal/host-event-page"), (m) => m.HostEventPage);
 const InvitationPage = lazyPage(() => import("@/features/personal/invitation-page"), (m) => m.InvitationPage);
-const JoinSocietyPage = lazyPage(() => import("@/features/society/join-society-page"), (m) => m.JoinSocietyPage);
 
 let warmed = false;
 /** Fetch every on-demand page while the browser is idle, once. */
@@ -141,7 +140,6 @@ export function App() {
             pages. /i/<code> is open to anybody with the code; /my/* is the host's. See api/_lib/personal-events.ts. */}
         <Route path="/i/:code" element={<Page><InvitationPage /></Page>} />
         {/* Join a society with its eight-character code; asks for sign-in first. */}
-        <Route path="/join/:code" element={<Page><JoinSocietyPage /></Page>} />
         <Route path="/my/new" element={<Page><PersonalEventFormPage /></Page>} />
         <Route path="/my/e/:id" element={<Page><HostEventPage /></Page>} />
         <Route path="/my/e/:id/edit" element={<Page><PersonalEventFormPage /></Page>} />

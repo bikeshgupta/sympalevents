@@ -2279,15 +2279,19 @@ tablist, so refresh, sharing and Back agree.
   chooser of society cards (`society-chooser.tsx`) once they have more. One society shows no chooser.
 - **Default tab:** the society for a member, unless it has no events to show (then My space, decided once its
   events arrive; a society chosen by its address always opens); My space for somebody signed in with no society (`SocietyRoot` sends
-  them to `/society?view=space` instead of the demo dashboard). Signed-out visitors get no tabs.
-- **The home is open to everybody.** Signed out at `/` or `/society` (no slug) is the guest home (`GuestHome` in
-  society-home-page.tsx): Create your free event (sign-in is asked for at `/my/new`, which comes straight back),
-  **Got a code?** and Sign in. `SocietyRoot` sends a signed-out visitor there; only demo mode (Supabase
-  unconfigured) still goes to the dashboard. A society opened by its address stays public as before.
+  them to `/society?view=space` instead of the demo dashboard). `?view=society` opens the society tab even with
+  no society, so the tab is never a dead link.
+- **The home is open to everybody, and it is the same page.** Signed out at `/` or `/society` there is no second
+  "guest" page: the same header ("Welcome to SymPal" with Sign in in the corner), the same two tabs, My space open
+  with Create your free event and Got a code?. **Sign-in is asked for only at the moment it is needed**: creating
+  an event (`/my/new` asks and comes straight back) and joining a society. The society tab, signed out, says to
+  sign in. A society opened by its address stays public and keeps its own header, as before. Only demo mode
+  (Supabase unconfigured) still goes to the dashboard. A separate guest page and a `/join/<code>` page were built
+  and rejected as needless: keep it one page.
 - **One code box** (`CodeBox` in home-cards.tsx, `classifyCode` in shared/personal-events.ts): six characters
-  opens a personal invitation at `/i/<code>` (no account needed); eight is a society's invite code, joined at
-  `/join/<code>` ([join-society-page.tsx](src/features/society/join-society-page.tsx), the existing
-  `?resource=join`), which asks for sign-in first and then opens that society.
+  opens a personal invitation at `/i/<code>` (no account needed); eight is a society's invite code, joined in
+  place (the existing `?resource=join`) and then opens that society. Signed out, it goes to sign-in and comes
+  back to the box with the code filled in (`?code=`).
 - **My space** ([my-space.tsx](src/features/society/my-space.tsx)) lists the events the person organises or belongs
   to, across societies, from the `my-events` read (no request of its own). Personal events (birthdays,
   anniversaries, private and invite-only) are **not built**: they need their own storage, and the card says

@@ -8,9 +8,8 @@ import { groupByMonth, pickFeaturedEvent, residentVisibleEvents } from "@/featur
 import { FeaturedEvent } from "@/features/society/featured-event";
 import { FestivalIdeas } from "@/features/society/festival-ideas";
 import { HomeTabs } from "@/features/society/home-tabs";
-import { homeView, showsSocietyChooser, societyTabLabel, SPACE_PARAM, SPACE_VALUE } from "@/features/society/home-view";
+import { homeView, showsSocietyChooser, SOCIETY_VALUE, societyTabLabel, SPACE_PARAM, SPACE_VALUE } from "@/features/society/home-view";
 import { MySpace } from "@/features/society/my-space";
-import { CodeBox, CreateEventCard } from "@/features/society/home-cards";
 import { SocietyChooser } from "@/features/society/society-chooser";
 import { firstNameOf, greetingFor } from "@/features/society/greeting";
 import { SocietyAccount } from "@/features/society/society-account";
@@ -57,16 +56,13 @@ export function SocietyHomePage() {
   const { data: session, isLoading: sessionLoading } = useSession();
   const { societies, isLoading: contextLoading } = useEventContext();
   const signedIn = Boolean(session);
-  // My space, or the society - see home-view.ts. A signed-out visitor gets no tabs.
+  // My space, or the society - see home-view.ts. The same page for everybody, signed in or not.
   // Decided in two steps: the society tab is the default, but an empty society hands over to My space, and
   // that is only known once its events have arrived.
-  const viewOptions = { signedIn, societyCount: societies.length, hasSlug: Boolean(societySlug) };
+  const viewOptions = { societyCount: societies.length, hasSlug: Boolean(societySlug) };
   const firstView = homeView(search.get(SPACE_PARAM), { ...viewOptions, societyEmpty: null });
-  // Somebody signed in with no society, and no society in the address, has nothing to read.
+  // With no society, and none in the address, the society tab has nothing to read (the server would refuse).
   const hasSociety = Boolean(societySlug) || societies.length > 0;
-  // Signed out with no society in the address: there is no society to mean (the server would refuse), so the
-  // page asks the person to sign in instead of showing that refusal as an error.
-  const signedOutNowhere = !signedIn && !societySlug;
   const { data, isLoading, error } = useSocietyHome(societySlug, { enabled: firstView === "society" && hasSociety && !sessionLoading && !(signedIn && contextLoading) });
   // One clock for the whole page, so every row and the featured pick agree.
   const now = useMemo(() => new Date(), []);
@@ -113,7 +109,6 @@ export function SocietyHomePage() {
 
   // Which tab opens depends on how many societies the person has, so wait for that rather than flashing one.
   if (sessionLoading || (signedIn && contextLoading) || isLoading) return <SocietyHomeSkeleton />;
-  if (signedOutNowhere) return <GuestHome />;
 
   if (error && view === "society") {
     return (
@@ -138,22 +133,28 @@ export function SocietyHomePage() {
   const canCreateSocietyEvent = societies.some((item) => item.role === "admin" || item.role === "committee");
   const currentSlug = societySlug ?? society?.slug ?? societies[0]?.slug ?? null;
   const spaceTo = `${location.pathname}?${SPACE_PARAM}=${SPACE_VALUE}`;
-  const societyTo = currentSlug ? `/society/${currentSlug}` : "/society";
+  const societyTo = currentSlug ? `/society/${currentSlug}` : `/society?${SPACE_PARAM}=${SOCIETY_VALUE}`;
+  const showTabs = signedIn || !societySlug;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
       {motion ? <ScrollProgressBar /> : null}
-      {/* Signed in: a compact greeting, then the two tabs. Signed out: the society's own header, as before. */}
+      {/* A compact greeting, then the two tabs. A signed-out visitor on a society's address gets that
+          society's own header instead, as before. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          {signedIn ? (
-            <header>
-              <h1 className="font-display text-2xl font-semibold leading-tight sm:text-[28px]">{greeting ?? "Welcome back"}</h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">Here&rsquo;s what&rsquo;s coming up for you.</p>
-            </header>
-          ) : society ? (
+          {!signedIn && societySlug && society ? (
             <SocietyHeader society={society} greeting={null} />
-          ) : null}
+          ) : (
+            <header>
+              <h1 className="font-display text-2xl font-semibold leading-tight sm:text-[28px]">
+                {greeting ?? (signedIn ? "Welcome back" : "Welcome to SymPal")}
+              </h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {signedIn ? <>Here&rsquo;s what&rsquo;s coming up for you.</> : "Celebrate with your people, and with your society."}
+              </p>
+            </header>
+          )}
         </div>
         <SocietyAccount
           role={memberRole}
@@ -165,7 +166,7 @@ export function SocietyHomePage() {
         />
       </div>
 
-      {signedIn ? (
+      {showTabs ? (
         <HomeTabs
           view={view}
           spaceTo={spaceTo}
@@ -188,7 +189,7 @@ export function SocietyHomePage() {
       {view === "space" ? (
         <MySpace canCreateSocietyEvent={canCreateSocietyEvent} />
       ) : !hasSociety ? (
-        <NoSociety />
+        <NoSociety signedIn={signedIn} />
       ) : (
       <>
       {signedIn && showsSocietyChooser(societies.length) ? <SocietyChooser societies={societies} currentSlug={society?.slug ?? null} /> : null}
@@ -377,38 +378,26 @@ function EmptySociety({ canCreate }: { canCreate: boolean }) {
   );
 }
 
-/**
- * The home for somebody not signed in, at the bare address (an installed app icon, a link to the app):
- * open to everybody. Creating an event asks for sign-in at that moment (`/my/new` does it and comes back);
- * a code opens an invitation without an account, and only joining a society asks to sign in.
- */
-function GuestHome() {
-  return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
-      <div className="flex items-start justify-between gap-3">
-        <header className="min-w-0">
-          <h1 className="font-display text-2xl font-semibold leading-tight sm:text-[28px]">Welcome to SymPal</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">Celebrate with your people, and with your society.</p>
-        </header>
-        <SocietyAccount role={null} canManage={false} isSocietyAdmin={false} societySlug={null} draftCount={0} onShowDrafts={() => undefined} />
-      </div>
-      <CreateEventCard ready />
-      <CodeBox />
-      <section className="mt-8 border-t pt-6">
-        <h2 className="font-display text-xl font-semibold">Already part of a society?</h2>
-        <p className="mt-1 text-[15px] text-muted-foreground">
-          Sign in to see its events, your passes and what you host.{" "}
-          <Link to="/login" state={{ from: "/" }} className="font-medium text-primary underline-offset-2 hover:underline">
-            Sign in
-          </Link>
+/** No society yet, and none in the address. Signed out, the society may simply be behind the sign-in. */
+function NoSociety({ signedIn }: { signedIn: boolean }) {
+  if (!signedIn) {
+    return (
+      <div className="mt-8 flex flex-col items-center gap-2 py-4 text-center">
+        <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />
+        <p className="font-display text-2xl font-semibold">Already part of a society?</p>
+        <p className="max-w-sm text-[15px] text-muted-foreground">
+          Sign in to see its events and your passes. New here? Enter your society&rsquo;s code in My space.
         </p>
-      </section>
-    </main>
-  );
-}
-
-/** Signed in, with no society yet and none in the address. */
-function NoSociety() {
+        <Link
+          to="/login"
+          state={{ from: "/society" }}
+          className="mt-2 inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Sign in
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="mt-8 flex flex-col items-center gap-2 py-4 text-center">
       <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />

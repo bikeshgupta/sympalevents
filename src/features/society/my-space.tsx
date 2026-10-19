@@ -8,6 +8,7 @@ import { formatEventDate } from "@/features/dashboard/dashboard-utils";
 import { getDateInEventZone } from "@/lib/event-status";
 import { useEventContext, type EventOption } from "@/lib/event-context";
 import { useDashboardMotion } from "@/lib/dashboard-motion";
+import { useSession } from "@/lib/auth";
 
 /**
  * My space: what is the person's own, across every society.
@@ -19,6 +20,9 @@ import { useDashboardMotion } from "@/lib/dashboard-motion";
  * And the person's **personal events** (migration 049; src/features/personal/): the ones they host, and the
  * ones they have replied to while signed in. Before 049 is applied the server says so (`ready: false`) and
  * the card says they are coming rather than offering a button that would only fail.
+ *
+ * Signed out, it is the same tab with nothing of theirs in it yet: creating an event asks for sign-in at that
+ * moment, and a code opens an invitation without an account.
  */
 const roleLabel: Record<NonNullable<EventOption["role"]>, string> = {
   admin: "Organising",
@@ -28,6 +32,7 @@ const roleLabel: Record<NonNullable<EventOption["role"]>, string> = {
 
 export function MySpace({ canCreateSocietyEvent }: { canCreateSocietyEvent: boolean }) {
   const { events, isLoading } = useEventContext();
+  const { data: session } = useSession();
   const personal = useMyPersonalEvents();
   const motion = useDashboardMotion();
   const today = getDateInEventZone(new Date());
@@ -59,17 +64,19 @@ export function MySpace({ canCreateSocietyEvent }: { canCreateSocietyEvent: bool
   }
 
   return (
-    <div>
+    // When nothing of theirs is listed, the first card sits straight under the tabs and needs no rule of its own.
+    <div className="[&>section:first-child]:mt-6 [&>section:first-child]:border-t-0 [&>section:first-child]:pt-0">
       {personal.data?.ready ? <PersonalLists data={personal.data} today={today} motion={motion} /> : null}
       {organising.length ? <EventList title="You're organising" events={organising} today={today} motion={motion} /> : null}
       {member.length ? <EventList title="Your events" events={member} today={today} motion={motion} /> : null}
-      {!organising.length && !member.length && !personal.data?.hosting.length && !personal.data?.invited.length ? (
+      {session && !organising.length && !member.length && !personal.data?.hosting.length && !personal.data?.invited.length ? (
         <p className="mt-6 text-[15px] text-muted-foreground">
           Nothing here yet. Events you organise or are part of, in any society, will show up here.
         </p>
       ) : null}
 
-      <CreateEventCard ready={Boolean(personal.data?.ready)} canCreateSocietyEvent={canCreateSocietyEvent} />
+      {/* Signed out, whether personal events are switched on is only known after sign-in; creating asks for it. */}
+      <CreateEventCard ready={session ? Boolean(personal.data?.ready) : true} canCreateSocietyEvent={canCreateSocietyEvent} />
 
       <CodeBox />
     </div>

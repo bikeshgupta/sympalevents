@@ -9,20 +9,24 @@
  *   agree. Without it the society tab opens, since that is where a member's events are - unless the person
  *   has no society at all, or their society has no events to show (`societyEmpty`), when My space opens.
  *   A society named in the address always opens, empty or not: somebody chose it.
- * - A signed-out visitor gets no tabs: My space is a person's own, and there is nobody to own it.
+ * - The same page and the same rules for somebody signed out: My space holds "Create your free event" and the
+ *   code box, and only creating an event or joining a society asks them to sign in. A society opened by its
+ *   address shows that society, as it always has.
+ * - `?view=society` opens the society tab even for somebody with no society, so the tab is never a dead link.
  */
 
 export type HomeView = "space" | "society";
 
 export const SPACE_PARAM = "view";
 export const SPACE_VALUE = "space";
+export const SOCIETY_VALUE = "society";
 
 export function homeView(
   param: string | null | undefined,
-  opts: { signedIn: boolean; societyCount: number; hasSlug: boolean; societyEmpty?: boolean | null },
+  opts: { societyCount: number; hasSlug: boolean; societyEmpty?: boolean | null },
 ): HomeView {
-  if (!opts.signedIn) return "society";
   if (param === SPACE_VALUE) return "space";
+  if (param === SOCIETY_VALUE) return "society";
   // A society named in the address is a society to show, member or not.
   if (opts.hasSlug) return "society";
   if (opts.societyCount === 0) return "space";

@@ -1,12 +1,14 @@
 import { CalendarHeart, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useSession } from "@/lib/auth";
+import { useSocietyActions } from "@/lib/societies";
 import { classifyCode, PERSONAL_KINDS } from "../../../shared/personal-events";
 
 /**
- * The two cards My space and the signed-out home share: "Create your free event" and "Got a code?".
+ * My space's two cards: "Create your free event" and "Got a code?".
  *
  * Both work for somebody who is not signed in. Creating sends them through sign-in first (`/my/new` asks for
  * it and comes straight back); a code needs no account to *open* - an invitation can be replied to as a
@@ -63,12 +65,17 @@ export function CreateEventCard({ ready, canCreateSocietyEvent = false }: { read
 
 /**
  * One box for both kinds of code, told apart by length (`classifyCode`): six characters is an invitation to
- * a personal event (opened at `/i/<code>`, no account needed), eight is a society's invite code (joined at
- * `/join/<code>`, which asks for sign-in first).
+ * a personal event (opened at `/i/<code>`, no account needed), eight is a society's invite code, joined right
+ * here (`?resource=join`). Joining needs an account, so a signed-out visitor is sent to sign in and brought
+ * back to this box with the code still in it (`?code=`), one tap from joining.
  */
 export function CodeBox() {
   const navigate = useNavigate();
-  const [value, setValue] = useState("");
+  const location = useLocation();
+  const [search] = useSearchParams();
+  const { data: session } = useSession();
+  const { join } = useSocietyActions();
+  const [value, setValue] = useState(() => search.get("code") ?? "");
   const [problem, setProblem] = useState<string | null>(null);
   return (
     <section aria-labelledby="code-heading" className="mt-8 border-t pt-6">
@@ -84,7 +91,16 @@ export function CodeBox() {
           event.preventDefault();
           const found = classifyCode(value);
           if (!found) return setProblem("That doesn't look like a code. Check it with whoever sent it.");
-          navigate(found.kind === "invitation" ? `/i/${found.code}` : `/join/${found.code}`);
+          if (found.kind === "invitation") return navigate(`/i/${found.code}`);
+          if (!session) {
+            const back = new URLSearchParams(location.search);
+            back.set("code", found.code);
+            return navigate("/login", { state: { from: `${location.pathname}?${back.toString()}` } });
+          }
+          join
+            .mutateAsync(found.code)
+            .then(({ society }) => navigate(society.slug ? `/society/${society.slug}` : "/society"))
+            .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "Could not join. Try again."));
         }}
       >
         <label htmlFor="any-code" className="sr-only">
@@ -103,7 +119,9 @@ export function CodeBox() {
             setProblem(null);
           }}
         />
-        <Button type="submit">Open</Button>
+        <Button type="submit" disabled={join.isPending}>
+          {join.isPending ? "Joining…" : "Open"}
+        </Button>
       </form>
       {problem ? <p className="mt-2 text-sm text-destructive">{problem}</p> : null}
     </section>
