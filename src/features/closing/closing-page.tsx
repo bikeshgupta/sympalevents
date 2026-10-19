@@ -13,6 +13,7 @@ import { GallerySection } from "@/features/closing/gallery-section";
 import { formatEventWeekday, getEventDays } from "@/features/dashboard/dashboard-utils";
 import { useSession } from "@/lib/auth";
 import { emptyCredits, useEventClosing, usesSeedCredits, withSeedCredits } from "@/lib/closing";
+import { defaultCreditsSettings, visibleNames } from "../../../shared/credits-settings";
 import { useHashTarget } from "@/lib/scroll";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
@@ -83,6 +84,7 @@ export function ClosingPage() {
     creditPeople(data.eventPlan.map((row) => ({ name: row.owner }))).map((person) => person.name),
   );
   const credits = closing.data?.credits ?? (seedCredits ? withSeedCredits(fallbackCredits) : fallbackCredits);
+  const creditsSettings = credits.settings ?? defaultCreditsSettings();
   // Which pages this event has open to this viewer. A credits group for a page
   // the event does not use (Prasad on a Garba night) is not drawn at all; null
   // in the demo, where nothing is filtered.
@@ -110,8 +112,12 @@ export function ClosingPage() {
     sponsorCount: data.collections.hidden ? data.collections.sponsors : sponsors.length,
     sponsorshipReceived: data.financials.sponsorshipReceived,
     collectionsHidden: data.collections.hidden,
-    coreCount: credits.core.length,
-    volunteerCount: credits.volunteers.length,
+    // What the card actually shows, so the note never counts somebody the
+    // committee hid.
+    coreCount: creditsSettings.groups.core.hidden ? 0 : visibleNames(credits.core, creditsSettings.groups.core).length,
+    volunteerCount: creditsSettings.groups.volunteers.hidden
+      ? 0
+      : visibleNames(credits.volunteers, creditsSettings.groups.volunteers).length,
   };
 
   return (
@@ -172,6 +178,8 @@ export function ClosingPage() {
         <CreditsDialog
           credits={credits}
           seed={seedCredits}
+          sponsors={sponsors}
+          contributors={contributors}
           onOpenChange={setEditingCredits}
           onSave={(draft) => closing.saveCredits.mutateAsync(draft)}
         />

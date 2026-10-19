@@ -3,6 +3,7 @@ import { extraCoreCommittee, extraVolunteers, specialMentions } from "@/data/cre
 import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
 import { usesBundledPhoto } from "@/lib/hero-artwork";
+import { defaultCreditsSettings, type CreditsSettings } from "../../shared/credits-settings";
 
 export type ClosingRecord = {
   event_id: string;
@@ -88,6 +89,10 @@ export type ClosingCredits = {
   /** False until migration 020 has been run: the lists are derived-only and
    *  the page offers no editor rather than one whose save would 501. */
   editable: boolean;
+  /** What the committee customised (048). Absent from an older server. */
+  settings?: CreditsSettings;
+  /** False until 048 is run: hiding names and changing groups cannot be saved. */
+  settingsReady?: boolean;
 };
 
 /** An auction that finished, and what it went for. */
@@ -166,6 +171,7 @@ export function useEventClosing(eventId?: string, { seedCredits = false }: { see
       extraVolunteers: string[];
       coreOrder: string[];
       shoutouts: Shoutout[];
+      creditsSettings?: CreditsSettings;
     }) => apiFetch<{ closing: ClosingRecord }>(CLOSING_PATH, { method: "PATCH", body: { eventId, ...input } }),
     onSuccess: invalidate,
   });
@@ -256,7 +262,16 @@ export function useEventClosing(eventId?: string, { seedCredits = false }: { see
  * An empty closing payload, for demo mode and for before the server answers.
  */
 export function emptyCredits(volunteers: string[] = []): ClosingCredits {
-  return { core: [], volunteers, prasad: [], shoutouts: [], manual: { core: [], volunteers: [] }, editable: false };
+  return {
+    core: [],
+    volunteers,
+    prasad: [],
+    shoutouts: [],
+    manual: { core: [], volunteers: [] },
+    editable: false,
+    settings: defaultCreditsSettings(),
+    settingsReady: false,
+  };
 }
 
 /**

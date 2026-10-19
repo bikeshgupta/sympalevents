@@ -37,6 +37,8 @@ Supabase). 043 now also replaces `create_event_draft` so the event-creation limi
 function and approval obeys it. 044 does not exist. 045 generalises `event_visits` / `event_page_views` (names kept; surface +
 organization_id, both ids ON DELETE SET NULL; scope = surface + organization + event) and adds
 `app_users.last_seen_at` (seeded once from `updated_at`, approximate). No application code reads 043, 045 or 046 yet.
+**048_closing_credits_settings is PREPARED, not applied** (note in `docs/migration-notes/`): one nullable jsonb
+column for the closing page's credit customisation; the page draws its default credits without it.
 **047_platform_access_log is PREPARED, not applied** (note in `docs/migration-notes/`; tested on a scratch PostgreSQL,
 not Supabase). Only the Platform Control Center reads or writes it, and both degrade to "not recorded yet" without it.
 
@@ -142,9 +144,9 @@ created there unused and was the largest library in the bundle; do not bring it 
   page checks in `?resource=data` were doing seven times; `?resource=data` and `society-home` start
   every read that needs only the event or society id alongside sign-in and the access checks, and
   return nothing until those pass.
-- **The function region is not set in `vercel.json`.** Vercel's default is Washington (iad1). If the
-  Supabase project is in Mumbai or Singapore, every database round trip crosses the world; setting
-  the function region to the Supabase region is the largest single latency fix left.
+- **Functions run in Singapore (`"regions": ["sin1"]` in `vercel.json`)**, next to the Supabase project
+  (`ap-southeast-1`). Vercel's default was Washington, which put every database round trip across the
+  world. If the database ever moves, move this with it.
 
 `ContributionRow.createdAt` comes from the table's existing `created_at` column and is
 what the Contributions list sorts by (newest first) so the most recent entry is on top.
@@ -1741,6 +1743,16 @@ naming it.
   crediting the Ganesh committee, its six volunteers and its shout-out, and emptying the
   list brought them back. On the original event, emptying a list still brings the seed
   back - known, and not worth a column to record "they meant nobody".
+- **Everything on the credits card is the committee's to change** (Edit credits; `shared/credits-settings.ts`,
+  tested in `tests/credits-settings.test.mjs`; stored in `event_closing.credits_settings`,
+  [048](supabase/migrations/048_closing_credits_settings.sql), **PREPARED, not applied**): the heading and the line
+  under it, which groups show and their order, each group's title and description, **hiding anybody from any group**
+  (derived names included - roles, task/schedule owners, prasad, sponsors, contributions; keyed by name, plus flat
+  where the group has one), and names added by hand to sponsors and contributors. Hiding changes nothing at the
+  source. **The server filters hidden names for everybody but the committee** (admin, society admin, committee), so
+  a hidden name is off the wire, not just off the screen; the committee gets the full lists so the editor can bring
+  a name back. Before 048 those controls are disabled with a banner and a save carrying them answers 501 naming
+  048; what 020 stores still saves. `null` in the column is the default card.
 - **A credits group with nobody in it is not drawn for residents**, and for an organiser
   only when the event uses the page those names come from (Prasad, Sponsors,
   Contributions; `openPageKeys` from `useEventAccess`). A group that has names always

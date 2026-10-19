@@ -8,6 +8,12 @@ import {
   sendJson,
 } from "./server.js";
 import { audit } from "./audit.js";
+import {
+  cleanCreditsSettings,
+  isDefaultCreditsSettings,
+  visibleNames,
+  visiblePrasad,
+} from "../../shared/credits-settings.js";
 
 type ApiRequest = {
   method?: string;
@@ -43,6 +49,7 @@ const MAX_NAMES_PER_LIST = 200;
 const MAX_SHOUTOUTS = 6;
 
 const CREDITS_MIGRATION = "supabase/migrations/020_closing_credits.sql";
+const CREDITS_SETTINGS_MIGRATION = "supabase/migrations/048_closing_credits_settings.sql";
 const GALLERY_MIGRATION = "supabase/migrations/021_gallery_social.sql";
 
 /** How many photographs one person may add to one event's gallery.
@@ -66,6 +73,8 @@ function isMissingGallerySocial(error: { code?: string; message?: string } | nul
 /** The closing row, with the hand-kept credit lists 020 adds. */
 const CLOSING_COLUMNS =
   "event_id,headline,message,is_closed,closed_at,updated_at,extra_core,extra_volunteers,core_order,shoutouts";
+/** With 048's customisation as well. */
+const CLOSING_COLUMNS_WITH_SETTINGS = `${CLOSING_COLUMNS},credits_settings`;
 /** The same row before 020. Reads degrade to this; writes say so instead. */
 const CLOSING_COLUMNS_LEGACY = "event_id,headline,message,is_closed,closed_at,updated_at";
 
@@ -76,6 +85,16 @@ function isMissingCreditColumns(error: { code?: string; message?: string } | nul
   return (
     (["42703", "PGRST204", "PGRST116"].includes(error.code ?? "") || /does not exist|could not find/i.test(message)) &&
     /extra_core|extra_volunteers|core_order|shoutouts/.test(message)
+  );
+}
+
+/** Migration 048 has not been run: `credits_settings` is missing. */
+function isMissingSettingsColumn(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    (["42703", "PGRST204"].includes(error.code ?? "") || /does not exist|could not find/i.test(message)) &&
+    /credits_settings/.test(message)
   );
 }
 
@@ -447,10 +466,19 @@ async function shapeGallery(
  * what turns the page's credits editor off rather than letting a save 501.
  */
 async function fetchClosingRow(supabase: Supabase, eventId: string) {
+  // 048 first; without it, 020's columns; without those, the row as 014 made it.
+  const full = await supabase
+    .from("event_closing")
+    .select(CLOSING_COLUMNS_WITH_SETTINGS)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (!full.error) return { row: (full.data ?? {}) as Record<string, unknown>, ready: true, settingsReady: true };
+  if (!isMissingSettingsColumn(full.error) && !isMissingCreditColumns(full.error)) throw full.error;
+
   const rich = await supabase.from("event_closing").select(CLOSING_COLUMNS).eq("event_id", eventId).maybeSingle();
   if (!isMissingCreditColumns(rich.error)) {
     if (rich.error) throw rich.error;
-    return { row: (rich.data ?? {}) as Record<string, unknown>, ready: true };
+    return { row: (rich.data ?? {}) as Record<string, unknown>, ready: true, settingsReady: false };
   }
 
   console.warn(`event_closing is missing its credit columns. Run ${CREDITS_MIGRATION}.`);
@@ -460,12 +488,17 @@ async function fetchClosingRow(supabase: Supabase, eventId: string) {
     .eq("event_id", eventId)
     .maybeSingle();
   if (plain.error) throw plain.error;
-  return { row: (plain.data ?? {}) as Record<string, unknown>, ready: false };
+  return { row: (plain.data ?? {}) as Record<string, unknown>, ready: false, settingsReady: false };
 }
 
 async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiResponse, eventId: string) {
   const viewer = await optionalAppUser(req);
-  if (!(await resolvePageAccess(eventId,viewer?.id ?? null,"closing")).canView) { sendJson(res,403,{error:"Event is not available"}); return; }
+  const access = await resolvePageAccess(eventId, viewer?.id ?? null, "closing");
+  if (!access.canView) { sendJson(res,403,{error:"Event is not available"}); return; }
+  // The committee sees every name, hidden ones included, so the editor can
+  // bring a name back. Everybody else is sent the credits already filtered:
+  // hiding somebody keeps them off the wire, not merely off the screen.
+  const isManager = access.isAdmin || access.role === "committee";
 
   const [closingRow, galleryResult, feedbackResult, membersResult, tasksResult, scheduleResult, prasad, auctions] =
     await Promise.all([
@@ -544,6 +577,13 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
     manualVolunteers,
   ).sort((a, b) => a.localeCompare(b));
 
+  const settings = cleanCreditsSettings(closingRow.row.credits_settings);
+  const forViewer = <T,>(key: keyof typeof settings.groups, list: T[], filter: (items: T[]) => T[]) =>
+    isManager ? list : settings.groups[key].hidden ? [] : filter(list);
+  const shownCore = forViewer("core", core, (names) => visibleNames(names, settings.groups.core));
+  const shownVolunteers = forViewer("volunteers", volunteers, (names) => visibleNames(names, settings.groups.volunteers));
+  const shownPrasad = forViewer("prasad", prasad, (entries) => visiblePrasad(entries, settings.groups.prasad));
+
   const reviews = feedbackRows.map((row) => ({
     id: row.id,
     rating: Number(row.rating),
@@ -575,9 +615,12 @@ async function sendClosingPayload(supabase: Supabase, req: ApiRequest, res: ApiR
       updated_at: (closingRow.row.updated_at as string | null) ?? null,
     },
     credits: {
-      core,
-      volunteers,
-      prasad,
+      core: shownCore,
+      volunteers: shownVolunteers,
+      prasad: shownPrasad,
+      settings,
+      // False until 048 is run: the page then offers only what 020 stores.
+      settingsReady: closingRow.settingsReady,
       shoutouts: asShoutouts(closingRow.row.shoutouts),
       manual: { core: manualCore, volunteers: manualVolunteers },
       // False until 020 is run: the lists above are derived-only and the
@@ -629,24 +672,37 @@ async function handleClosingWrite(
 
   // The four credit lists 020 adds. Cleaned here rather than trusted: the
   // client sends what its editor collected, and jsonb will store anything.
+  const touchesSettings = body.creditsSettings !== undefined;
   const touchesCredits =
     body.extraCore !== undefined ||
     body.extraVolunteers !== undefined ||
     body.coreOrder !== undefined ||
-    body.shoutouts !== undefined;
+    body.shoutouts !== undefined ||
+    touchesSettings;
 
   if (body.extraCore !== undefined) updates.extra_core = asNames(body.extraCore);
   if (body.extraVolunteers !== undefined) updates.extra_volunteers = asNames(body.extraVolunteers);
   if (body.coreOrder !== undefined) updates.core_order = asNames(body.coreOrder);
   if (body.shoutouts !== undefined) updates.shoutouts = asShoutouts(body.shoutouts);
+  if (touchesSettings) {
+    // Cleaned, never trusted; nothing customised is stored as null.
+    const settings = cleanCreditsSettings(body.creditsSettings);
+    updates.credits_settings = isDefaultCreditsSettings(settings) ? null : settings;
+  }
 
   const { data, error } = await supabase
     .from("event_closing")
     .upsert({ event_id: eventId, ...updates }, { onConflict: "event_id" })
-    .select(touchesCredits ? CLOSING_COLUMNS : CLOSING_COLUMNS_LEGACY)
+    .select(touchesSettings ? CLOSING_COLUMNS_WITH_SETTINGS : touchesCredits ? CLOSING_COLUMNS : CLOSING_COLUMNS_LEGACY)
     .single();
 
   if (error) {
+    if (touchesSettings && isMissingSettingsColumn(error)) {
+      sendJson(res, 501, {
+        error: `Hiding names and changing the groups needs ${CREDITS_SETTINGS_MIGRATION}. Run it in Supabase, then try again.`,
+      });
+      return;
+    }
     // Read degrades, write says so: a save carrying credits fails by name
     // when 020 has not been run, rather than appearing to work.
     if (touchesCredits && isMissingCreditColumns(error)) {

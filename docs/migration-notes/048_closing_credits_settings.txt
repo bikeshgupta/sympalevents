@@ -1,0 +1,48 @@
+MIGRATION 048 - closing credits settings  (prepared for review; YOU run it by hand)
+File: supabase/migrations/048_closing_credits_settings.sql
+Status: PREPARED, NOT APPLIED. Until it is applied the closing page draws its credits exactly as before, and
+saving the new options in Edit credits (hide a name, rename or hide a group, reorder groups, the heading, extra
+sponsors and contributors) answers "needs migration 048". Adding committee members, volunteers and shout-outs,
+which 020 already stores, keeps working.
+
+WHAT IT DOES (plain words)
+  Lets the committee decide everything the "It took all of us" card shows: hide anybody from any group (even
+  people the app adds by itself from roles, tasks, the schedule, prasad, sponsors and contributions), rename,
+  describe, hide and reorder the groups, change the heading, and add sponsors and contributors by hand.
+
+WHAT IT ADDS (and only this)
+  - column public.event_closing.credits_settings  (jsonb, nullable, no default)
+  It changes no other table, column or row. Hiding a name changes nothing in the table it came from.
+
+------------------------------------------------------------------------------------
+1. PRE-CHECKS  (Supabase SQL editor)
+------------------------------------------------------------------------------------
+-- A. 020 is in (expect 4 rows: core_order, extra_core, extra_volunteers, shoutouts).
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'event_closing'
+  and column_name in ('extra_core','extra_volunteers','core_order','shoutouts') order by 1;
+
+-- B. The new column does not exist yet (expect 0 rows).
+select column_name from information_schema.columns
+where table_schema = 'public' and table_name = 'event_closing' and column_name = 'credits_settings';
+
+------------------------------------------------------------------------------------
+2. RUN
+------------------------------------------------------------------------------------
+Paste supabase/migrations/048_closing_credits_settings.sql into the SQL editor and run it once.
+
+------------------------------------------------------------------------------------
+3. VERIFICATION SQL
+------------------------------------------------------------------------------------
+-- Expect one row: credits_settings | jsonb | YES
+select column_name, data_type, is_nullable from information_schema.columns
+where table_schema = 'public' and table_name = 'event_closing' and column_name = 'credits_settings';
+
+-- Every existing row is untouched (expect 0).
+select count(*) from public.event_closing where credits_settings is not null;
+
+------------------------------------------------------------------------------------
+4. ROLLBACK
+------------------------------------------------------------------------------------
+-- Removes every committee's customisation. The page goes back to its default credits.
+alter table public.event_closing drop column if exists credits_settings;

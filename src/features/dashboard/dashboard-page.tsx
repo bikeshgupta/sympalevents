@@ -4,6 +4,7 @@ import { Settings2 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useEventClosing, usesSeedCredits } from "@/lib/closing";
+import { visibleNames, type CreditGroupSettings } from "../../../shared/credits-settings";
 import { useEventData } from "@/lib/event-data";
 import { useHashTarget } from "@/lib/scroll";
 import { renderWidget, type DashboardContext } from "@/features/dashboard/widget-host";
@@ -29,6 +30,13 @@ import { PreviousEditionCard } from "@/features/dashboard/previous-edition-card"
 import { CommunityCard } from "@/features/dashboard/community-card";
 import { useDashboardMotion, useScrollReveal } from "@/lib/dashboard-motion";
 import { BackToTop, ScrollProgressBar } from "@/components/shared/dashboard-fx";
+
+/** How many names the closing card shows in a group, after the committee's hidden ones. */
+function visibleCount(names: string[] | undefined, group: CreditGroupSettings | undefined) {
+  if (!names) return 0;
+  if (!group) return names.length;
+  return group.hidden ? 0 : visibleNames(names, group).length;
+}
 
 export function DashboardPage() {
   const { data, isFetching } = useEventData({ includeTasks: false });
@@ -83,8 +91,8 @@ export function DashboardPage() {
     sponsorCount: data.collections.hidden ? data.collections.sponsors : data.sponsors.length,
     sponsorshipReceived: financials.sponsorshipReceived,
     collectionsHidden: data.collections.hidden,
-    coreCount: closing.data?.credits.core.length ?? 0,
-    volunteerCount: closing.data?.credits.volunteers.length ?? 0,
+    coreCount: visibleCount(closing.data?.credits.core, closing.data?.credits.settings?.groups.core),
+    volunteerCount: visibleCount(closing.data?.credits.volunteers, closing.data?.credits.settings?.groups.volunteers),
   };
 
   // Tick only as fast as the screen needs: per-second for the live countdown, every

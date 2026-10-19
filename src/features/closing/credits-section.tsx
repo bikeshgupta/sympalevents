@@ -3,6 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { initials, type ClosingCredits, type PrasadCredit } from "@/lib/closing";
 import { cn } from "@/lib/utils";
+import {
+  defaultCreditsHeading,
+  defaultCreditsSettings,
+  groupBlurb,
+  groupTitle,
+  visibleNames,
+  visiblePeople,
+  visiblePrasad,
+  type CreditGroupKey,
+} from "../../../shared/credits-settings";
 
 /**
  * One name on the honour roll, with the flat it belongs to when the data
@@ -47,58 +57,67 @@ export function CreditsSection({
   /** "Day 3 · Sat, 20 Sept" for a prasad slot's date, from the event itself. */
   dayLabel: (date: string) => string;
 }) {
-  const named = (names: string[]): CreditPerson[] => names.map((name) => ({ name, flat: "" }));
+  // What the committee customised (shared/credits-settings.ts): the heading,
+  // which groups show and in what order, their titles and descriptions, the
+  // names hidden from each, and names added to sponsors and contributors. The
+  // server already filters hidden names for everybody but the committee;
+  // applying it here too is what makes the committee's own view match.
+  const settings = credits.settings ?? defaultCreditsSettings();
+  const groups = settings.groups;
+  const asPerson = (name: string): CreditPerson => ({ name, flat: "" });
+
+  const shown = {
+    core: visibleNames(credits.core, groups.core),
+    volunteers: visibleNames(credits.volunteers, groups.volunteers).map(asPerson),
+    prasad: visiblePrasad(credits.prasad, groups.prasad),
+    sponsors: visiblePeople(sponsors, groups.sponsors, asPerson),
+    contributors: visiblePeople(contributors, groups.contributors, asPerson),
+  };
 
   const prasadSponsorCount = new Set(
-    credits.prasad.flatMap((entry) => entry.sponsors.map((name) => name.toLowerCase())),
+    shown.prasad.flatMap((entry) => entry.sponsors.map((name) => name.toLowerCase())),
   ).size;
+  const counts: Record<CreditGroupKey, number> = {
+    core: shown.core.length,
+    volunteers: shown.volunteers.length,
+    prasad: prasadSponsorCount,
+    sponsors: shown.sponsors.length,
+    contributors: shown.contributors.length,
+  };
 
-  // A group with nobody in it is drawn only for an organiser, and only when the
-  // event actually uses the page its names come from - so a Garba night with no
-  // prasad module has no "Prasad sponsors: nobody recorded" line, and a resident
-  // never meets an empty heading. A group that has names always shows.
-  const pageOpen = (pageKey: string) => openPageKeys === null || openPageKeys.has(pageKey);
-  const showGroup = (count: number, pageKey?: string) =>
-    isLoading || count > 0 || (canManage && (!pageKey || pageOpen(pageKey)));
+  // A group the committee switched off is never drawn. One with nobody in it
+  // is drawn only for an organiser, and only when the event actually uses the
+  // page its names come from - so a Garba night with no prasad module has no
+  // "Prasad sponsors: nobody recorded" line, and a resident never meets an
+  // empty heading. The core committee always shows, unless switched off.
+  const sourcePage: Partial<Record<CreditGroupKey, string>> = {
+    prasad: "prasad",
+    sponsors: "sponsors",
+    contributors: "contributions",
+  };
+  const pageOpen = (pageKey?: string) => !pageKey || openPageKeys === null || openPageKeys.has(pageKey);
+  const showGroup = (key: CreditGroupKey) => {
+    if (groups[key].hidden) return false;
+    if (key === "core") return true;
+    return isLoading || counts[key] > 0 || (canManage && pageOpen(sourcePage[key]));
+  };
+  const order = settings.order.filter(showGroup);
 
-  const total =
-    credits.core.length + credits.volunteers.length + prasadSponsorCount + sponsors.length + contributors.length;
+  const total = order.reduce((sum, key) => sum + counts[key], 0);
+  const subheading = isLoading
+    ? "Counting everyone…"
+    : settings.subheading || `${total} ${total === 1 ? "person" : "people"} made this happen.`;
 
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Users className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div>
-              <CardTitle>It took all of us</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {isLoading ? "Counting everyone…" : `${total} people made this happen.`}
-              </p>
-            </div>
-          </div>
-          {canManage ? (
-            <Button variant="outline" size="sm" onClick={onEdit}>
-              <Pencil className="h-4 w-4" aria-hidden="true" />
-              Edit credits
-            </Button>
-          ) : null}
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        <section>
-          <GroupHeading
-            icon={ShieldCheck}
-            title="Core committee"
-            count={credits.core.length}
-            blurb="Planned it, chased it, and stayed till the lights went off."
-          />
-          {credits.core.length ? (
+  const renderGroup = (key: CreditGroupKey) => {
+    const title = groupTitle(settings, key);
+    const blurb = groupBlurb(settings, key);
+    if (key === "core") {
+      return (
+        <section key={key}>
+          <GroupHeading icon={ShieldCheck} title={title} count={counts.core} blurb={blurb} />
+          {shown.core.length ? (
             <ol className="mt-2.5 overflow-hidden rounded-lg border">
-              {credits.core.map((name, index) => (
+              {shown.core.map((name, index) => (
                 <li
                   key={`core-${name}-${index}`}
                   className="flex items-center gap-3 border-b bg-card px-3 py-2.5 last:border-b-0"
@@ -131,57 +150,51 @@ export function CreditsSection({
             </p>
           ))}
         </section>
+      );
+    }
+    if (key === "prasad") {
+      return (
+        <section key={key}>
+          <GroupHeading icon={HandHeart} title={title} count={counts.prasad} blurb={blurb} />
+          {shown.prasad.length ? (
+            <ol className="mt-2.5 space-y-2">
+              {shown.prasad.map((entry, index) => (
+                <PrasadRow key={`${entry.date}-${entry.slot}-${entry.item}-${index}`} entry={entry} dayLabel={dayLabel} />
+              ))}
+            </ol>
+          ) : (
+            <EmptyLine isLoading={isLoading} />
+          )}
+        </section>
+      );
+    }
+    const icon = key === "volunteers" ? Users : key === "sponsors" ? HeartHandshake : Sparkles;
+    return <ChipGroup key={key} icon={icon} title={title} blurb={blurb} people={shown[key]} isLoading={isLoading} />;
+  };
 
-        {showGroup(credits.volunteers.length) ? (
-          <ChipGroup
-            icon={Users}
-            title="Volunteers"
-            blurb="Owned a task or a slot on the schedule and saw it through."
-            people={named(credits.volunteers)}
-            isLoading={isLoading}
-          />
-        ) : null}
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Users className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <CardTitle>{settings.heading || defaultCreditsHeading}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{subheading}</p>
+            </div>
+          </div>
+          {canManage ? (
+            <Button variant="outline" size="sm" onClick={onEdit}>
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Edit credits
+            </Button>
+          ) : null}
+        </div>
+      </CardHeader>
 
-        {showGroup(credits.prasad.length, "prasad") ? (
-          <section>
-            <GroupHeading
-              icon={HandHeart}
-              title="Prasad sponsors"
-              count={prasadSponsorCount}
-              blurb="What each family brought, in the order it was served."
-            />
-            {credits.prasad.length ? (
-              <ol className="mt-2.5 space-y-2">
-                {credits.prasad.map((entry, index) => (
-                  <PrasadRow key={`${entry.date}-${entry.slot}-${entry.item}-${index}`} entry={entry} dayLabel={dayLabel} />
-                ))}
-              </ol>
-            ) : (
-              <EmptyLine isLoading={isLoading} />
-            )}
-          </section>
-        ) : null}
-
-        {showGroup(sponsors.length, "sponsors") ? (
-          <ChipGroup
-            icon={HeartHandshake}
-            title="Sponsors"
-            blurb="Backed a slot, an item, or a whole evening."
-            people={sponsors}
-            isLoading={isLoading}
-          />
-        ) : null}
-
-        {showGroup(contributors.length, "contributions") ? (
-          <ChipGroup
-            icon={Sparkles}
-            title="Contributors"
-            blurb="Every family who put money behind the celebration."
-            people={contributors}
-            isLoading={isLoading}
-          />
-        ) : null}
-      </CardContent>
+      <CardContent className="space-y-6">{order.map(renderGroup)}</CardContent>
     </Card>
   );
 }
