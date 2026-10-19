@@ -9,6 +9,14 @@ test('the society tab opens by default for a member, My space for somebody with 
   assert.equal(homeView('space', { signedIn: true, societyCount: 2, hasSlug: true }), 'space');
 });
 
+test('an empty society hands the default over to My space, once that is known', () => {
+  assert.equal(homeView(null, { signedIn: true, societyCount: 1, hasSlug: false, societyEmpty: true }), 'space');
+  assert.equal(homeView(null, { signedIn: true, societyCount: 1, hasSlug: false, societyEmpty: false }), 'society');
+  assert.equal(homeView(null, { signedIn: true, societyCount: 1, hasSlug: false, societyEmpty: null }), 'society');
+  // Chosen by address, it opens even when empty.
+  assert.equal(homeView(null, { signedIn: true, societyCount: 2, hasSlug: true, societyEmpty: true }), 'society');
+});
+
 test('a society named in the address opens on that society', () => {
   assert.equal(homeView(null, { signedIn: true, societyCount: 0, hasSlug: true }), 'society');
 });

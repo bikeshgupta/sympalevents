@@ -57,10 +57,13 @@ export function SocietyHomePage() {
   const { societies, isLoading: contextLoading } = useEventContext();
   const signedIn = Boolean(session);
   // My space, or the society - see home-view.ts. A signed-out visitor gets no tabs.
-  const view = homeView(search.get(SPACE_PARAM), { signedIn, societyCount: societies.length, hasSlug: Boolean(societySlug) });
+  // Decided in two steps: the society tab is the default, but an empty society hands over to My space, and
+  // that is only known once its events have arrived.
+  const viewOptions = { signedIn, societyCount: societies.length, hasSlug: Boolean(societySlug) };
+  const firstView = homeView(search.get(SPACE_PARAM), { ...viewOptions, societyEmpty: null });
   // Somebody signed in with no society, and no society in the address, has nothing to read.
   const hasSociety = Boolean(societySlug) || societies.length > 0 || !signedIn;
-  const { data, isLoading, error } = useSocietyHome(societySlug, { enabled: view === "society" && hasSociety && !sessionLoading && !(signedIn && contextLoading) });
+  const { data, isLoading, error } = useSocietyHome(societySlug, { enabled: firstView === "society" && hasSociety && !sessionLoading && !(signedIn && contextLoading) });
   // One clock for the whole page, so every row and the featured pick agree.
   const now = useMemo(() => new Date(), []);
   const [managing, setManaging] = useState(false);
@@ -71,6 +74,7 @@ export function SocietyHomePage() {
   // Drafts never reach this page's lists, and a cancelled event only stays while its
   // date is still ahead - see residentVisibleEvents for why.
   const events = useMemo(() => residentVisibleEvents(data?.events ?? [], now), [data?.events, now]);
+  const view = homeView(search.get(SPACE_PARAM), { ...viewOptions, societyEmpty: data ? events.length === 0 : null });
   const featured = useMemo(() => pickFeaturedEvent(events, now), [events, now]);
   const grouped = useMemo(() => {
     const groups: Record<EventGroup, SocietyEvent[]> = { ongoing: [], upcoming: [], past: [] };

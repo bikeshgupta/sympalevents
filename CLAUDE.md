@@ -2277,7 +2277,8 @@ tablist, so refresh, sharing and Back agree.
 
 - **The second tab is named after the society when the person has exactly one**, and says "Societies" with a
   chooser of society cards (`society-chooser.tsx`) once they have more. One society shows no chooser.
-- **Default tab:** the society for a member; My space for somebody signed in with no society (`SocietyRoot` sends
+- **Default tab:** the society for a member, unless it has no events to show (then My space, decided once its
+  events arrive; a society chosen by its address always opens); My space for somebody signed in with no society (`SocietyRoot` sends
   them to `/society?view=space` instead of the demo dashboard). Signed-out visitors get no tabs, as before.
 - **My space** ([my-space.tsx](src/features/society/my-space.tsx)) lists the events the person organises or belongs
   to, across societies, from the `my-events` read (no request of its own). Personal events (birthdays,

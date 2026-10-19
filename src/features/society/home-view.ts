@@ -7,7 +7,8 @@
  *   "Societies" once they have more, because then the tab holds a choice between them.
  * - Which tab is open comes from the address (`?view=space`), so a link, a refresh and the Back button all
  *   agree. Without it the society tab opens, since that is where a member's events are - unless the person
- *   has no society at all, when My space is the only tab with anything in it.
+ *   has no society at all, or their society has no events to show (`societyEmpty`), when My space opens.
+ *   A society named in the address always opens, empty or not: somebody chose it.
  * - A signed-out visitor gets no tabs: My space is a person's own, and there is nobody to own it.
  */
 
@@ -16,12 +17,17 @@ export type HomeView = "space" | "society";
 export const SPACE_PARAM = "view";
 export const SPACE_VALUE = "space";
 
-export function homeView(param: string | null | undefined, opts: { signedIn: boolean; societyCount: number; hasSlug: boolean }): HomeView {
+export function homeView(
+  param: string | null | undefined,
+  opts: { signedIn: boolean; societyCount: number; hasSlug: boolean; societyEmpty?: boolean | null },
+): HomeView {
   if (!opts.signedIn) return "society";
   if (param === SPACE_VALUE) return "space";
   // A society named in the address is a society to show, member or not.
   if (opts.hasSlug) return "society";
-  return opts.societyCount > 0 ? "society" : "space";
+  if (opts.societyCount === 0) return "space";
+  // Unknown (still loading) counts as not empty, so the society's own skeleton shows meanwhile.
+  return opts.societyEmpty === true ? "space" : "society";
 }
 
 export function societyTabLabel(societies: { name: string }[]) {
