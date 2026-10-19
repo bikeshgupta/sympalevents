@@ -45,7 +45,7 @@ export function EventCard({ event, to, now }: { event: SocietyEvent; to: string;
         imageUrl={event.heroImageUrl ?? (remembered ? event.coverPhotoUrl : null)}
         focus={event.heroFocus}
         dim={remembered || cancelled}
-        className="h-24 w-[84px] shrink-0 rounded-lg sm:h-28 sm:w-24"
+        className="h-24 w-[84px] shrink-0 rounded-[20px] shadow-sm sm:h-28 sm:w-24"
         iconClassName="h-7 w-7"
       />
 

@@ -64,14 +64,14 @@ export function PersonalEventCard({
       to={to}
       {...tiltHandlers(motion, 0.6)}
       className={cn(
-        "dfx-spot group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border bg-card p-2.5 pr-3 shadow-sm transition duration-300",
+        "glass-card dfx-spot group relative flex items-center gap-3.5 overflow-hidden rounded-[26px] p-2 pr-3 transition duration-300",
         "[@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:shadow-md active:scale-[0.99]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none motion-reduce:transition-none",
       )}
     >
-      <span className={cn("relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-xl bg-muted", past && "grayscale-[35%]")}>
+      <span className={cn("relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-[20px] bg-muted shadow-inner", past && "grayscale-[35%]")}>
         <PersonalEventImage event={event} className="transition-transform duration-500 [@media(hover:hover)]:group-hover:scale-105 motion-reduce:transition-none" />
-        <span className="absolute left-1.5 top-1.5 flex flex-col items-center rounded-lg bg-white/95 px-1.5 py-1 leading-none text-foreground shadow-sm">
+        <span className="absolute left-1.5 top-1.5 flex flex-col items-center rounded-xl border border-white/70 bg-white/75 px-1.5 py-1 leading-none text-foreground shadow-sm backdrop-blur-md">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{when.weekday}</span>
           <span className="font-display text-lg font-semibold tabular-nums">{when.day}</span>
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{when.month}</span>
@@ -83,7 +83,7 @@ export function PersonalEventCard({
           {[time, event.venue].filter(Boolean).join(" · ") || "Time and place to follow"}
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", chipTone[chip.tone])}>{chip.label}</span>
+          <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", chipTone[chip.tone])}>{chip.label}</span>
           {togo ? (
             <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
@@ -98,7 +98,9 @@ export function PersonalEventCard({
           ) : null}
         </span>
       </span>
-      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform [@media(hover:hover)]:group-hover:translate-x-0.5" aria-hidden="true" />
+      <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/70 text-muted-foreground shadow-sm ring-1 ring-black/5 transition-transform [@media(hover:hover)]:group-hover:translate-x-0.5">
+        <ChevronRight className="h-4 w-4" />
+      </span>
     </Link>
   );
 }

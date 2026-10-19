@@ -55,9 +55,9 @@ export function MySpace({ greeting, canCreateSocietyEvent }: { greeting: string;
         {canCreateSocietyEvent ? (
           <Link
             to="/new-event"
-            className="flex min-h-14 items-center gap-3 rounded-2xl border bg-card px-4 py-3 text-sm font-medium shadow-sm transition [@media(hover:hover)]:hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="glass-card glass-press flex min-h-14 items-center gap-3 rounded-full py-2 pl-2 pr-5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <span aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Sparkles className="h-[18px] w-[18px]" strokeWidth={1.75} />
             </span>
             <span className="min-w-0 flex-1">
@@ -95,9 +95,9 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
         <h2 id="my-events" className="font-display text-xl font-semibold">
           My events
         </h2>
-        <div className="mt-2 flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">
+        <div className="glass-card mt-2 flex items-center gap-3 rounded-[24px] px-4 py-3">
           <p className="min-w-0 flex-1 text-sm text-muted-foreground">Sign in to see what you host and the invitations you&rsquo;ve answered.</p>
-          <Button asChild variant="outline" className="h-10 shrink-0">
+          <Button asChild className="h-10 shrink-0 rounded-full px-4">
             <Link to="/login" state={{ from: `${location.pathname}${location.search}` }}>
               <LogIn className="h-4 w-4" aria-hidden="true" />
               Sign in
@@ -114,8 +114,8 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
         <div className="h-7 w-32 animate-pulse rounded bg-muted" />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {[0, 1].map((key) => (
-            <div key={key} className="flex animate-pulse gap-3.5 rounded-2xl border bg-card p-2.5">
-              <div className="h-[88px] w-[88px] rounded-xl bg-muted" />
+            <div key={key} className="glass-card flex animate-pulse gap-3.5 rounded-[26px] p-2">
+              <div className="h-[92px] w-[92px] rounded-[20px] bg-muted" />
               <div className="flex-1 space-y-2 pt-2">
                 <div className="h-4 w-3/4 rounded bg-muted" />
                 <div className="h-3 w-1/2 rounded bg-muted" />
@@ -147,8 +147,8 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
         <h2 id="my-events" className="font-display text-xl font-semibold">
           My events
         </h2>
-        <div className="mt-2 flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:flex-row sm:items-center">
-          <span aria-hidden="true" className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex">
+        <div className="glass-card mt-2 flex flex-col gap-3 rounded-[28px] p-4 sm:flex-row sm:items-center">
+          <span aria-hidden="true" className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:flex">
             <CalendarHeart className="h-5 w-5" strokeWidth={1.75} />
           </span>
           <div className="min-w-0 flex-1">
@@ -156,10 +156,10 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
             <p className="text-sm text-muted-foreground">Host a celebration, or open an invitation you were sent.</p>
           </div>
           <div className="flex gap-2">
-            <Button asChild className="h-10">
+            <Button asChild className="h-10 rounded-full px-4">
               <Link to="/my/new">Create event</Link>
             </Button>
-            <Button type="button" variant="outline" className="h-10" onClick={() => document.getElementById("join-event-code")?.focus()}>
+            <Button type="button" variant="outline" className="h-10 rounded-full bg-white/60 px-4" onClick={() => document.getElementById("join-event-code")?.focus()}>
               Join with a code
             </Button>
           </div>
@@ -231,7 +231,7 @@ function EventGrid({ lists, current, motion }: { lists: Lists; current: ListKey;
             going: event.counts.goingPeople as number | null,
           }));
 
-  if (!cards.length) return <p className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">{emptyLine[current]}</p>;
+  if (!cards.length) return <p className="glass-card rounded-[24px] px-4 py-3 text-sm text-muted-foreground">{emptyLine[current]}</p>;
 
   return (
     <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">

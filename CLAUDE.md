@@ -2313,6 +2313,16 @@ shared `FilterTabs` ([filter-tabs.tsx](src/components/shared/filter-tabs.tsx), a
   something in it. Cards are `PersonalEventCard` (picture with the date on it, title, time and place, what it means
   for you, how many are going). Society events are no longer listed here - they are the other tab. An invitation
   is only known to My space once the person has replied to it while signed in (opening one records nothing).
+- **The home is liquid glass** (owner's ask: "more rounded, liquid glass, animations"), and it supersedes the
+  Society Home "type and hairlines, not boxes" note for these two tabs. Pieces in globals.css: `HomeAmbient`
+  ([home-ambient.tsx](src/features/society/home-ambient.tsx), portalled, fixed) drifts three soft washes of colour
+  behind the page so the glass has something to refract; the brand bar is a sticky round `.glass` bar; the switch
+  is `.liquid-track` + `.liquid-thumb`, and the thumb stretches as it travels (`.liquid-go`, the CSS `scale`
+  property, separate from the sliding `transform`); `FilterTabs` is the same track with a white glass bead;
+  cards, the join box, the society event list, festival ideas and the chooser are `.glass-card` at 24-30px radii;
+  buttons and inputs on the home are fully round. Every glass rule has a solid fallback without backdrop-filter.
+  **Nothing fixed may sit inside the glass bar** (backdrop-filter makes it the containing block) - the account
+  menu is a Radix portal, which is why it works.
 - **Motion on the home** (all through `useDashboardMotion`, so off for reduced motion; the pieces are the
   dashboard's own, `dashboard-fx.tsx` / `dashboard-motion.ts`): the scroll bar along the top; the banner's drifting
   aurora, rising embers, headline rising a word at a time, artwork easing with the scroll and a light sweeping the

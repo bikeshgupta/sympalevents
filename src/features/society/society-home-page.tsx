@@ -10,6 +10,7 @@ import { FestivalIdeas } from "@/features/society/festival-ideas";
 import { HomeTabs } from "@/features/society/home-tabs";
 import { homeView, showsSocietyChooser, SOCIETY_VALUE, societyTabLabel, SPACE_PARAM, SPACE_VALUE } from "@/features/society/home-view";
 import { MySpace } from "@/features/society/my-space";
+import { HomeAmbient } from "@/features/society/home-ambient";
 import { JoinEventCard } from "@/features/society/home-cards";
 import { FilterTabs } from "@/components/shared/filter-tabs";
 import { Button } from "@/components/ui/button";
@@ -141,16 +142,18 @@ export function SocietyHomePage() {
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-3 sm:pt-5 lg:max-w-6xl lg:px-8">
       {motion ? <ScrollProgressBar /> : null}
-      {/* The brand and the account, on one short row; then the switch between My space and the society. */}
-      <div className="flex items-center justify-between gap-3">
+      <HomeAmbient />
+      {/* The brand and the account on one floating glass bar that stays at the top as the page scrolls. Its
+          menu opens in a portal, so nothing fixed sits inside the bar's backdrop filter. */}
+      <div className="glass sticky top-2 z-30 -mx-1 flex items-center justify-between gap-3 rounded-full py-1.5 pl-1.5 pr-1.5 sm:top-3">
         <Link
           to="/"
-          className="-ml-1 flex min-h-11 items-center gap-2 rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-11 items-center gap-2.5 rounded-full pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {/* The app's own icon, the same file as the tab icon and the event header's way home. */}
-          <img src="/favicon.svg" alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-xl shadow-sm" />
+          <img src="/favicon.svg" alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-full shadow-sm ring-2 ring-white/80" />
           <span className="leading-tight">
-            <span className="font-display block text-xl font-semibold">SymPal</span>
+            <span className="font-display block text-lg font-semibold">SymPal</span>
             <span className="block text-xs text-muted-foreground">Celebrate your way</span>
           </span>
         </Link>
@@ -186,7 +189,7 @@ export function SocietyHomePage() {
       <div className="mt-5 flex items-end justify-between gap-3">
         <div className="min-w-0">{society ? <SocietyHeader society={society} greeting={signedIn ? greeting : null} /> : null}</div>
         {canManage ? (
-          <Button asChild variant="outline" className="hidden shrink-0 sm:inline-flex">
+          <Button asChild variant="outline" className="hidden shrink-0 rounded-full bg-white/60 shadow-sm backdrop-blur sm:inline-flex">
             <Link to="/new-event">
               <Plus className="h-4 w-4" aria-hidden="true" />
               Create event
@@ -242,8 +245,8 @@ export function SocietyHomePage() {
       {data?.myPasses?.length ? <PassesShelf events={events} passes={data.myPasses} now={now} /> : null}
 
       {featured ? (
-        // Edge to edge on a phone: the main column's own 16px gutters are pulled back.
-        <section className="-mx-4 mt-4 sm:mx-0" aria-label="Featured event">
+        // A rounded glass-edged frame at every width, like every other card on the home.
+        <section className="mt-4" aria-label="Featured event">
           <FeaturedEvent event={featured} to={eventPath(featured)} now={now} />
         </section>
       ) : null}
@@ -262,7 +265,7 @@ export function SocietyHomePage() {
             />
           </div>
 
-          <section key={current} role="tabpanel" id="society-events-panel" aria-labelledby={`society-events-tab-${current}`} className="mt-1">
+          <section key={current} role="tabpanel" id="society-events-panel" aria-labelledby={`society-events-tab-${current}`} className="glass-card mt-3 rounded-[28px] px-4 py-1">
             {grouped[current].length ? (
               // Months only once there is enough to scan - see groupByMonth.
               groupByMonth(grouped[current], now).map((group) => (
@@ -299,7 +302,11 @@ export function SocietyHomePage() {
       </div>
 
       <aside className="mt-8 space-y-6 lg:mt-5" aria-label="Plan and join">
-        {canManage && data?.ready !== false ? <FestivalIdeas events={data?.events ?? []} now={now} eventPath={eventPath} /> : null}
+        {canManage && data?.ready !== false ? (
+          <div className="glass-card rounded-[28px] px-4 pb-2 pt-1 empty:hidden [&>section]:mt-3">
+            <FestivalIdeas events={data?.events ?? []} now={now} eventPath={eventPath} />
+          </div>
+        ) : null}
         {signedIn ? <JoinEventCard variant="society" /> : null}
       </aside>
       </div>

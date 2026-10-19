@@ -50,7 +50,7 @@ export function CreateEventBanner({ ready, motion }: { ready: boolean; motion: b
     <section
       ref={ref}
       aria-labelledby="create-banner"
-      className={cn("group relative isolate mt-4 overflow-hidden rounded-3xl bg-primary shadow-sm ring-1 ring-black/5", motion && "dfx-row")}
+      className={cn("group relative isolate mt-4 overflow-hidden rounded-[30px] bg-primary shadow-[0_24px_50px_-28px_hsl(var(--foreground)/0.6)] ring-1 ring-white/40", motion && "dfx-row")}
     >
       <img
         ref={artRef}
@@ -71,7 +71,7 @@ export function CreateEventBanner({ ready, motion }: { ready: boolean; motion: b
         </span>
       ) : null}
       <div className="relative flex flex-col justify-center px-5 py-3.5 text-white sm:px-7 sm:py-5">
-        <p className="hidden items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/85 sm:flex">
+        <p className="hidden w-fit items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/90 backdrop-blur-md sm:flex">
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           Your space for celebrations
         </p>
@@ -94,7 +94,7 @@ export function CreateEventBanner({ ready, motion }: { ready: boolean; motion: b
         {ready ? (
           <Button
             asChild
-            className={cn("mt-2.5 h-10 w-fit bg-white text-foreground shadow-md transition-transform hover:bg-white", motion && "dfx-glint")}
+            className={cn("mt-2.5 h-11 w-fit rounded-full border border-white/70 bg-white/90 px-5 text-foreground shadow-lg backdrop-blur-md transition-transform hover:bg-white", motion && "dfx-glint")}
             {...magneticHandlers(motion)}
           >
             <Link to="/my/new">
@@ -179,9 +179,9 @@ export function JoinEventCard({ variant = "event", className }: { variant?: "eve
 
   const busy = join.isPending || opening;
   return (
-    <section aria-labelledby={`${id}-heading`} className={cn("rounded-2xl border bg-card p-4 shadow-sm", className)}>
+    <section aria-labelledby={`${id}-heading`} className={cn("glass-card rounded-[28px] p-4 sm:p-5", className)}>
       <div className="flex items-start gap-3">
-        <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15">
           <Ticket className="h-[18px] w-[18px]" strokeWidth={1.75} />
         </span>
         <div className="min-w-0 flex-1">
@@ -227,13 +227,13 @@ export function JoinEventCard({ variant = "event", className }: { variant?: "eve
           placeholder={variant === "society" ? "AB12CD34" : "K7Q4MX"}
           aria-invalid={problem ? true : undefined}
           aria-describedby={`${id}-help`}
-          className="h-10 font-semibold tracking-[0.12em] placeholder:font-normal"
+          className="h-11 rounded-full border-white/80 bg-white/70 px-4 font-semibold tracking-[0.12em] shadow-inner placeholder:font-normal"
           onChange={(event) => {
             setValue(event.target.value);
             setProblem(null);
           }}
         />
-        <Button type="submit" className="h-10" disabled={busy || !value.trim()}>
+        <Button type="submit" className="h-11 rounded-full px-5 shadow-md shadow-primary/25" disabled={busy || !value.trim()}>
           {join.isPending ? "Joining…" : opening ? "Opening…" : variant === "society" ? "Join" : "Open"}
         </Button>
       </form>

@@ -19,15 +19,15 @@ export function SocietyChooser({ societies, currentSlug }: { societies: SocietyO
             to={society.slug ? `/society/${society.slug}` : "/society"}
             aria-current={current ? "page" : undefined}
             className={cn(
-              "flex min-h-14 w-44 shrink-0 lg:w-56 items-center gap-2.5 rounded-xl border bg-card px-3 py-2 transition-colors",
+              "glass-card glass-press flex min-h-14 w-44 shrink-0 lg:w-56 items-center gap-2.5 rounded-full py-2 pl-2 pr-4 transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              current ? "border-foreground" : "[@media(hover:hover)]:hover:bg-muted/40",
+              current ? "ring-2 ring-primary/70" : "",
             )}
           >
             {society.logoUrl ? (
-              <img src={society.logoUrl} alt="" aria-hidden className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+              <img src={society.logoUrl} alt="" aria-hidden className="h-10 w-10 shrink-0 rounded-full object-cover" />
             ) : (
-              <span aria-hidden className="font-display flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-base font-semibold text-primary-foreground">
+              <span aria-hidden className="font-display flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground">
                 {society.name[0]?.toUpperCase()}
               </span>
             )}
