@@ -62,7 +62,10 @@ export function SocietyHomePage() {
   const viewOptions = { signedIn, societyCount: societies.length, hasSlug: Boolean(societySlug) };
   const firstView = homeView(search.get(SPACE_PARAM), { ...viewOptions, societyEmpty: null });
   // Somebody signed in with no society, and no society in the address, has nothing to read.
-  const hasSociety = Boolean(societySlug) || societies.length > 0 || !signedIn;
+  const hasSociety = Boolean(societySlug) || societies.length > 0;
+  // Signed out with no society in the address: there is no society to mean (the server would refuse), so the
+  // page asks the person to sign in instead of showing that refusal as an error.
+  const signedOutNowhere = !signedIn && !societySlug;
   const { data, isLoading, error } = useSocietyHome(societySlug, { enabled: firstView === "society" && hasSociety && !sessionLoading && !(signedIn && contextLoading) });
   // One clock for the whole page, so every row and the featured pick agree.
   const now = useMemo(() => new Date(), []);
@@ -109,6 +112,7 @@ export function SocietyHomePage() {
 
   // Which tab opens depends on how many societies the person has, so wait for that rather than flashing one.
   if (sessionLoading || (signedIn && contextLoading) || isLoading) return <SocietyHomeSkeleton />;
+  if (signedOutNowhere) return <SignedOutHome />;
 
   if (error && view === "society") {
     return (
@@ -369,6 +373,27 @@ function EmptySociety({ canCreate }: { canCreate: boolean }) {
         </Link>
       ) : null}
     </div>
+  );
+}
+
+/** Signed out, at the bare home address (an installed app icon, an old bookmark): an invitation to sign in. */
+function SignedOutHome() {
+  return (
+    <main className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col items-center justify-center px-4 py-10 text-center">
+      <img src="/icon-192.png" alt="" aria-hidden className="h-16 w-16 rounded-2xl shadow-sm" />
+      <h1 className="font-display mt-5 text-3xl font-semibold">Welcome to SymPal</h1>
+      <p className="mt-2 text-[15px] text-muted-foreground">
+        Sign in to see your society&rsquo;s events, your passes and the celebrations you host.
+      </p>
+      <Link
+        to="/login"
+        state={{ from: "/" }}
+        className="mt-6 inline-flex h-11 items-center rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        Sign in
+      </Link>
+      <p className="mt-4 text-xs text-muted-foreground">Got an invitation link? Open it directly; no account is needed to reply.</p>
+    </main>
   );
 }
 
