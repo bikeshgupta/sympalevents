@@ -3,7 +3,7 @@ import { getDefaultEventDay, getEventDays, getEventPhase, getNextEvent, sortTime
 import { Settings2 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useEventClosing } from "@/lib/closing";
+import { useEventClosing, usesSeedCredits } from "@/lib/closing";
 import { useEventData } from "@/lib/event-data";
 import { useHashTarget } from "@/lib/scroll";
 import { renderWidget, type DashboardContext } from "@/features/dashboard/widget-host";
@@ -58,7 +58,7 @@ export function DashboardPage() {
     [timeline, selectedDay, selectedDate],
   );
   const nextEvent = getNextEvent(timeline, now);
-  const closing = useEventClosing(event.id);
+  const closing = useEventClosing(event.id, { seedCredits: usesSeedCredits(event) });
   // Decoration only (src/lib/dashboard-motion.ts): widgets below the first
   // screen slide in as they are reached, and a bar along the top shows how far
   // down the page you are. Off for anyone who asks their device for less motion.

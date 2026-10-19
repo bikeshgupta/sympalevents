@@ -1711,8 +1711,16 @@ naming it.
   truth**. It stands in only while an event has nothing stored, and the editor
   preloads it so the first save turns those names into real per-event rows.
   `withSeedCredits()` / `manualCredits()` in `src/lib/closing.ts` are the two sides of
-  that. (Emptying a list back out brings the seed back - known, and not worth a column
-  to record "they meant nobody".)
+  that. **The seed is that one event's committee and applies to that event only**
+  (`usesSeedCredits()`: no template and type festival, the same rule that keeps its
+  bundled hero photograph). It used to apply to every event, so a Garba night opened
+  crediting the Ganesh committee, its six volunteers and its shout-out, and emptying the
+  list brought them back. On the original event, emptying a list still brings the seed
+  back - known, and not worth a column to record "they meant nobody".
+- **A credits group with nobody in it is not drawn for residents**, and for an organiser
+  only when the event uses the page those names come from (Prasad, Sponsors,
+  Contributions; `openPageKeys` from `useEventAccess`). A group that has names always
+  shows.
 - `CreditsDialog` ([credits-dialog.tsx](src/features/closing/credits-dialog.tsx))
   edits **one merged committee list**, not "derived" and "yours" side by side - that
   split is an implementation detail an admin reordering the committee should not have

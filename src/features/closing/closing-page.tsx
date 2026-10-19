@@ -12,7 +12,7 @@ import { FeedbackSection } from "@/features/closing/feedback-section";
 import { GallerySection } from "@/features/closing/gallery-section";
 import { formatEventWeekday, getEventDays } from "@/features/dashboard/dashboard-utils";
 import { useSession } from "@/lib/auth";
-import { emptyCredits, useEventClosing, withSeedCredits } from "@/lib/closing";
+import { emptyCredits, useEventClosing, usesSeedCredits, withSeedCredits } from "@/lib/closing";
 import { useHashTarget } from "@/lib/scroll";
 import { useEventAccess } from "@/lib/event-access";
 import { useEventContext } from "@/lib/event-context";
@@ -62,7 +62,8 @@ export function ClosingPage() {
   const { data: session } = useSession();
   const { data: eventAccess } = useEventAccess();
   const canManage = eventAccess?.role === "admin" || eventAccess?.role === "committee";
-  const closing = useEventClosing(selectedEventId ?? data.event.id);
+  const seedCredits = usesSeedCredits(data.event);
+  const closing = useEventClosing(selectedEventId ?? data.event.id, { seedCredits });
   const [editingCredits, setEditingCredits] = useState(false);
 
   // Arriving from the dashboard's "All N reviews" or its gallery preview.
@@ -76,13 +77,19 @@ export function ClosingPage() {
   // the prasad sponsors from prasad_items. When it has not answered - demo
   // mode, or migration 014 not run yet - the schedule the page already has
   // still names most of the volunteers, so the credits are never emptier than
-  // the data actually is. Either way the hand-kept names in src/data/credits.ts
-  // are folded in by the same mergeCredits() the query uses.
-  const credits =
-    closing.data?.credits ??
-    withSeedCredits(
-      emptyCredits(creditPeople(data.eventPlan.map((row) => ({ name: row.owner }))).map((person) => person.name)),
-    );
+  // the data actually is. The hand-kept names in src/data/credits.ts are folded
+  // in only for the event they belong to (usesSeedCredits).
+  const fallbackCredits = emptyCredits(
+    creditPeople(data.eventPlan.map((row) => ({ name: row.owner }))).map((person) => person.name),
+  );
+  const credits = closing.data?.credits ?? (seedCredits ? withSeedCredits(fallbackCredits) : fallbackCredits);
+  // Which pages this event has open to this viewer. A credits group for a page
+  // the event does not use (Prasad on a Garba night) is not drawn at all; null
+  // in the demo, where nothing is filtered.
+  const openPageKeys =
+    data.source === "demo"
+      ? null
+      : new Set((eventAccess?.pages ?? []).filter((page) => page.canView).map((page) => page.pageKey));
 
   // "Day 3 · Sat, 20 Sept" for a prasad slot. The server sends the plain date
   // because only the client knows which day of this event it is.
@@ -156,6 +163,7 @@ export function ClosingPage() {
         sponsors={sponsors}
         isLoading={closing.isLoading}
         canManage={canManage}
+        openPageKeys={openPageKeys}
         onEdit={() => setEditingCredits(true)}
         dayLabel={dayLabel}
       />
@@ -163,6 +171,7 @@ export function ClosingPage() {
       {canManage && editingCredits ? (
         <CreditsDialog
           credits={credits}
+          seed={seedCredits}
           onOpenChange={setEditingCredits}
           onSave={(draft) => closing.saveCredits.mutateAsync(draft)}
         />
