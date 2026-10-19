@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { extraCoreCommittee, extraVolunteers, specialMentions } from "@/data/credits";
 import { apiFetch } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import { usesBundledPhoto } from "@/lib/hero-artwork";
 
 export type ClosingRecord = {
   event_id: string;
@@ -132,7 +133,7 @@ const FEEDBACK_PATH = "/api/events?resource=feedback";
  * not. A token is still sent when there is one, which is how the server
  * knows which review is "yours" to edit.
  */
-export function useEventClosing(eventId?: string) {
+export function useEventClosing(eventId?: string, { seedCredits = false }: { seedCredits?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const queryKey = ["event-closing", eventId, session?.user.appUserId ?? "guest"];
@@ -142,11 +143,14 @@ export function useEventClosing(eventId?: string) {
     queryKey,
     enabled: Boolean(eventId),
     queryFn: async () => {
-      const payload = await apiFetch<ClosingPayload>(`${CLOSING_PATH}&eventId=${encodeURIComponent(eventId!)}`, {
+      return apiFetch<ClosingPayload>(`${CLOSING_PATH}&eventId=${encodeURIComponent(eventId!)}`, {
         requireAuth: false,
       });
-      return { ...payload, credits: withSeedCredits(payload.credits) };
     },
+    // The seed names belong to one event (see `usesSeedCredits`). Applied per
+    // caller rather than in the fetch, so the cached answer is always the
+    // event's own and every screen decides the same way.
+    select: (payload) => (seedCredits ? { ...payload, credits: withSeedCredits(payload.credits) } : payload),
     retry: false,
   });
 
@@ -256,7 +260,23 @@ export function emptyCredits(volunteers: string[] = []): ClosingCredits {
 }
 
 /**
- * The credits, with src/data/credits.ts standing in while nothing is stored.
+ * Whether src/data/credits.ts applies to this event at all.
+ *
+ * Those names are the committee of the one event this app was built for - the
+ * Ganesh Chaturthi that predates templates, recognised the same way its hero
+ * keeps the bundled photograph (`usesBundledPhoto`: no template, type
+ * festival). The seed used to apply to every event, so a Garba night opened
+ * with that committee, its six volunteers and its shout-out in the credits,
+ * and emptying the list in the editor only brought them back. An event made
+ * from a template credits its own people and nobody else.
+ */
+export function usesSeedCredits(event: { templateKey?: string | null; eventType?: string | null }) {
+  return usesBundledPhoto(event);
+}
+
+/**
+ * The credits, with src/data/credits.ts standing in while nothing is stored -
+ * only for the event `usesSeedCredits` names.
  *
  * That file is a **seed, not the source of truth**: once an admin saves the
  * credits from the page the stored lists win and the file is ignored, and the
@@ -292,7 +312,14 @@ export function initials(name: string) {
 
 /** What the credits editor starts from - the stored lists, or the seed while
  *  those are empty, so a first save keeps the names already on the page. */
-export function manualCredits(credits: ClosingCredits) {
+export function manualCredits(credits: ClosingCredits, seed = false) {
+  if (!seed) {
+    return {
+      core: [...credits.manual.core],
+      volunteers: [...credits.manual.volunteers],
+      shoutouts: credits.shoutouts.map((entry) => ({ ...entry })),
+    };
+  }
   return {
     core: credits.manual.core.length ? credits.manual.core : [...extraCoreCommittee],
     volunteers: credits.manual.volunteers.length ? credits.manual.volunteers : [...extraVolunteers],

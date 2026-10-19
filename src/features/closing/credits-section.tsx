@@ -32,6 +32,7 @@ export function CreditsSection({
   sponsors,
   isLoading,
   canManage,
+  openPageKeys = null,
   onEdit,
   dayLabel,
 }: {
@@ -40,6 +41,8 @@ export function CreditsSection({
   sponsors: CreditPerson[];
   isLoading: boolean;
   canManage: boolean;
+  /** Pages this event has open to the viewer; `null` (the demo) filters nothing. */
+  openPageKeys?: Set<string> | null;
   onEdit: () => void;
   /** "Day 3 · Sat, 20 Sept" for a prasad slot's date, from the event itself. */
   dayLabel: (date: string) => string;
@@ -49,6 +52,14 @@ export function CreditsSection({
   const prasadSponsorCount = new Set(
     credits.prasad.flatMap((entry) => entry.sponsors.map((name) => name.toLowerCase())),
   ).size;
+
+  // A group with nobody in it is drawn only for an organiser, and only when the
+  // event actually uses the page its names come from - so a Garba night with no
+  // prasad module has no "Prasad sponsors: nobody recorded" line, and a resident
+  // never meets an empty heading. A group that has names always shows.
+  const pageOpen = (pageKey: string) => openPageKeys === null || openPageKeys.has(pageKey);
+  const showGroup = (count: number, pageKey?: string) =>
+    isLoading || count > 0 || (canManage && (!pageKey || pageOpen(pageKey)));
 
   const total =
     credits.core.length + credits.volunteers.length + prasadSponsorCount + sponsors.length + contributors.length;
@@ -121,47 +132,55 @@ export function CreditsSection({
           ))}
         </section>
 
-        <ChipGroup
-          icon={Users}
-          title="Volunteers"
-          blurb="Owned a task or a slot on the schedule and saw it through."
-          people={named(credits.volunteers)}
-          isLoading={isLoading}
-        />
-
-        <section>
-          <GroupHeading
-            icon={HandHeart}
-            title="Prasad sponsors"
-            count={prasadSponsorCount}
-            blurb="What each family brought, in the order it was served."
+        {showGroup(credits.volunteers.length) ? (
+          <ChipGroup
+            icon={Users}
+            title="Volunteers"
+            blurb="Owned a task or a slot on the schedule and saw it through."
+            people={named(credits.volunteers)}
+            isLoading={isLoading}
           />
-          {credits.prasad.length ? (
-            <ol className="mt-2.5 space-y-2">
-              {credits.prasad.map((entry, index) => (
-                <PrasadRow key={`${entry.date}-${entry.slot}-${entry.item}-${index}`} entry={entry} dayLabel={dayLabel} />
-              ))}
-            </ol>
-          ) : (
-            <EmptyLine isLoading={isLoading} />
-          )}
-        </section>
+        ) : null}
 
-        <ChipGroup
-          icon={HeartHandshake}
-          title="Sponsors"
-          blurb="Backed a slot, an item, or a whole evening."
-          people={sponsors}
-          isLoading={isLoading}
-        />
+        {showGroup(credits.prasad.length, "prasad") ? (
+          <section>
+            <GroupHeading
+              icon={HandHeart}
+              title="Prasad sponsors"
+              count={prasadSponsorCount}
+              blurb="What each family brought, in the order it was served."
+            />
+            {credits.prasad.length ? (
+              <ol className="mt-2.5 space-y-2">
+                {credits.prasad.map((entry, index) => (
+                  <PrasadRow key={`${entry.date}-${entry.slot}-${entry.item}-${index}`} entry={entry} dayLabel={dayLabel} />
+                ))}
+              </ol>
+            ) : (
+              <EmptyLine isLoading={isLoading} />
+            )}
+          </section>
+        ) : null}
 
-        <ChipGroup
-          icon={Sparkles}
-          title="Contributors"
-          blurb="Every family who put money behind the celebration."
-          people={contributors}
-          isLoading={isLoading}
-        />
+        {showGroup(sponsors.length, "sponsors") ? (
+          <ChipGroup
+            icon={HeartHandshake}
+            title="Sponsors"
+            blurb="Backed a slot, an item, or a whole evening."
+            people={sponsors}
+            isLoading={isLoading}
+          />
+        ) : null}
+
+        {showGroup(contributors.length, "contributions") ? (
+          <ChipGroup
+            icon={Sparkles}
+            title="Contributors"
+            blurb="Every family who put money behind the celebration."
+            people={contributors}
+            isLoading={isLoading}
+          />
+        ) : null}
       </CardContent>
     </Card>
   );

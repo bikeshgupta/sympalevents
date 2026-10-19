@@ -40,14 +40,17 @@ function moved<T>(list: T[], index: number, direction: -1 | 1) {
  */
 export function CreditsDialog({
   credits,
+  seed: useSeed = false,
   onOpenChange,
   onSave,
 }: {
   credits: ClosingCredits;
+  /** Start from src/data/credits.ts while nothing is stored - only for the event it belongs to. */
+  seed?: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: CreditsDraft) => Promise<unknown>;
 }) {
-  const seed = manualCredits(credits);
+  const seed = manualCredits(credits, useSeed);
   // Which committee names came from a real `event_members` row: everything on
   // the displayed list that is not one of the hand-kept ones. Removing one of
   // these would only bring it straight back on the next read, so the editor
