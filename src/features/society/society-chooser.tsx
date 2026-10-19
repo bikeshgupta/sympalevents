@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  */
 export function SocietyChooser({ societies, currentSlug }: { societies: SocietyOption[]; currentSlug: string | null }) {
   return (
-    <nav aria-label="Your societies" className="-mx-4 mt-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+    <nav aria-label="Your societies" className="-mx-3 mt-2 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:-mx-4 sm:px-4">
       {societies.map((society) => {
         const current = society.slug === currentSlug;
         return (
@@ -19,7 +19,7 @@ export function SocietyChooser({ societies, currentSlug }: { societies: SocietyO
             to={society.slug ? `/society/${society.slug}` : "/society"}
             aria-current={current ? "page" : undefined}
             className={cn(
-              "glass-card glass-press flex min-h-14 w-44 shrink-0 lg:w-56 items-center gap-2.5 rounded-full py-2 pl-2 pr-4 transition-colors",
+              "glass-press flex min-h-14 w-44 shrink-0 lg:w-56 items-center gap-2.5 rounded-full bg-white/55 py-2 pl-2 pr-4 ring-1 ring-black/[0.04] transition-colors [@media(hover:hover)]:hover:bg-white/85",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               current ? "ring-2 ring-primary/70" : "",
             )}

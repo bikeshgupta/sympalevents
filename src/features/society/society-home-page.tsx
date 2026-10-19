@@ -143,15 +143,21 @@ export function SocietyHomePage() {
     <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-3 sm:pt-5 lg:max-w-6xl lg:px-8">
       {motion ? <ScrollProgressBar /> : null}
       <HomeAmbient />
-      {/* The brand and the account on one floating glass bar that stays at the top as the page scrolls. Its
-          menu opens in a portal, so nothing fixed sits inside the bar's backdrop filter. */}
-      <div className="glass sticky top-2 z-30 -mx-1 flex items-center justify-between gap-3 rounded-full py-1.5 pl-1.5 pr-1.5 sm:top-3">
+      {/* The brand and the account, flat on the page (no bar): the glass is kept for the content below. */}
+      <div className="flex items-center justify-between gap-3">
         <Link
           to="/"
-          className="flex min-h-11 items-center gap-2.5 rounded-full pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group flex min-h-11 items-center gap-2.5 rounded-full pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {/* The app's own icon, the same file as the tab icon and the event header's way home. */}
-          <img src="/favicon.svg" alt="" width={40} height={40} className="h-10 w-10 shrink-0 rounded-full shadow-sm ring-2 ring-white/80" />
+          {/* The app's own icon, the same file as the tab icon and the event header's way home. It gives a little
+              under a press and turns a touch on hover. */}
+          <img
+            src="/favicon.svg"
+            alt=""
+            width={40}
+            height={40}
+            className="h-10 w-10 shrink-0 rounded-xl shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.34,1.5,0.5,1)] group-active:scale-90 [@media(hover:hover)]:group-hover:-rotate-6 [@media(hover:hover)]:group-hover:scale-105 motion-reduce:transform-none"
+          />
           <span className="leading-tight">
             <span className="font-display block text-lg font-semibold">SymPal</span>
             <span className="block text-xs text-muted-foreground">Celebrate your way</span>
@@ -199,8 +205,8 @@ export function SocietyHomePage() {
       </div>
 
       {signedIn && showsSocietyChooser(societies.length) ? (
-        <section aria-labelledby="your-societies" className="mt-5">
-          <h2 id="your-societies" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <section aria-labelledby="your-societies" className="glass-card mt-5 rounded-[30px] p-3 sm:p-4">
+          <h2 id="your-societies" className="font-display px-1 text-xl font-semibold">
             Your societies
           </h2>
           <SocietyChooser societies={societies} currentSlug={society?.slug ?? null} />
@@ -252,9 +258,12 @@ export function SocietyHomePage() {
       ) : null}
 
       {hasAnything ? (
-        <>
-          <h2 className="font-display mt-7 text-2xl font-semibold">Events</h2>
-          <div className="mt-1">
+        // One panel: the heading, its filter and the events it filters belong together.
+        <section aria-labelledby="society-events" className="glass-card mt-6 rounded-[30px] p-3 sm:p-4">
+          <h2 id="society-events" className="font-display px-1 text-xl font-semibold">
+            Events
+          </h2>
+          <div className="mt-2">
             <FilterTabs
               label="Events by when they happen"
               idPrefix="society-events"
@@ -265,7 +274,7 @@ export function SocietyHomePage() {
             />
           </div>
 
-          <section key={current} role="tabpanel" id="society-events-panel" aria-labelledby={`society-events-tab-${current}`} className="glass-card mt-3 rounded-[28px] px-4 py-1">
+          <div key={current} role="tabpanel" id="society-events-panel" aria-labelledby={`society-events-tab-${current}`} className="mt-1 px-1">
             {grouped[current].length ? (
               // Months only once there is enough to scan - see groupByMonth.
               groupByMonth(grouped[current], now).map((group) => (
@@ -291,8 +300,8 @@ export function SocietyHomePage() {
             ) : (
               <EmptyGroup group={current} canCreate={canManage} />
             )}
-          </section>
-        </>
+          </div>
+        </section>
       ) : data?.ready !== false ? (
         <EmptySociety canCreate={canManage} />
       ) : null}

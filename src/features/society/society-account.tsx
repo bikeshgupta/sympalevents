@@ -75,7 +75,7 @@ export function SocietyAccount({
         <button
           type="button"
           aria-label={`Account menu for ${name}`}
-          className="relative block shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="relative block shrink-0 rounded-full transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.34,1.5,0.5,1)] active:scale-90 data-[state=open]:ring-2 data-[state=open]:ring-primary data-[state=open]:ring-offset-2 data-[state=open]:ring-offset-background [@media(hover:hover)]:hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transform-none"
         >
           {session.user.avatarUrl ? (
             <img

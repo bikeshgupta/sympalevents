@@ -1,5 +1,5 @@
 import { CalendarHeart, LogIn, Sparkles } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FilterTabs } from "@/components/shared/filter-tabs";
@@ -83,6 +83,22 @@ const replyChip: Record<"going" | "maybe" | "declined", CardChip> = {
   declined: { label: "Can't come", tone: "muted" },
 };
 
+/**
+ * My events is one panel: its heading, the Hosting / Invited / Joined / Past filter and the events under it sit
+ * in a single glass card, because they are one thing - the filter belongs to the list it filters. Every state
+ * (signed out, loading, error, nothing yet) draws inside the same panel, so the page keeps its shape.
+ */
+function EventsPanel({ children, busy }: { children: ReactNode; busy?: boolean }) {
+  return (
+    <section aria-labelledby="my-events" aria-busy={busy || undefined} className="glass-card mt-6 rounded-[30px] p-3 sm:p-4">
+      <h2 id="my-events" className="font-display px-1 text-xl font-semibold">
+        My events
+      </h2>
+      {children}
+    </section>
+  );
+}
+
 function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: ReturnType<typeof useMyPersonalEvents>; motion: boolean }) {
   const location = useLocation();
   const today = getDateInEventZone(new Date());
@@ -91,11 +107,8 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
 
   if (!signedIn) {
     return (
-      <section aria-labelledby="my-events" className="mt-7">
-        <h2 id="my-events" className="font-display text-xl font-semibold">
-          My events
-        </h2>
-        <div className="glass-card mt-2 flex items-center gap-3 rounded-[24px] px-4 py-3">
+      <EventsPanel>
+        <div className="mt-2 flex items-center gap-3 px-1">
           <p className="min-w-0 flex-1 text-sm text-muted-foreground">Sign in to see what you host and the invitations you&rsquo;ve answered.</p>
           <Button asChild className="h-10 shrink-0 rounded-full px-4">
             <Link to="/login" state={{ from: `${location.pathname}${location.search}` }}>
@@ -104,18 +117,18 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
             </Link>
           </Button>
         </div>
-      </section>
+      </EventsPanel>
     );
   }
 
   if (query.isLoading) {
     return (
-      <section aria-label="My events" aria-busy="true" className="mt-7">
-        <div className="h-7 w-32 animate-pulse rounded bg-muted" />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <EventsPanel busy>
+        <div className="mt-3 h-11 animate-pulse rounded-full bg-white/60" />
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {[0, 1].map((key) => (
-            <div key={key} className="glass-card flex animate-pulse gap-3.5 rounded-[26px] p-2">
-              <div className="h-[92px] w-[92px] rounded-[20px] bg-muted" />
+            <div key={key} className="flex animate-pulse gap-3.5 rounded-[22px] bg-white/50 p-2">
+              <div className="h-[84px] w-[84px] rounded-[18px] bg-muted" />
               <div className="flex-1 space-y-2 pt-2">
                 <div className="h-4 w-3/4 rounded bg-muted" />
                 <div className="h-3 w-1/2 rounded bg-muted" />
@@ -124,17 +137,17 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
             </div>
           ))}
         </div>
-      </section>
+      </EventsPanel>
     );
   }
 
   if (query.error) {
     return (
-      <section aria-label="My events" className="mt-7">
-        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+      <EventsPanel>
+        <p className="mt-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           {query.error instanceof Error ? query.error.message : "Could not load your events."}
         </p>
-      </section>
+      </EventsPanel>
     );
   }
 
@@ -143,11 +156,8 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
   const total = lists.hosting.length + lists.invited.length + lists.joined.length + lists.past.length;
   if (!total) {
     return (
-      <section aria-labelledby="my-events" className="mt-7">
-        <h2 id="my-events" className="font-display text-xl font-semibold">
-          My events
-        </h2>
-        <div className="glass-card mt-2 flex flex-col gap-3 rounded-[28px] p-4 sm:flex-row sm:items-center">
+      <EventsPanel>
+        <div className="mt-2 flex flex-col gap-3 px-1 sm:flex-row sm:items-center">
           <span aria-hidden="true" className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:flex">
             <CalendarHeart className="h-5 w-5" strokeWidth={1.75} />
           </span>
@@ -164,17 +174,14 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
             </Button>
           </div>
         </div>
-      </section>
+      </EventsPanel>
     );
   }
 
   const current = chosen ?? firstFilledList(lists);
   return (
-    <section aria-labelledby="my-events" className="mt-7">
-      <h2 id="my-events" className="font-display text-xl font-semibold">
-        My events
-      </h2>
-      <div className="mt-1">
+    <EventsPanel>
+      <div className="mt-2">
         <FilterTabs
           label="My events"
           idPrefix="my-events"
@@ -189,10 +196,10 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
           ]}
         />
       </div>
-      <div key={current} role="tabpanel" id="my-events-panel" aria-labelledby={`my-events-tab-${current}`} className="mt-4">
+      <div key={current} role="tabpanel" id="my-events-panel" aria-labelledby={`my-events-tab-${current}`} className="mt-3">
         <EventGrid lists={lists} current={current} motion={motion} />
       </div>
-    </section>
+    </EventsPanel>
   );
 }
 
@@ -231,10 +238,10 @@ function EventGrid({ lists, current, motion }: { lists: Lists; current: ListKey;
             going: event.counts.goingPeople as number | null,
           }));
 
-  if (!cards.length) return <p className="glass-card rounded-[24px] px-4 py-3 text-sm text-muted-foreground">{emptyLine[current]}</p>;
+  if (!cards.length) return <p className="rounded-[22px] bg-white/50 px-4 py-3 text-sm text-muted-foreground">{emptyLine[current]}</p>;
 
   return (
-    <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
+    <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
       {cards.map((card, index) => (
         <li key={card.key} className={motion ? "dfx-row" : undefined} style={motion ? { animationDelay: `${Math.min(index, 11) * 60}ms` } : undefined}>
           <PersonalEventCard event={card.event} to={card.to} chip={card.chip} going={card.going} past={current === "past"} />

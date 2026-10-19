@@ -2316,10 +2316,14 @@ shared `FilterTabs` ([filter-tabs.tsx](src/components/shared/filter-tabs.tsx), a
 - **The home is liquid glass** (owner's ask: "more rounded, liquid glass, animations"), and it supersedes the
   Society Home "type and hairlines, not boxes" note for these two tabs. Pieces in globals.css: `HomeAmbient`
   ([home-ambient.tsx](src/features/society/home-ambient.tsx), portalled, fixed) drifts three soft washes of colour
-  behind the page so the glass has something to refract; the brand bar is a sticky round `.glass` bar; the switch
+  behind the page so the glass has something to refract; the brand row (icon, name, avatar) is **flat on the page,
+  not in glass** (asked for), with a press effect on the icon and avatar; the switch
   is `.liquid-track` + `.liquid-thumb`, and the thumb stretches as it travels (`.liquid-go`, the CSS `scale`
   property, separate from the sliding `transform`); `FilterTabs` is the same track with a white glass bead;
-  cards, the join box, the society event list, festival ideas and the chooser are `.glass-card` at 24-30px radii;
+  **one panel per section**: a section's heading, its filter and its items sit in a single `.glass-card` (My events
+  = heading + Hosting/Invited/Joined/Past + the cards; society Events = heading + Upcoming/Live/Past + the rows;
+  Your societies; Plan your next event; the join box), and what is inside a panel is flat (`bg-white/55`, a faint
+  ring), never glass on glass - asked for, to save space and show what belongs together. Panels are 30px round;
   buttons and inputs on the home are fully round. Every glass rule has a solid fallback without backdrop-filter.
   **Nothing fixed may sit inside the glass bar** (backdrop-filter makes it the containing block) - the account
   menu is a Radix portal, which is why it works.
