@@ -74,3 +74,11 @@ test('replies close after the day, or when the event is cancelled', () => {
   assert.ok(!repliesOpen('2026-10-31', '2026-11-01', 'active'));
   assert.ok(!repliesOpen('2026-11-05', '2026-11-01', 'cancelled'));
 });
+
+test('one code box tells an invitation from a society code', async () => {
+  const { classifyCode } = await import('../shared/personal-events.ts');
+  assert.deepEqual(classifyCode('k7q 4mx'), { kind: 'invitation', code: 'K7Q4MX' });
+  assert.deepEqual(classifyCode('ab12-cd34'), { kind: 'society', code: 'AB12CD34' });
+  assert.equal(classifyCode('hello'), null);
+  assert.equal(classifyCode(''), null);
+});

@@ -313,7 +313,7 @@ async function joinSociety(req: ApiRequest, res: ApiResponse) {
 
   const { data: society, error } = await supabase
     .from("organizations")
-    .select("id,name,city")
+    .select("id,name,city,slug")
     .eq("invite_code", code)
     .maybeSingle();
 
@@ -358,7 +358,7 @@ async function joinSociety(req: ApiRequest, res: ApiResponse) {
   }
 
   sendJson(res, 200, {
-    society: { id: society.id, name: society.name, city: society.city ?? "", role: "read_only" as SocietyRole },
+    society: { id: society.id, name: society.name, city: society.city ?? "", slug: (society as { slug?: string | null }).slug ?? null, role: "read_only" as SocietyRole },
   });
 }
 

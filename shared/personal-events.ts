@@ -150,3 +150,15 @@ export function firstName(name: unknown) {
 export function repliesOpen(startsOn: string, today: string, status: string) {
   return status === "active" && startsOn >= today;
 }
+
+/**
+ * A code somebody typed, told apart by length: six characters from the invitation alphabet is a personal
+ * event's invitation; eight letters and numbers is a society's invite code (api/_lib/societies.ts makes those).
+ */
+export function classifyCode(value: unknown): { kind: "invitation" | "society"; code: string } | null {
+  const code = String(value ?? "").toUpperCase().replace(/[\s-]/g, "");
+  const invitation = normaliseCode(code);
+  if (invitation) return { kind: "invitation", code: invitation };
+  if (/^[A-Z0-9]{8}$/.test(code)) return { kind: "society", code };
+  return null;
+}

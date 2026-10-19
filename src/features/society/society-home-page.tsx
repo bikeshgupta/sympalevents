@@ -10,6 +10,7 @@ import { FestivalIdeas } from "@/features/society/festival-ideas";
 import { HomeTabs } from "@/features/society/home-tabs";
 import { homeView, showsSocietyChooser, societyTabLabel, SPACE_PARAM, SPACE_VALUE } from "@/features/society/home-view";
 import { MySpace } from "@/features/society/my-space";
+import { CodeBox, CreateEventCard } from "@/features/society/home-cards";
 import { SocietyChooser } from "@/features/society/society-chooser";
 import { firstNameOf, greetingFor } from "@/features/society/greeting";
 import { SocietyAccount } from "@/features/society/society-account";
@@ -112,7 +113,7 @@ export function SocietyHomePage() {
 
   // Which tab opens depends on how many societies the person has, so wait for that rather than flashing one.
   if (sessionLoading || (signedIn && contextLoading) || isLoading) return <SocietyHomeSkeleton />;
-  if (signedOutNowhere) return <SignedOutHome />;
+  if (signedOutNowhere) return <GuestHome />;
 
   if (error && view === "society") {
     return (
@@ -376,23 +377,32 @@ function EmptySociety({ canCreate }: { canCreate: boolean }) {
   );
 }
 
-/** Signed out, at the bare home address (an installed app icon, an old bookmark): an invitation to sign in. */
-function SignedOutHome() {
+/**
+ * The home for somebody not signed in, at the bare address (an installed app icon, a link to the app):
+ * open to everybody. Creating an event asks for sign-in at that moment (`/my/new` does it and comes back);
+ * a code opens an invitation without an account, and only joining a society asks to sign in.
+ */
+function GuestHome() {
   return (
-    <main className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col items-center justify-center px-4 py-10 text-center">
-      <img src="/icon-192.png" alt="" aria-hidden className="h-16 w-16 rounded-2xl shadow-sm" />
-      <h1 className="font-display mt-5 text-3xl font-semibold">Welcome to SymPal</h1>
-      <p className="mt-2 text-[15px] text-muted-foreground">
-        Sign in to see your society&rsquo;s events, your passes and the celebrations you host.
-      </p>
-      <Link
-        to="/login"
-        state={{ from: "/" }}
-        className="mt-6 inline-flex h-11 items-center rounded-lg bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        Sign in
-      </Link>
-      <p className="mt-4 text-xs text-muted-foreground">Got an invitation link? Open it directly; no account is needed to reply.</p>
+    <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
+      <div className="flex items-start justify-between gap-3">
+        <header className="min-w-0">
+          <h1 className="font-display text-2xl font-semibold leading-tight sm:text-[28px]">Welcome to SymPal</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">Celebrate with your people, and with your society.</p>
+        </header>
+        <SocietyAccount role={null} canManage={false} isSocietyAdmin={false} societySlug={null} draftCount={0} onShowDrafts={() => undefined} />
+      </div>
+      <CreateEventCard ready />
+      <CodeBox />
+      <section className="mt-8 border-t pt-6">
+        <h2 className="font-display text-xl font-semibold">Already part of a society?</h2>
+        <p className="mt-1 text-[15px] text-muted-foreground">
+          Sign in to see its events, your passes and what you host.{" "}
+          <Link to="/login" state={{ from: "/" }} className="font-medium text-primary underline-offset-2 hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </section>
     </main>
   );
 }

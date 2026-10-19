@@ -1,11 +1,9 @@
-import { CalendarHeart, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { CodeBox, CreateEventCard } from "@/features/society/home-cards";
 import { formatPersonalDate, useMyPersonalEvents, type MinePersonal } from "@/lib/personal-events";
 import { themeByKey } from "@/lib/themes";
-import { kindOf, normaliseCode, PERSONAL_KINDS } from "../../../shared/personal-events";
+import { kindOf } from "../../../shared/personal-events";
 import { formatEventDate } from "@/features/dashboard/dashboard-utils";
 import { getDateInEventZone } from "@/lib/event-status";
 import { useEventContext, type EventOption } from "@/lib/event-context";
@@ -71,96 +69,10 @@ export function MySpace({ canCreateSocietyEvent }: { canCreateSocietyEvent: bool
         </p>
       ) : null}
 
-      <section aria-labelledby="host-own" className="mt-8 border-t pt-6">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <CalendarHeart className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <h2 id="host-own" className="font-display text-xl font-semibold">
-              {personal.data?.ready ? "Create your free event" : "Host your own celebration"}
-            </h2>
-            <p className="mt-1 max-w-prose text-[15px] text-muted-foreground">
-              Birthdays, anniversaries, baby showers and get-togethers: private and invite-only, free, with
-              replies and wishes in one place.{personal.data?.ready ? " Guests reply without an account." : " Coming soon to My space."}
-            </p>
-            {personal.data?.ready ? (
-              <>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {PERSONAL_KINDS.slice(0, 6).map((kind) => (
-                    <Link
-                      key={kind.key}
-                      to={`/my/new?kind=${kind.key}`}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-full border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <span aria-hidden="true">{kind.emoji}</span>
-                      {kind.name}
-                    </Link>
-                  ))}
-                </div>
-                <Button asChild className="mt-3">
-                  <Link to="/my/new">Create my event</Link>
-                </Button>
-              </>
-            ) : null}
-            {canCreateSocietyEvent ? (
-              <Link
-                to="/new-event"
-                className="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                Create a society event &rarr;
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      </section>
+      <CreateEventCard ready={Boolean(personal.data?.ready)} canCreateSocietyEvent={canCreateSocietyEvent} />
 
-      <InviteCodeBox />
+      <CodeBox />
     </div>
-  );
-}
-
-/** "Got an invite code?" - opens the invitation it belongs to. */
-function InviteCodeBox() {
-  const navigate = useNavigate();
-  const [value, setValue] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  return (
-    <section aria-labelledby="code-heading" className="mt-8 border-t pt-6">
-      <h2 id="code-heading" className="font-display text-xl font-semibold">
-        Got an invite code?
-      </h2>
-      <p className="mt-1 text-[15px] text-muted-foreground">Six letters and numbers from the person who invited you.</p>
-      <form
-        className="mt-3 flex max-w-sm gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const code = normaliseCode(value);
-          if (!code) return setProblem("An invite code has six letters and numbers.");
-          navigate(`/i/${code}`);
-        }}
-      >
-        <label htmlFor="invite-code" className="sr-only">
-          Invite code
-        </label>
-        <Input
-          id="invite-code"
-          value={value}
-          maxLength={8}
-          autoCapitalize="characters"
-          autoComplete="off"
-          placeholder="K7Q4MX"
-          className="font-semibold uppercase tracking-[0.2em]"
-          onChange={(event) => {
-            setValue(event.target.value);
-            setProblem(null);
-          }}
-        />
-        <Button type="submit">Open</Button>
-      </form>
-      {problem ? <p className="mt-2 text-sm text-destructive">{problem}</p> : null}
-    </section>
   );
 }
 
