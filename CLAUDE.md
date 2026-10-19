@@ -2306,13 +2306,21 @@ shared `FilterTabs` ([filter-tabs.tsx](src/components/shared/filter-tabs.tsx), a
 - **My space** ([my-space.tsx](src/features/society/my-space.tsx)) is **personal events only**: greeting, a compact
   create banner (`CreateEventBanner` - its picture is the birthday artwork drawn in code, **not a photograph**; the
   scrim is deliberately light, because a heavier one over the artwork's already-dark left edge turned the banner
-  nearly black on a phone; ~156px tall on a phone), "Start with an occasion" (`KindTiles`: six kinds tinted from
-  `KIND_ACCENT`, one of the five presets, plus See all into the form), then **My events** with Hosting / Invited / Joined / Past
+  nearly black on a phone; ~156px tall on a phone), then **My events**. **There is no kind picker on the home**
+  (an "occasion" row was built and removed on request): the kind is chosen on the create page's first step with Hosting / Invited / Joined / Past
   (`myEventLists`, pure and tested in `tests/personal-home.test.mjs`): Invited is upcoming invitations not yet a
   yes, a "maybe" first; Joined is the yeses; Past is anything whose day has gone. It opens on the first list with
   something in it. Cards are `PersonalEventCard` (picture with the date on it, title, time and place, what it means
   for you, how many are going). Society events are no longer listed here - they are the other tab. An invitation
   is only known to My space once the person has replied to it while signed in (opening one records nothing).
+- **Motion on the home** (all through `useDashboardMotion`, so off for reduced motion; the pieces are the
+  dashboard's own, `dashboard-fx.tsx` / `dashboard-motion.ts`): the scroll bar along the top; the banner's drifting
+  aurora, rising embers, headline rising a word at a time, artwork easing with the scroll and a light sweeping the
+  Create button (`.dfx-glint`, the screen's one loop), which leans towards a mouse; the greeting rising in; sections
+  below the first screen sliding up as they arrive (`useScrollReveal`); event cards rising in a stagger, leaning
+  towards the mouse with a light under it and saying "In N days"; switching My space | society sliding the content
+  in from that half's side (`.dfx-from-left/right`); a wrong code shaking the join box (`.dfx-shake`). The create
+  page's heading and kind tiles get the same entrance.
 - **Plan your next event** ([festival-ideas.tsx](src/features/society/festival-ideas.tsx), dates and rules in
   [festivals.ts](src/features/society/festivals.ts)): the next festivals on the Indian calendar, 3 to 75 days away,
   for organisers (`canManage`) only. One the society already has an event for (name match within 12 days) links to

@@ -1,6 +1,8 @@
-import { ChevronRight, Users } from "lucide-react";
+import { ChevronRight, Clock, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { formatPersonalTime, type PersonalEvent } from "@/lib/personal-events";
+import { daysToGo, formatPersonalTime, type PersonalEvent } from "@/lib/personal-events";
+import { tiltHandlers, useDashboardMotion } from "@/lib/dashboard-motion";
+import { getDateInEventZone } from "@/lib/event-status";
 import { personalArtworkUrl } from "@/lib/personal-artwork";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +38,8 @@ const chipTone: Record<CardChip["tone"], string> = {
 /**
  * One personal event in a list: its picture with the date on it, the title, when and where, what it means
  * for you (Hosting, Going, Maybe...) and how many are coming. A row on a phone, a card in a grid from `sm`.
- * The whole card is the link; nothing inside it is a second control.
+ * The whole card is the link; nothing inside it is a second control. With a mouse it leans towards the cursor
+ * with a soft light under it (`tiltHandlers`, `.dfx-spot`); upcoming ones say how far away they are.
  */
 export function PersonalEventCard({
   event,
@@ -54,11 +57,14 @@ export function PersonalEventCard({
 }) {
   const when = day(event.startsOn);
   const time = formatPersonalTime(event.startTime);
+  const motion = useDashboardMotion();
+  const togo = past ? null : daysToGo(event.startsOn, getDateInEventZone(new Date()));
   return (
     <Link
       to={to}
+      {...tiltHandlers(motion, 0.6)}
       className={cn(
-        "group flex items-center gap-3.5 rounded-2xl border bg-card p-2.5 pr-3 shadow-sm transition",
+        "dfx-spot group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border bg-card p-2.5 pr-3 shadow-sm transition duration-300",
         "[@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:shadow-md active:scale-[0.99]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none motion-reduce:transition-none",
       )}
@@ -78,6 +84,12 @@ export function PersonalEventCard({
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", chipTone[chip.tone])}>{chip.label}</span>
+          {togo ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+              {togo}
+            </span>
+          ) : null}
           {typeof going === "number" ? (
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
               <Users className="h-3.5 w-3.5" aria-hidden="true" />

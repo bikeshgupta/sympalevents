@@ -591,6 +591,32 @@
   .dfx-row { animation: none; }
 }
 
+/* Home: switching My space | society slides the content in from the side of the half that was chosen. */
+.dfx-from-left { animation: dfx-from-left 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dfx-from-right { animation: dfx-from-right 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes dfx-from-left { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes dfx-from-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+/* A code that is not a code: the box shakes once. */
+.dfx-shake { animation: dfx-shake 0.4s ease-in-out; }
+@keyframes dfx-shake { 25% { transform: translateX(-6px); } 50% { transform: translateX(6px); } 75% { transform: translateX(-3px); } }
+/* A light sweeping across a button, every few seconds. One per screen. */
+.dfx-glint { position: relative; overflow: hidden; isolation: isolate; }
+.dfx-glint::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, hsl(42 95% 75% / 0.55) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: dfx-glint 3.8s ease-in-out 1.2s infinite;
+}
+@keyframes dfx-glint { 0% { transform: translateX(-120%); } 40%, 100% { transform: translateX(120%); } }
+@media (prefers-reduced-motion: reduce) {
+  .dfx-from-left, .dfx-from-right, .dfx-shake { animation: none; }
+  .dfx-glint::after { display: none; }
+}
+
 /* The closing reminder rising into place (src/features/closing/closing-reminder.tsx). A wrapper animates,
    never the Radix content box, so nothing fights the box's own positioning. */
 .dfx-sheet { animation: dfx-sheet 0.6s cubic-bezier(0.25, 1.25, 0.4, 1) both; }

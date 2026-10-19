@@ -174,6 +174,8 @@ export function SocietyHomePage() {
         />
       ) : null}
 
+      {/* Keyed on the view, so switching halves slides the new content in from that half's side. */}
+      <div key={view} className={motion && showTabs ? (view === "space" ? "dfx-from-left" : "dfx-from-right") : undefined}>
       {view === "space" ? (
         <MySpace greeting={greeting ?? (signedIn ? "Welcome back" : "Welcome to SymPal")} canCreateSocietyEvent={canCreateSocietyEvent} />
       ) : !hasSociety ? (
@@ -302,6 +304,7 @@ export function SocietyHomePage() {
       </aside>
       </div>
       )}
+      </div>
     </main>
   );
 }

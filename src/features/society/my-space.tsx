@@ -1,12 +1,13 @@
 import { CalendarHeart, LogIn, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { FilterTabs } from "@/components/shared/filter-tabs";
-import { CreateEventBanner, JoinEventCard, KindTiles } from "@/features/society/home-cards";
+import { CreateEventBanner, JoinEventCard } from "@/features/society/home-cards";
+import { RisingWords } from "@/components/shared/dashboard-fx";
 import { PersonalEventCard, type CardChip } from "@/features/personal/personal-event-card";
 import { useSession } from "@/lib/auth";
-import { useDashboardMotion } from "@/lib/dashboard-motion";
+import { useDashboardMotion, useScrollReveal } from "@/lib/dashboard-motion";
 import { getDateInEventZone } from "@/lib/event-status";
 import { useMyPersonalEvents, type MinePersonal } from "@/lib/personal-events";
 import { firstFilledList, myEventLists } from "../../../shared/personal-events";
@@ -16,8 +17,10 @@ import { firstFilledList, myEventLists } from "../../../shared/personal-events";
  * Nothing here comes from a society, and nothing here reaches one (migration 049 keeps personal events in
  * tables of their own; only api/_lib/personal-events.ts reads them). Society events are the other tab.
  *
- * Order: a greeting, one compact call to create, the kinds to start from, then My events (Hosting, Invited,
- * Joined, Past). From `lg` the join box and quick actions sit in a column beside them; on a phone they follow.
+ * Order: a greeting, one compact call to create (the kind is chosen on the next page), then My events (Hosting,
+ * Invited, Joined, Past). From `lg` the join box and quick actions sit in a column beside them; on a phone they
+ * follow. The greeting rises in a word at a time and each section below the first screen slides up as it is
+ * scrolled to (`useScrollReveal`, the dashboard's), all off for reduced motion.
  *
  * Signed out it is the same page with nothing of theirs in it yet: creating asks for sign-in at that moment,
  * and a code opens an invitation without an account. Before 049 is applied the server answers `ready: false`
@@ -29,20 +32,25 @@ export function MySpace({ greeting, canCreateSocietyEvent }: { greeting: string;
   const motion = useDashboardMotion();
   // Signed out, whether personal events are switched on is only known after sign-in; creating asks for it.
   const ready = session ? Boolean(personal.data?.ready) : true;
+  const mainRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  useScrollReveal(mainRef, motion);
+  useScrollReveal(asideRef, motion);
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
-      <div className="min-w-0">
+      <div ref={mainRef} className="min-w-0">
         <header className="mt-5">
-          <h1 className="font-display text-2xl font-semibold leading-tight sm:text-3xl">{greeting}</h1>
+          <h1 className="font-display text-2xl font-semibold leading-tight sm:text-3xl" aria-label={motion ? greeting : undefined}>
+            {motion ? <RisingWords text={greeting} /> : greeting}
+          </h1>
           <p className="mt-0.5 text-sm text-muted-foreground sm:text-[15px]">Your celebrations, invitations and memories</p>
         </header>
         <CreateEventBanner ready={ready} motion={motion} />
-        {ready ? <KindTiles /> : null}
         <MyEvents signedIn={Boolean(session)} query={personal} motion={motion} />
       </div>
 
-      <aside className="mt-7 space-y-3 lg:mt-5" aria-label="Join and quick actions">
+      <aside ref={asideRef} className="mt-7 space-y-3 lg:mt-5" aria-label="Join and quick actions">
         <JoinEventCard />
         {canCreateSocietyEvent ? (
           <Link

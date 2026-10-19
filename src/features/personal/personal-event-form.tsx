@@ -9,6 +9,8 @@ import { getDateInEventZone } from "@/lib/event-status";
 import { useHostedEvent, usePersonalEventMutations, whenLine, type PersonalEvent, type PersonalEventInput } from "@/lib/personal-events";
 import { themePresets, themeVariables } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { RisingWords } from "@/components/shared/dashboard-fx";
+import { tiltHandlers, useDashboardMotion } from "@/lib/dashboard-motion";
 import { OccasionIcon } from "@/components/shared/icon-tile";
 import { prepareGalleryPhoto } from "@/lib/images";
 import { useImageUpload } from "@/lib/uploads";
@@ -60,6 +62,7 @@ export function PersonalEventFormPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const upload = useImageUpload();
+  const motion = useDashboardMotion();
   const fileRef = useRef<HTMLInputElement>(null);
   const [photoNote, setPhotoNote] = useState<string | null>(null);
 
@@ -151,6 +154,7 @@ export function PersonalEventFormPage() {
     }
   };
   const saving = create.isPending || update.isPending;
+  const title = editing ? "Edit your event" : "Create your event";
 
   // A cover photo is re-encoded on the device (1600px, JPEG) before it goes up, like the gallery's, and filed
   // under the host's own id; the API accepts no other URL.
@@ -178,7 +182,9 @@ export function PersonalEventFormPage() {
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         {editing ? "Back to the event" : "My space"}
       </Link>
-      <h1 className="font-display mt-2 text-2xl font-semibold sm:text-3xl">{editing ? "Edit your event" : "Create your event"}</h1>
+      <h1 className="font-display mt-2 text-2xl font-semibold sm:text-3xl" aria-label={motion ? title : undefined}>
+        {motion ? <RisingWords text={title} /> : title}
+      </h1>
       <p className="mt-1 text-sm text-muted-foreground">Free, private, and only for the people you invite.</p>
 
       <ol className="mt-5 grid grid-cols-5 gap-1.5 sm:gap-2" aria-label="Steps">
@@ -204,13 +210,16 @@ export function PersonalEventFormPage() {
           <>
             <Field label="What are you celebrating?">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Kind of event">
-                {PERSONAL_KINDS.map((kind) => (
+                {PERSONAL_KINDS.map((kind, index) => (
                   <button
                     key={kind.key}
                     type="button"
                     aria-pressed={draft.kind === kind.key}
                     onClick={() => set("kind", kind.key)}
+                    {...tiltHandlers(motion, 0.5)}
+                    style={motion ? { animationDelay: `${index * 50}ms` } : undefined}
                     className={cn(
+                      motion && "dfx-row dfx-spot relative overflow-hidden",
                       "flex min-h-[92px] flex-col items-center justify-center gap-1.5 rounded-2xl border bg-card px-2 py-2.5 text-sm font-medium transition",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       draft.kind === kind.key ? "border-primary bg-primary/10 text-foreground" : "[@media(hover:hover)]:hover:bg-muted/50",
