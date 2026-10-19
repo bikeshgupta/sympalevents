@@ -1,11 +1,16 @@
 import { AlertTriangle, CalendarDays } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { buildCommunityFeed } from "@/features/society/community-feed";
 import { CommunitySection } from "@/features/society/community-section";
 import { EventCard } from "@/features/society/event-card";
 import { groupByMonth, pickFeaturedEvent, residentVisibleEvents } from "@/features/society/event-presentation";
 import { FeaturedEvent } from "@/features/society/featured-event";
+import { FestivalIdeas } from "@/features/society/festival-ideas";
+import { HomeTabs } from "@/features/society/home-tabs";
+import { homeView, showsSocietyChooser, societyTabLabel, SPACE_PARAM, SPACE_VALUE } from "@/features/society/home-view";
+import { MySpace } from "@/features/society/my-space";
+import { SocietyChooser } from "@/features/society/society-chooser";
 import { firstNameOf, greetingFor } from "@/features/society/greeting";
 import { SocietyAccount } from "@/features/society/society-account";
 import { SocietyHeader } from "@/features/society/society-header";
@@ -46,12 +51,19 @@ const tabs: { key: EventGroup; label: string }[] = [
 
 export function SocietyHomePage() {
   const { societySlug } = useParams();
-  const { data, isLoading, error } = useSocietyHome(societySlug);
-  const { data: session } = useSession();
+  const [search] = useSearchParams();
+  const location = useLocation();
+  const { data: session, isLoading: sessionLoading } = useSession();
+  const { societies, isLoading: contextLoading } = useEventContext();
+  const signedIn = Boolean(session);
+  // My space, or the society - see home-view.ts. A signed-out visitor gets no tabs.
+  const view = homeView(search.get(SPACE_PARAM), { signedIn, societyCount: societies.length, hasSlug: Boolean(societySlug) });
+  // Somebody signed in with no society, and no society in the address, has nothing to read.
+  const hasSociety = Boolean(societySlug) || societies.length > 0 || !signedIn;
+  const { data, isLoading, error } = useSocietyHome(societySlug, { enabled: view === "society" && hasSociety && !sessionLoading && !(signedIn && contextLoading) });
   // One clock for the whole page, so every row and the featured pick agree.
   const now = useMemo(() => new Date(), []);
   const [managing, setManaging] = useState(false);
-  const { societies, isLoading: contextLoading } = useEventContext();
   // Decoration only (src/lib/dashboard-motion.ts): a scroll bar along the top,
   // a tab underline that slides, and event rows that rise in when a tab opens.
   const motion = useDashboardMotion();
@@ -91,9 +103,10 @@ export function SocietyHomePage() {
     );
   }, [events, featured, grouped, current, now]);
 
-  if (isLoading) return <SocietyHomeSkeleton />;
+  // Which tab opens depends on how many societies the person has, so wait for that rather than flashing one.
+  if (sessionLoading || (signedIn && contextLoading) || isLoading) return <SocietyHomeSkeleton />;
 
-  if (error) {
+  if (error && view === "society") {
     return (
       <main className="mx-auto w-full max-w-3xl px-4 py-6">
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -113,14 +126,26 @@ export function SocietyHomePage() {
 
   const firstName = firstNameOf(session?.user.name);
   const greeting = session && firstName ? `${greetingFor(new Date().getHours())}, ${firstName}` : null;
+  const canCreateSocietyEvent = societies.some((item) => item.role === "admin" || item.role === "committee");
+  const currentSlug = societySlug ?? society?.slug ?? societies[0]?.slug ?? null;
+  const spaceTo = `${location.pathname}?${SPACE_PARAM}=${SPACE_VALUE}`;
+  const societyTo = currentSlug ? `/society/${currentSlug}` : "/society";
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
       {motion ? <ScrollProgressBar /> : null}
-      {/* The three lines start at the top, with the avatar in the corner beside them - the account has no row
-          of its own, which is what this saves. */}
+      {/* Signed in: a compact greeting, then the two tabs. Signed out: the society's own header, as before. */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">{society ? <SocietyHeader society={society} greeting={greeting} /> : null}</div>
+        <div className="min-w-0 flex-1">
+          {signedIn ? (
+            <header>
+              <h1 className="font-display text-2xl font-semibold leading-tight sm:text-[28px]">{greeting ?? "Welcome back"}</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">Here&rsquo;s what&rsquo;s coming up for you.</p>
+            </header>
+          ) : society ? (
+            <SocietyHeader society={society} greeting={null} />
+          ) : null}
+        </div>
         <SocietyAccount
           role={memberRole}
           canManage={canManage}
@@ -130,6 +155,34 @@ export function SocietyHomePage() {
           onShowDrafts={() => setManaging(true)}
         />
       </div>
+
+      {signedIn ? (
+        <HomeTabs
+          view={view}
+          spaceTo={spaceTo}
+          societyTo={societyTo}
+          societyLabel={societyTabLabel(societies)}
+          societyLogoUrl={societies.length === 1 ? societies[0].logoUrl : null}
+          action={
+            view === "society" && canManage ? (
+              <Link
+                to="/new-event"
+                className="inline-flex h-9 items-center rounded-lg border bg-card px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                + Create event
+              </Link>
+            ) : null
+          }
+        />
+      ) : null}
+
+      {view === "space" ? (
+        <MySpace canCreateSocietyEvent={canCreateSocietyEvent} />
+      ) : !hasSociety ? (
+        <NoSociety />
+      ) : (
+      <>
+      {signedIn && showsSocietyChooser(societies.length) ? <SocietyChooser societies={societies} currentSlug={society?.slug ?? null} /> : null}
 
       {data?.ready === false ? (
         <p className="mt-4 flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
@@ -252,7 +305,11 @@ export function SocietyHomePage() {
         <EmptySociety canCreate={canManage} />
       ) : null}
 
+      {canManage && data?.ready !== false ? <FestivalIdeas events={data?.events ?? []} now={now} eventPath={eventPath} /> : null}
+
       <CommunitySection entries={community} />
+      </>
+      )}
     </main>
   );
 }
@@ -307,6 +364,20 @@ function EmptySociety({ canCreate }: { canCreate: boolean }) {
           Create event &rarr;
         </Link>
       ) : null}
+    </div>
+  );
+}
+
+/** Signed in, with no society yet and none in the address. */
+function NoSociety() {
+  return (
+    <div className="mt-8 flex flex-col items-center gap-2 py-4 text-center">
+      <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />
+      <p className="font-display text-2xl font-semibold">You haven&rsquo;t joined a society yet</p>
+      <p className="max-w-sm text-[15px] text-muted-foreground">
+        Your committee shares a link for each event. Open it and sign in, and your society&rsquo;s events will show
+        up here.
+      </p>
     </div>
   );
 }

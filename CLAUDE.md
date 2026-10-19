@@ -2267,6 +2267,28 @@ thumbnails and the role badge. Headings, tab labels and the hero title use `.fon
 - Counts shown in rows (photos, reviews, teams, contributors) are real and gated on the module being open to the
   viewer, as before. Do not fabricate "42 photos".
 
+## The home tabs: My space and the society
+
+The signed-in home (`/society`, `/society/<slug>`) opens with a compact greeting and two tabs
+([home-tabs.tsx](src/features/society/home-tabs.tsx); rules pure in [home-view.ts](src/features/society/home-view.ts),
+tested in `tests/home-tabs.test.mjs`). Minimal by request: two words and an icon, one hairline, a sliding 2px
+underline; **not** pills, cards or big buttons. They are links (`?view=space`, or the society's address), not a
+tablist, so refresh, sharing and Back agree.
+
+- **The second tab is named after the society when the person has exactly one**, and says "Societies" with a
+  chooser of society cards (`society-chooser.tsx`) once they have more. One society shows no chooser.
+- **Default tab:** the society for a member; My space for somebody signed in with no society (`SocietyRoot` sends
+  them to `/society?view=space` instead of the demo dashboard). Signed-out visitors get no tabs, as before.
+- **My space** ([my-space.tsx](src/features/society/my-space.tsx)) lists the events the person organises or belongs
+  to, across societies, from the `my-events` read (no request of its own). Personal events (birthdays,
+  anniversaries, private and invite-only) are **not built**: they need their own storage, and the card says
+  "coming soon" rather than offering a button that does nothing.
+- **Plan your next event** ([festival-ideas.tsx](src/features/society/festival-ideas.tsx), dates and rules in
+  [festivals.ts](src/features/society/festivals.ts)): the next festivals on the Indian calendar, 3 to 75 days away,
+  for organisers (`canManage`) only. One the society already has an event for (name match within 12 days) links to
+  it. **The festival list must be extended once a year**; when it runs out the section disappears.
+- The society tab underneath is the society home exactly as it was.
+
 ## Society Management
 
 `/society/<slug>/admin` ([src/features/society/admin/](src/features/society/admin/)), API
