@@ -18,6 +18,7 @@ import { handleCommunications } from "./_lib/communications.js";
 import { handleDuplicateEvent } from "./_lib/duplicate-event.js";
 import { handleSocieties } from "./_lib/societies.js";
 import { handlePlatform } from "./_lib/platform.js";
+import { handlePersonalEvents } from "./_lib/personal-events.js";
 import {
   cleanModuleLabel,
   eventPageKeys,
@@ -48,6 +49,11 @@ export default async function handler(req: any, res: any) {
   }
   // Link previews for crawlers only (vercel.json); serves HTML, not JSON.
   if (resource === "og") return handleOg(req, res);
+  // Private, invite-only events hosted by one person (049). See api/_lib/personal-events.ts.
+  if (resource === "personal") {
+    try { return await handlePersonalEvents(req, res); }
+    catch (error) { return handleApiError(res, error); }
+  }
   if (resource === "opportunities") {
     try { return await handleOpportunities(req, res); }
     catch (error) { return handleApiError(res, error); }

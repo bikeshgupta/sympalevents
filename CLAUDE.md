@@ -2290,6 +2290,32 @@ tablist, so refresh, sharing and Back agree.
   it. **The festival list must be extended once a year**; when it runs out the section disappears.
 - The society tab underneath is the society home exactly as it was.
 
+## Personal events (My space)
+
+Private, invite-only events one person hosts outside any society - a birthday, an anniversary, a
+get-together. **Migration 049 (`personal_events`, `personal_event_rsvps`) is PREPARED, NOT APPLIED** (note in
+`docs/migration-notes/049_personal_events.txt`; tested on a scratch PostgreSQL, not Supabase). Until it is,
+My space shows the "coming soon" card and every request answers 501 naming 049.
+
+- **Separate tables on purpose**, not rows in `events`: everything about `events` assumes a society (page
+  visibility, modules, members, public pages), and a personal event must never surface through any of it.
+- API: `/api/events?resource=personal&part=mine|invite|event|create|rsvp` ([api/_lib/personal-events.ts](api/_lib/personal-events.ts));
+  the function count is still 12. Rules pure in [shared/personal-events.ts](shared/personal-events.ts), tested in
+  `tests/personal-events.test.mjs`.
+- Pages ([src/features/personal/](src/features/personal/)), outside AppLayout: `/my/new` and `/my/e/<id>/edit`
+  (four-step form with a live preview), `/my/e/<id>` (the host's page), `/i/<code>` (the invitation, public).
+- **Whoever has the code can open the invitation; nothing lists personal events anywhere else.** The code is six
+  characters with no I, L, O, 0 or 1. "New code" retires the old link at once.
+- **Guests reply without an account.** Their browser keeps a random token (`x-guest-token`, `sympal:guest-token`
+  in localStorage); only its SHA-256 is stored. A guest who later signs in keeps the same reply.
+- **Privacy:** guests see counts, not names, unless the host turns on "guests can see who's coming" (then first
+  names). **A phone number goes to the host and nobody else**, the guest's own reply included. Wishes are shown
+  to everyone with the code, signed with a first name. No flats, ever.
+- Limits: 20 upcoming events per host, 300 replies per event, replies close after the day or on cancel.
+- The event colour is one of the five `themes.ts` presets, applied with `themeVariables` on the page wrapper only.
+- `personal` query keys are not in `persistedRoots` (a guest list carries phone numbers) - keep it that way.
+- Not built yet: co-hosts, photos and a memory page, deleting an event, copying one into a society.
+
 ## Society Management
 
 `/society/<slug>/admin` ([src/features/society/admin/](src/features/society/admin/)), API
