@@ -163,3 +163,67 @@ export function classifyCode(value: unknown): { kind: "invitation" | "society"; 
   if (/^[A-Z0-9]{8}$/.test(code)) return { kind: "society", code };
   return null;
 }
+
+/**
+ * What somebody typed or pasted into "Join an event": a code, or a whole invitation link
+ * (`https://…/i/K7Q4MX`, or a society's `…/join/AB12CD34`). Only this app's own path shapes are read out of a
+ * link - nothing is fetched - so a pasted link from anywhere else is simply not a code.
+ */
+export function parseInviteInput(value: unknown): { kind: "invitation" | "society"; code: string } | null {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const link = /\/(i|join)\/([A-Za-z0-9-]{6,12})\/?(?:[?#].*)?$/.exec(text);
+  if (link) {
+    const found = classifyCode(link[2]);
+    if (!found) return null;
+    return (link[1] === "i") === (found.kind === "invitation") ? found : null;
+  }
+  if (/[/:.]/.test(text)) return null;
+  return classifyCode(text);
+}
+
+/**
+ * Each kind's accent: one of the five presets, so a category tile is tinted from the app's own palette and
+ * never from a colour written into a component.
+ */
+export const KIND_ACCENT: Record<PersonalKind, PersonalColor> = {
+  birthday: "rose",
+  anniversary: "indigo",
+  get_together: "forest",
+  festival: "marigold",
+  wedding: "rose",
+  baby_shower: "teal",
+  naming: "indigo",
+  other: "teal",
+};
+
+export type MineEvent = { id: string; startsOn: string; status: string };
+export type MineInvited = MineEvent & { myStatus: RsvpStatus | null };
+
+/**
+ * The four lists on My events, from the one `mine` read:
+ * - Hosting: what you host that is still ahead (cancelled ones stay, marked, until their day passes);
+ * - Invited: invitations still ahead that you have not said yes to - a "maybe" first, since it is the one
+ *   still waiting on an answer;
+ * - Joined: invitations still ahead that you said you're going to;
+ * - Past: anything whose day has gone, newest first.
+ */
+export function myEventLists<H extends MineEvent, I extends MineInvited>(hosting: H[], invited: I[], today: string) {
+  const ahead = <T extends MineEvent>(rows: T[]) => rows.filter((row) => row.startsOn >= today).sort((a, b) => a.startsOn.localeCompare(b.startsOn));
+  const rank = (status: RsvpStatus | null) => (status === "maybe" ? 0 : status === null ? 1 : 2);
+  const upcomingInvites = ahead(invited);
+  return {
+    hosting: ahead(hosting),
+    invited: upcomingInvites.filter((row) => row.myStatus !== "going").sort((a, b) => rank(a.myStatus) - rank(b.myStatus) || a.startsOn.localeCompare(b.startsOn)),
+    joined: upcomingInvites.filter((row) => row.myStatus === "going"),
+    past: [...hosting.map((row) => ({ row, hosted: true as const })), ...invited.map((row) => ({ row, hosted: false as const }))]
+      .filter((item) => item.row.startsOn < today)
+      .sort((a, b) => b.row.startsOn.localeCompare(a.row.startsOn)),
+  };
+}
+
+/** Which list My events opens on: the first with something in it, in the order the tabs are drawn. */
+export function firstFilledList(lists: { hosting: unknown[]; invited: unknown[]; joined: unknown[]; past: unknown[] }) {
+  const order = ["hosting", "invited", "joined", "past"] as const;
+  return order.find((key) => lists[key].length) ?? "hosting";
+}

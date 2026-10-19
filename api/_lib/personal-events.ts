@@ -3,6 +3,7 @@ import { z } from "zod";
 import { audit } from "./audit.js";
 import { assertServiceSupabase, getRequestBody, optionalAppUser, requireAppUser, sendJson } from "./server.js";
 import { getDateInEventZone } from "../../shared/event-status.js";
+import { isOwnUploadUrl } from "../../shared/profile.js";
 import {
   LIMITS,
   cleanParagraphs,
@@ -59,7 +60,7 @@ function dbError(error: { code?: string; message: string } | null) {
 }
 
 const EVENT_COLUMNS =
-  "id,host_user_id,kind,title,description,color,starts_on,start_time,end_time,venue,address,invite_code,guests_see_list,allow_plus_ones,status,created_at";
+  "id,host_user_id,kind,title,description,color,starts_on,start_time,end_time,venue,address,cover_url,invite_code,guests_see_list,allow_plus_ones,status,created_at";
 
 type EventRow = {
   id: string;
@@ -73,6 +74,7 @@ type EventRow = {
   end_time: string | null;
   venue: string | null;
   address: string | null;
+  cover_url: string | null;
   invite_code: string;
   guests_see_list: boolean;
   allow_plus_ones: boolean;
@@ -109,10 +111,29 @@ function eventView(row: EventRow) {
     endTime: hhmm(row.end_time),
     venue: row.venue,
     address: row.address,
+    coverUrl: row.cover_url,
     code: row.invite_code,
     guestsSeeList: row.guests_see_list,
     allowPlusOnes: row.allow_plus_ones,
     status: row.status,
+  };
+}
+
+/**
+ * What the audit log keeps of a personal event: that it changed and roughly how, never what the host wrote.
+ * The title, note, venue, address, cover and code are private to the people invited, and `audit_log` is read
+ * by the platform owner's Activity view - so they stay out of it. The action and the time are still recorded.
+ */
+function auditView(row: EventRow) {
+  return {
+    kind: row.kind,
+    color: row.color,
+    starts_on: row.starts_on,
+    start_time: row.start_time,
+    end_time: row.end_time,
+    status: row.status,
+    guests_see_list: row.guests_see_list,
+    allow_plus_ones: row.allow_plus_ones,
   };
 }
 
@@ -125,7 +146,7 @@ function guestTokenHash(req: ApiRequest) {
 const today = () => getDateInEventZone(new Date());
 
 /** The fields a host may set. On create every required one must be there; on edit only what is sent. */
-function cleanEventInput(body: Record<string, unknown>, mode: "create" | "edit") {
+function cleanEventInput(body: Record<string, unknown>, mode: "create" | "edit", userId: string) {
   const out: Record<string, unknown> = {};
   const has = (key: string) => mode === "create" || key in body;
 
@@ -151,6 +172,14 @@ function cleanEventInput(body: Record<string, unknown>, mode: "create" | "edit")
   }
   if (has("venue")) out.venue = cleanText(body.venue, LIMITS.venue);
   if (has("address")) out.address = cleanText(body.address, LIMITS.address);
+  if (has("coverUrl")) {
+    // Only a photograph this person uploaded through this app: any other URL would let a host point an
+    // invitation at a third party, who would then learn who opened it and when.
+    const url = String(body.coverUrl ?? "").trim();
+    const origin = (process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "");
+    if (url && !isOwnUploadUrl(url, userId, "personal", origin || undefined)) fail("A cover photo has to be one uploaded through this app");
+    out.cover_url = url || null;
+  }
   if (has("guestsSeeList")) out.guests_see_list = body.guestsSeeList === true;
   if (has("allowPlusOnes")) out.allow_plus_ones = body.allowPlusOnes !== false;
   return out;
@@ -281,7 +310,7 @@ export async function handlePersonalEvents(req: ApiRequest, res: ApiResponse) {
   if (req.method === "POST" && part === "create") {
     const { appUser } = await requireAppUser(req);
     const body = (await getRequestBody(req)) as Record<string, unknown>;
-    const values = cleanEventInput(body ?? {}, "create");
+    const values = cleanEventInput(body ?? {}, "create", appUser.id);
 
     const active = await db
       .from("personal_events")
@@ -302,7 +331,7 @@ export async function handlePersonalEvents(req: ApiRequest, res: ApiResponse) {
         .single();
       return { data: data as unknown as EventRow | null, error };
     });
-    audit(req, { action: "create", entityType: "personal_event", entityId: row.id, actor: appUser, after: row, summary: `Created personal event "${row.title}"` });
+    audit(req, { action: "create", entityType: "personal_event", entityId: row.id, actor: appUser, after: auditView(row), summary: "Created a personal event" });
     sendJson(res, 201, { event: eventView(row) });
     return;
   }
@@ -375,7 +404,7 @@ export async function handlePersonalEvents(req: ApiRequest, res: ApiResponse) {
       });
     } else {
       const values =
-        action === "cancel" ? { status: "cancelled" } : action === "reopen" ? { status: "active" } : cleanEventInput(body, "edit");
+        action === "cancel" ? { status: "cancelled" } : action === "reopen" ? { status: "active" } : cleanEventInput(body, "edit", appUser.id);
       const { data, error } = await db
         .from("personal_events")
         .update({ ...values, updated_at: new Date().toISOString() })
@@ -385,7 +414,7 @@ export async function handlePersonalEvents(req: ApiRequest, res: ApiResponse) {
       dbError(error);
       row = data as unknown as EventRow;
     }
-    audit(req, { action: action || "update", entityType: "personal_event", entityId: row.id, actor: appUser, before, after: row, summary: `Personal event "${row.title}": ${action || "edited"}` });
+    audit(req, { action: action || "update", entityType: "personal_event", entityId: row.id, actor: appUser, before: auditView(before), after: auditView(row), summary: `Personal event: ${action || "edited"}` });
     sendJson(res, 200, { event: eventView(row) });
     return;
   }

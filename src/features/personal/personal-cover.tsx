@@ -1,15 +1,19 @@
 import { CalendarDays, MapPin } from "lucide-react";
 import { HeroEmbers, RisingWords } from "@/components/shared/dashboard-fx";
+import { IconTile } from "@/components/shared/icon-tile";
+import { PersonalEventImage } from "@/features/personal/personal-event-card";
 import { useDashboardMotion } from "@/lib/dashboard-motion";
 import { whenLine, type PersonalEvent } from "@/lib/personal-events";
 import { cn } from "@/lib/utils";
-import { IconTile } from "@/components/shared/icon-tile";
 import { kindOf } from "../../../shared/personal-events";
 
 /**
- * The top of a personal event, for host and guest alike. It is drawn in the event's own colour (the page
- * wraps it in `themeVariables(event.color)`), so `bg-primary` here is the host's choice and the rest of the
- * app stays as it is. White text on every preset clears 4.5:1 - that is what the presets are for.
+ * The top of a personal event, for host and guest alike: the host's photograph (or the artwork for its kind)
+ * with the title, day and place over its foot.
+ *
+ * The words sit on a scrim weighted to the bottom, where they are; the rest of the picture stays clear. The
+ * page around it is drawn in the event's own colour (`themeVariables(event.color)`), which tints the icon
+ * tile's ring and the buttons below - the picture carries the rest.
  */
 export function PersonalCover({ event, eyebrow, className }: { event: PersonalEvent; eyebrow: string; className?: string }) {
   const motion = useDashboardMotion();
@@ -18,25 +22,25 @@ export function PersonalCover({ event, eyebrow, className }: { event: PersonalEv
   return (
     <section
       aria-label={event.title}
-      className={cn("relative overflow-hidden rounded-2xl bg-primary p-5 text-primary-foreground shadow-sm sm:p-7", className)}
+      className={cn("relative isolate flex min-h-64 flex-col justify-end overflow-hidden rounded-3xl bg-primary text-white shadow-sm sm:min-h-80", className)}
     >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/15 blur-3xl"
-      />
+      <PersonalEventImage event={event} className={cn("absolute inset-0 -z-10", cancelled && "grayscale")} />
+      <span aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/40 to-black/0" />
       {motion && !cancelled ? <HeroEmbers /> : null}
-      <IconTile name={kind.key} size="lg" tone="inverse" className="pointer-events-none absolute right-5 top-5 sm:right-8" />
-      <div className="relative pr-20">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-foreground/85">{eyebrow}</p>
-        <h1 className="font-display mt-2 text-3xl font-semibold leading-tight sm:text-4xl" aria-label={motion ? event.title : undefined}>
+      <IconTile name={kind.key} size="sm" tone="inverse" className="absolute left-4 top-4 sm:left-6 sm:top-6" />
+      <div className="relative p-5 sm:p-7">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/85">
+          {eyebrow} · {kind.name}
+        </p>
+        <h1 className="font-display mt-1.5 text-3xl font-semibold leading-tight sm:text-4xl" aria-label={motion ? event.title : undefined}>
           {motion ? <RisingWords text={event.title} /> : event.title}
         </h1>
-        <p className="mt-3 flex items-center gap-2 text-sm text-primary-foreground/90">
+        <p className="mt-2.5 flex items-center gap-2 text-sm text-white/90">
           <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="tabular-nums">{whenLine(event)}</span>
         </p>
         {event.venue ? (
-          <p className="mt-1 flex items-center gap-2 text-sm text-primary-foreground/90">
+          <p className="mt-1 flex items-center gap-2 text-sm text-white/90">
             <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span>{event.venue}</span>
           </p>

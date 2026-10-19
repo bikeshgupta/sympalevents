@@ -1,202 +1,232 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { CodeBox, CreateEventCard } from "@/features/society/home-cards";
-import { formatPersonalDate, useMyPersonalEvents, type MinePersonal } from "@/lib/personal-events";
-import { themeByKey } from "@/lib/themes";
-import { kindOf } from "../../../shared/personal-events";
-import { formatEventDate } from "@/features/dashboard/dashboard-utils";
-import { getDateInEventZone } from "@/lib/event-status";
-import { useEventContext, type EventOption } from "@/lib/event-context";
-import { useDashboardMotion } from "@/lib/dashboard-motion";
+import { CalendarHeart, LogIn, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { FilterTabs } from "@/components/shared/filter-tabs";
+import { CreateEventBanner, JoinEventCard, KindTiles } from "@/features/society/home-cards";
+import { PersonalEventCard, type CardChip } from "@/features/personal/personal-event-card";
 import { useSession } from "@/lib/auth";
-import { OccasionIcon } from "@/components/shared/icon-tile";
+import { useDashboardMotion } from "@/lib/dashboard-motion";
+import { getDateInEventZone } from "@/lib/event-status";
+import { useMyPersonalEvents, type MinePersonal } from "@/lib/personal-events";
+import { firstFilledList, myEventLists } from "../../../shared/personal-events";
 
 /**
- * My space: what is the person's own, across every society.
+ * My space: the person's own private events - the ones they host and the invitations they have answered.
+ * Nothing here comes from a society, and nothing here reaches one (migration 049 keeps personal events in
+ * tables of their own; only api/_lib/personal-events.ts reads them). Society events are the other tab.
  *
- * Today that is the events they have a role on (organising, or a member of), from the same `my-events`
- * read the event switcher uses - so this tab costs no request of its own. Finished events are left out;
- * they are each society's memories.
+ * Order: a greeting, one compact call to create, the kinds to start from, then My events (Hosting, Invited,
+ * Joined, Past). From `lg` the join box and quick actions sit in a column beside them; on a phone they follow.
  *
- * And the person's **personal events** (migration 049; src/features/personal/): the ones they host, and the
- * ones they have replied to while signed in. Before 049 is applied the server says so (`ready: false`) and
- * the card says they are coming rather than offering a button that would only fail.
- *
- * Signed out, it is the same tab with nothing of theirs in it yet: creating an event asks for sign-in at that
- * moment, and a code opens an invitation without an account.
+ * Signed out it is the same page with nothing of theirs in it yet: creating asks for sign-in at that moment,
+ * and a code opens an invitation without an account. Before 049 is applied the server answers `ready: false`
+ * and the page says personal events are coming rather than offering a button that would only fail.
  */
-const roleLabel: Record<NonNullable<EventOption["role"]>, string> = {
-  admin: "Organising",
-  committee: "Organising",
-  read_only: "Member",
-};
-
-export function MySpace({ canCreateSocietyEvent }: { canCreateSocietyEvent: boolean }) {
-  const { events, isLoading } = useEventContext();
+export function MySpace({ greeting, canCreateSocietyEvent }: { greeting: string; canCreateSocietyEvent: boolean }) {
   const { data: session } = useSession();
   const personal = useMyPersonalEvents();
   const motion = useDashboardMotion();
-  const today = getDateInEventZone(new Date());
-
-  const { organising, member } = useMemo(() => {
-    const current = events
-      .filter((event) => event.end_date >= today)
-      .sort((a, b) => a.start_date.localeCompare(b.start_date));
-    return {
-      organising: current.filter((event) => event.role === "admin" || event.role === "committee"),
-      member: current.filter((event) => event.role !== "admin" && event.role !== "committee"),
-    };
-  }, [events, today]);
-
-  if (isLoading) {
-    return (
-      <div className="mt-6 animate-pulse space-y-4" aria-hidden>
-        {[0, 1].map((key) => (
-          <div key={key} className="flex gap-4">
-            <div className="h-16 w-14 rounded-lg bg-muted" />
-            <div className="flex-1 space-y-2 pt-2">
-              <div className="h-4 w-48 rounded bg-muted" />
-              <div className="h-3 w-32 rounded bg-muted" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  // Signed out, whether personal events are switched on is only known after sign-in; creating asks for it.
+  const ready = session ? Boolean(personal.data?.ready) : true;
 
   return (
-    // When nothing of theirs is listed, the first card sits straight under the tabs and needs no rule of its own.
-    <div className="[&>section:first-child]:mt-6 [&>section:first-child]:border-t-0 [&>section:first-child]:pt-0">
-      {personal.data?.ready ? <PersonalLists data={personal.data} today={today} motion={motion} /> : null}
-      {organising.length ? <EventList title="You're organising" events={organising} today={today} motion={motion} /> : null}
-      {member.length ? <EventList title="Your events" events={member} today={today} motion={motion} /> : null}
-      {session && !organising.length && !member.length && !personal.data?.hosting.length && !personal.data?.invited.length ? (
-        <p className="mt-6 text-[15px] text-muted-foreground">
-          Nothing here yet. Events you organise or are part of, in any society, will show up here.
-        </p>
-      ) : null}
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+      <div className="min-w-0">
+        <header className="mt-5">
+          <h1 className="font-display text-[26px] font-semibold leading-tight sm:text-3xl">{greeting}</h1>
+          <p className="mt-0.5 text-[15px] text-muted-foreground">Your celebrations, invitations and memories</p>
+        </header>
+        <CreateEventBanner ready={ready} motion={motion} />
+        {ready ? <KindTiles /> : null}
+        <MyEvents signedIn={Boolean(session)} query={personal} motion={motion} />
+      </div>
 
-      {/* Signed out, whether personal events are switched on is only known after sign-in; creating asks for it. */}
-      <CreateEventCard ready={session ? Boolean(personal.data?.ready) : true} canCreateSocietyEvent={canCreateSocietyEvent} />
-
-      <CodeBox />
+      <aside className="mt-8 space-y-4 lg:mt-5" aria-label="Join and quick actions">
+        <JoinEventCard />
+        {canCreateSocietyEvent ? (
+          <Link
+            to="/new-event"
+            className="flex min-h-14 items-center gap-3 rounded-2xl border bg-card px-4 py-3 text-sm font-medium shadow-sm transition [@media(hover:hover)]:hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Sparkles className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block">Create a society event</span>
+              <span className="block text-xs font-normal text-muted-foreground">For your committee, not a private one</span>
+            </span>
+            <span aria-hidden="true" className="text-primary">
+              &rarr;
+            </span>
+          </Link>
+        ) : null}
+      </aside>
     </div>
   );
 }
 
-/** What the person hosts, and what they have replied to - upcoming first, then a short list of past ones. */
-function PersonalLists({ data, today, motion }: { data: MinePersonal; today: string; motion: boolean }) {
-  const hosting = data.hosting.filter((event) => event.startsOn >= today);
-  const invited = data.invited.filter((event) => event.startsOn >= today);
-  const past = [
-    ...data.hosting.map((event) => ({ ...event, to: `/my/e/${event.id}` })),
-    ...data.invited.map((event) => ({ ...event, to: `/i/${event.code}` })),
-  ]
-    .filter((event) => event.startsOn < today)
-    .sort((a, b) => b.startsOn.localeCompare(a.startsOn))
-    .slice(0, 3);
-  const replyLabel = { going: "You're going", maybe: "You said maybe", declined: "Can't come" } as const;
-  const row = (
-    key: string,
-    to: string,
-    title: string,
-    kind: string,
-    color: string,
-    line: string,
-    chip: string,
-    index: number,
-  ) => (
-    <li key={key} className={motion ? "dfx-row" : undefined} style={motion ? { animationDelay: `${Math.min(index, 11) * 70}ms` } : undefined}>
-      <Link
-        to={to}
-        className="group -mx-2 flex items-center gap-3.5 rounded-lg px-2 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span
-          aria-hidden="true"
-          className="flex h-14 w-12 shrink-0 items-center justify-center rounded-xl"
-          style={{ background: `hsl(${themeByKey(color).primary} / 0.12)`, color: `hsl(${themeByKey(color).primary})` }}
-        >
-          <OccasionIcon name={kindOf(kind).key} className="h-6 w-6" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="font-display block truncate text-lg font-semibold leading-snug">{title}</span>
-          <span className="block truncate text-sm text-muted-foreground tabular-nums">{line}</span>
-        </span>
-        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{chip}</span>
-      </Link>
-    </li>
-  );
+type ListKey = "hosting" | "invited" | "joined" | "past";
+type Lists = ReturnType<typeof myEventLists<MinePersonal["hosting"][number], MinePersonal["invited"][number]>>;
+
+const replyChip: Record<"going" | "maybe" | "declined", CardChip> = {
+  going: { label: "Going", tone: "primary" },
+  maybe: { label: "Maybe", tone: "warning" },
+  declined: { label: "Can't come", tone: "muted" },
+};
+
+function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: ReturnType<typeof useMyPersonalEvents>; motion: boolean }) {
+  const location = useLocation();
+  const today = getDateInEventZone(new Date());
+  const lists = useMemo(() => (query.data?.ready ? myEventLists(query.data.hosting, query.data.invited, today) : null), [query.data, today]);
+  const [chosen, setChosen] = useState<ListKey | null>(null);
+
+  if (!signedIn) {
+    return (
+      <section aria-labelledby="my-events" className="mt-8">
+        <h2 id="my-events" className="font-display text-2xl font-semibold">
+          My events
+        </h2>
+        <div className="mt-3 flex flex-col items-start gap-3 rounded-2xl border border-dashed p-5 sm:flex-row sm:items-center">
+          <p className="flex-1 text-[15px] text-muted-foreground">Sign in to see the events you host and the invitations you&rsquo;ve replied to.</p>
+          <Button asChild variant="outline">
+            <Link to="/login" state={{ from: `${location.pathname}${location.search}` }}>
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+              Sign in
+            </Link>
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  if (query.isLoading) {
+    return (
+      <section aria-label="My events" aria-busy="true" className="mt-8">
+        <div className="h-7 w-32 animate-pulse rounded bg-muted" />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {[0, 1].map((key) => (
+            <div key={key} className="flex animate-pulse gap-3.5 rounded-2xl border bg-card p-2.5">
+              <div className="h-[88px] w-[88px] rounded-xl bg-muted" />
+              <div className="flex-1 space-y-2 pt-2">
+                <div className="h-4 w-3/4 rounded bg-muted" />
+                <div className="h-3 w-1/2 rounded bg-muted" />
+                <div className="h-4 w-16 rounded-full bg-muted" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (query.error) {
+    return (
+      <section aria-label="My events" className="mt-8">
+        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          {query.error instanceof Error ? query.error.message : "Could not load your events."}
+        </p>
+      </section>
+    );
+  }
+
+  if (!lists) return null;
+
+  const total = lists.hosting.length + lists.invited.length + lists.joined.length + lists.past.length;
+  if (!total) {
+    return (
+      <section aria-labelledby="my-events" className="mt-8">
+        <h2 id="my-events" className="font-display text-2xl font-semibold">
+          My events
+        </h2>
+        <div className="mt-3 flex flex-col items-center gap-2 rounded-3xl border border-dashed px-5 py-8 text-center">
+          <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <CalendarHeart className="h-6 w-6" strokeWidth={1.75} />
+          </span>
+          <p className="font-display text-xl font-semibold">Nothing planned yet</p>
+          <p className="max-w-sm text-[15px] text-muted-foreground">
+            Create one for a birthday or a get-together, or open an invitation somebody sent you with its code or link.
+          </p>
+          <Button asChild className="mt-2">
+            <Link to="/my/new">Create my first event</Link>
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  const current = chosen ?? firstFilledList(lists);
   return (
-    <>
-      {hosting.length ? (
-        <section className="mt-6" aria-label="You're hosting">
-          <h2 className="font-display text-xl font-semibold">You're hosting</h2>
-          <ul className="mt-1 divide-y">
-            {hosting.map((event, index) =>
-              row(event.id, `/my/e/${event.id}`, event.title, event.kind, event.color, `${formatPersonalDate(event.startsOn)} · ${event.counts.goingPeople} going`, event.status === "cancelled" ? "Cancelled" : "Hosting", index),
-            )}
-          </ul>
-        </section>
-      ) : null}
-      {invited.length ? (
-        <section className="mt-6" aria-label="Invitations">
-          <h2 className="font-display text-xl font-semibold">Invitations</h2>
-          <ul className="mt-1 divide-y">
-            {invited.map((event, index) =>
-              row(event.id, `/i/${event.code}`, event.title, event.kind, event.color, formatPersonalDate(event.startsOn), event.myStatus ? replyLabel[event.myStatus] : "Invited", index),
-            )}
-          </ul>
-        </section>
-      ) : null}
-      {past.length ? (
-        <section className="mt-6" aria-label="Past celebrations">
-          <h2 className="font-display text-xl font-semibold">Past celebrations</h2>
-          <ul className="mt-1 divide-y">
-            {past.map((event, index) => row(`past-${event.id}`, event.to, event.title, event.kind, event.color, formatPersonalDate(event.startsOn), "Done", index))}
-          </ul>
-        </section>
-      ) : null}
-    </>
+    <section aria-labelledby="my-events" className="mt-8">
+      <h2 id="my-events" className="font-display text-2xl font-semibold">
+        My events
+      </h2>
+      <div className="mt-2">
+        <FilterTabs
+          label="My events"
+          idPrefix="my-events"
+          motion={motion}
+          value={current}
+          onChange={setChosen}
+          tabs={[
+            { key: "hosting", label: "Hosting", count: lists.hosting.length },
+            { key: "invited", label: "Invited", count: lists.invited.length },
+            { key: "joined", label: "Joined", count: lists.joined.length },
+            { key: "past", label: "Past", count: lists.past.length },
+          ]}
+        />
+      </div>
+      <div key={current} role="tabpanel" id="my-events-panel" aria-labelledby={`my-events-tab-${current}`} className="mt-4">
+        <EventGrid lists={lists} current={current} motion={motion} />
+      </div>
+    </section>
   );
 }
 
-function EventList({ title, events, today, motion }: { title: string; events: EventOption[]; today: string; motion: boolean }) {
+const emptyLine: Record<ListKey, string> = {
+  hosting: "You're not hosting anything coming up. Create an event to start one.",
+  invited: "No invitations waiting on you. One you open and answer maybe shows up here.",
+  joined: "Invitations you've said yes to will show up here.",
+  past: "Events you hosted or went to stay here once their day has passed.",
+};
+
+const cancelled: CardChip = { label: "Cancelled", tone: "danger" };
+
+function EventGrid({ lists, current, motion }: { lists: Lists; current: ListKey; motion: boolean }) {
+  const cards =
+    current === "hosting"
+      ? lists.hosting.map((event) => ({
+          key: event.id,
+          event,
+          to: `/my/e/${event.id}`,
+          chip: event.status === "cancelled" ? cancelled : ({ label: "Hosting", tone: "primary" } satisfies CardChip),
+          going: event.counts.goingPeople as number | null,
+        }))
+      : current === "past"
+        ? lists.past.map(({ row, hosted }) => ({
+            key: `${hosted ? "h" : "i"}-${row.id}`,
+            event: row,
+            to: hosted ? `/my/e/${row.id}` : `/i/${row.code}`,
+            chip: { label: hosted ? "Hosted" : "myStatus" in row && row.myStatus === "going" ? "Went" : "Invited", tone: "muted" } satisfies CardChip,
+            going: hosted ? row.counts.goingPeople : null,
+          }))
+        : lists[current].map((event) => ({
+            key: event.id,
+            event,
+            to: `/i/${event.code}`,
+            chip: event.status === "cancelled" ? cancelled : event.myStatus ? replyChip[event.myStatus] : ({ label: "Invited", tone: "primary" } satisfies CardChip),
+            going: event.counts.goingPeople as number | null,
+          }));
+
+  if (!cards.length) return <p className="rounded-2xl border border-dashed p-5 text-[15px] text-muted-foreground">{emptyLine[current]}</p>;
+
   return (
-    <section className="mt-6" aria-label={title}>
-      <h2 className="font-display text-xl font-semibold">{title}</h2>
-      <ul className="mt-1 divide-y">
-        {events.map((event, index) => {
-          const live = event.start_date <= today;
-          const [, month, day] = event.start_date.split("-");
-          const monthName = new Date(Date.UTC(2000, Number(month) - 1, 1)).toLocaleString("en-IN", { month: "short", timeZone: "UTC" });
-          return (
-            <li
-              key={event.id}
-              className={motion ? "dfx-row" : undefined}
-              style={motion ? { animationDelay: `${Math.min(index, 11) * 70}ms` } : undefined}
-            >
-              <Link
-                to={`/e/${event.id}`}
-                className="group -mx-2 flex items-center gap-3.5 rounded-lg px-2 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-lg border bg-card leading-none">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{monthName}</span>
-                  <span className="font-display mt-1 text-xl font-semibold tabular-nums">{Number(day)}</span>
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="font-display block truncate text-lg font-semibold leading-snug">{event.name}</span>
-                  <span className="block truncate text-sm text-muted-foreground">
-                    {[event.societyName, live ? "Happening now" : formatEventDate(event.start_date)].filter(Boolean).join(" · ")}
-                  </span>
-                </span>
-                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  {roleLabel[event.role ?? "read_only"]}
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {cards.map((card, index) => (
+        <li key={card.key} className={motion ? "dfx-row" : undefined} style={motion ? { animationDelay: `${Math.min(index, 11) * 60}ms` } : undefined}>
+          <PersonalEventCard event={card.event} to={card.to} chip={card.chip} going={card.going} past={current === "past"} />
+        </li>
+      ))}
+    </ul>
   );
 }

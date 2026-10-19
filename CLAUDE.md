@@ -2269,11 +2269,18 @@ thumbnails and the role badge. Headings, tab labels and the hero title use `.fon
 
 ## The home tabs: My space and the society
 
-The signed-in home (`/society`, `/society/<slug>`) opens with a compact greeting and two tabs
-([home-tabs.tsx](src/features/society/home-tabs.tsx); rules pure in [home-view.ts](src/features/society/home-view.ts),
-tested in `tests/home-tabs.test.mjs`). Minimal by request: two words and an icon, one hairline, a sliding 2px
-underline; **not** pills, cards or big buttons. They are links (`?view=space`, or the society's address), not a
-tablist, so refresh, sharing and Back agree.
+The home (`/society`, `/society/<slug>`) is a short brand row (the app icon, "SymPal", the account menu), then
+**a compact two-option segmented control, My space | <society>** ([home-tabs.tsx](src/features/society/home-tabs.tsx);
+rules pure in [home-view.ts](src/features/society/home-view.ts), tested in `tests/home-tabs.test.mjs`): one soft
+track, the chosen half filled in `bg-primary`, 48px in all, the fill sliding between halves. It replaced the
+underlined text tabs on the owner's 2026 redesign brief (the earlier "no pills" note is superseded). The halves
+are links (`?view=space`, or the society's address), not a tablist, so refresh, sharing and Back agree. Each tab
+then opens with its own heading (My space: the greeting; the society: `SocietyHeader`). **From `lg` both tabs
+are a main column and a 340px side column** (join box and quick actions; festival ideas and Join a society), in a
+`max-w-6xl` container; on a phone the side column follows the main one. Lists of filters on both tabs are the
+shared `FilterTabs` ([filter-tabs.tsx](src/components/shared/filter-tabs.tsx), a real tablist with arrow keys).
+**There is no bottom tab bar** in the reference designs' sense - the fixed bottom bar was removed on purpose
+(see Navigation), and the home sits outside AppLayout.
 
 - **The second tab is named after the society when the person has exactly one**, and says "Societies" with a
   chooser of society cards (`society-chooser.tsx`) once they have more. One society shows no chooser.
@@ -2288,19 +2295,28 @@ tablist, so refresh, sharing and Back agree.
   sign in. A society opened by its address stays public and keeps its own header, as before. Only demo mode
   (Supabase unconfigured) still goes to the dashboard. A separate guest page and a `/join/<code>` page were built
   and rejected as needless: keep it one page.
-- **One code box** (`CodeBox` in home-cards.tsx, `classifyCode` in shared/personal-events.ts): six characters
-  opens a personal invitation at `/i/<code>` (no account needed); eight is a society's invite code, joined in
-  place (the existing `?resource=join`) and then opens that society. Signed out, it goes to sign-in and comes
-  back to the box with the code filled in (`?code=`).
-- **My space** ([my-space.tsx](src/features/society/my-space.tsx)) lists the events the person organises or belongs
-  to, across societies, from the `my-events` read (no request of its own). Personal events (birthdays,
-  anniversaries, private and invite-only) are **not built**: they need their own storage, and the card says
-  "coming soon" rather than offering a button that does nothing.
+- **One join box** (`JoinEventCard` in home-cards.tsx, `parseInviteInput` in shared/personal-events.ts): a code or
+  a whole pasted link. Six characters (or `…/i/<code>`) opens a personal invitation at `/i/<code>` (no account
+  needed; that page says when a code is wrong, cancelled or closed); eight (or `…/join/<code>`) is a society's
+  invite code, joined in place (the existing `?resource=join`) and then opens that society. A link of the wrong
+  shape for its code, or any other URL, is not a code - nothing is fetched. Signed out, joining a society goes to
+  sign-in and comes back to the box with the code filled in (`?code=`). `variant="society"` is the same box worded
+  for the society tab and its empty state.
+- **My space** ([my-space.tsx](src/features/society/my-space.tsx)) is **personal events only**: greeting, a compact
+  create banner (`CreateEventBanner`, artwork drawn in code), six kind tiles (`KindTiles`, each tinted from
+  `KIND_ACCENT`, one of the five presets), then **My events** with Hosting / Invited / Joined / Past
+  (`myEventLists`, pure and tested in `tests/personal-home.test.mjs`): Invited is upcoming invitations not yet a
+  yes, a "maybe" first; Joined is the yeses; Past is anything whose day has gone. It opens on the first list with
+  something in it. Cards are `PersonalEventCard` (picture with the date on it, title, time and place, what it means
+  for you, how many are going). Society events are no longer listed here - they are the other tab. An invitation
+  is only known to My space once the person has replied to it while signed in (opening one records nothing).
 - **Plan your next event** ([festival-ideas.tsx](src/features/society/festival-ideas.tsx), dates and rules in
   [festivals.ts](src/features/society/festivals.ts)): the next festivals on the Indian calendar, 3 to 75 days away,
   for organisers (`canManage`) only. One the society already has an event for (name match within 12 days) links to
   it. **The festival list must be extended once a year**; when it runs out the section disappears.
-- The society tab underneath is the society home exactly as it was.
+- The society tab keeps every behaviour it had (featured event, Upcoming/Live/Past, passes, drafts, community,
+  festival ideas, Create event for `canManage`); only the layout around it changed, and the chooser is headed
+  "Your societies". Somebody with no society gets the join box in the empty state.
 
 ## Personal events (My space)
 
@@ -2315,7 +2331,15 @@ My space shows the "coming soon" card and every request answers 501 naming 049.
   the function count is still 12. Rules pure in [shared/personal-events.ts](shared/personal-events.ts), tested in
   `tests/personal-events.test.mjs`.
 - Pages ([src/features/personal/](src/features/personal/)), outside AppLayout: `/my/new` and `/my/e/<id>/edit`
-  (four-step form with a live preview), `/my/e/<id>` (the host's page), `/i/<code>` (the invitation, public).
+  (five steps - Type, Details, When, Guests, Review - with a live preview; inviting is the link and code the host's
+  page hands out once it exists), `/my/e/<id>` (the host's page), `/i/<code>` (the invitation, public).
+- **A cover photograph** (`cover_url`, in 049): uploaded through `/api/uploads` with the `personal` folder, which is
+  any signed-in person filed under their own id like `profiles`, re-encoded on the device (`prepareGalleryPhoto`);
+  the API accepts only a URL in **that person's own** `personal/<id>/` folder (`isOwnUploadUrl`, shared/profile.ts).
+  The bucket is public, so a cover is reachable by anybody holding its (random) URL, the same as every upload here.
+  Without one, the kind's artwork ([personal-artwork.ts](src/lib/personal-artwork.ts)) is the picture.
+- **The audit log keeps no private detail of a personal event** (`auditView`): kind, colour, dates, status and the
+  two switches - never the title, note, venue, address, cover or code. `audit_log` is read by the platform owner.
 - **Whoever has the code can open the invitation; nothing lists personal events anywhere else.** The code is six
   characters with no I, L, O, 0 or 1. "New code" retires the old link at once.
 - **Guests reply without an account.** Their browser keeps a random token (`x-guest-token`, `sympal:guest-token`
@@ -2326,7 +2350,9 @@ My space shows the "coming soon" card and every request answers 501 naming 049.
 - Limits: 20 upcoming events per host, 300 replies per event, replies close after the day or on cancel.
 - The event colour is one of the five `themes.ts` presets, applied with `themeVariables` on the page wrapper only.
 - `personal` query keys are not in `persistedRoots` (a guest list carries phone numbers) - keep it that way.
-- Not built yet: co-hosts, photos and a memory page, deleting an event, copying one into a society.
+- Not built yet: co-hosts (the host is the only manager), a schedule, a gallery and a memory page, deleting an
+  event, copying one into a society, and rate-limiting code guesses (a 6-character code is ~887 million
+  possibilities; the API does not throttle `part=invite`).
 
 ## Society Management
 

@@ -1,7 +1,7 @@
 MIGRATION 049 - personal events  (prepared for review; YOU run it by hand)
 File: supabase/migrations/049_personal_events.sql
-Status: PREPARED, NOT APPLIED. Tested on a scratch PostgreSQL 16 (run twice, constraints checked), not on
-Supabase. Until it is applied, My space shows personal events as "coming soon", and every personal-event
+Status: PREPARED, NOT APPLIED. Tested on a scratch PostgreSQL 16 (run twice, constraints checked - again after cover_url was added on
+2026-10-19), not on Supabase. Until it is applied, My space shows personal events as "coming soon", and every personal-event
 request answers "needs migration 049". Nothing else in the app changes.
 
 WHAT IT DOES (plain words)
@@ -10,7 +10,8 @@ WHAT IT DOES (plain words)
   account. Only the host sees the guest list and phone numbers.
 
 WHAT IT ADDS (and only this)
-  - table public.personal_events       (one row per event; host, details, colour, invite code)
+  - table public.personal_events       (one row per event; host, details, colour, optional cover photo URL,
+                                        invite code)
   - table public.personal_event_rsvps  (one row per guest reply; name, going/maybe/can't, people, phone, wish)
   - indexes on both; RLS enabled on both with NO policies (the API uses the service role, like every table)
   It changes no existing table, column or row.

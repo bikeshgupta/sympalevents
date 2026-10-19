@@ -22,6 +22,8 @@ export type PersonalEvent = {
   endTime: string | null;
   venue: string | null;
   address: string | null;
+  /** The host's own photograph (uploads/personal/<host>/...), or null for the kind's artwork. */
+  coverUrl: string | null;
   code: string;
   guestsSeeList: boolean;
   allowPlusOnes: boolean;
@@ -63,6 +65,7 @@ export type PersonalEventInput = {
   endTime: string;
   venue: string;
   address: string;
+  coverUrl: string;
   guestsSeeList: boolean;
   allowPlusOnes: boolean;
 };

@@ -19,7 +19,7 @@ export function SocietyChooser({ societies, currentSlug }: { societies: SocietyO
             to={society.slug ? `/society/${society.slug}` : "/society"}
             aria-current={current ? "page" : undefined}
             className={cn(
-              "flex min-h-14 w-44 shrink-0 items-center gap-2.5 rounded-xl border bg-card px-3 py-2 transition-colors",
+              "flex min-h-14 w-44 shrink-0 lg:w-56 items-center gap-2.5 rounded-xl border bg-card px-3 py-2 transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               current ? "border-foreground" : "[@media(hover:hover)]:hover:bg-muted/40",
             )}

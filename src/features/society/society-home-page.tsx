@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays } from "lucide-react";
+import { AlertTriangle, CalendarDays, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { buildCommunityFeed } from "@/features/society/community-feed";
@@ -10,6 +10,9 @@ import { FestivalIdeas } from "@/features/society/festival-ideas";
 import { HomeTabs } from "@/features/society/home-tabs";
 import { homeView, showsSocietyChooser, SOCIETY_VALUE, societyTabLabel, SPACE_PARAM, SPACE_VALUE } from "@/features/society/home-view";
 import { MySpace } from "@/features/society/my-space";
+import { JoinEventCard } from "@/features/society/home-cards";
+import { FilterTabs } from "@/components/shared/filter-tabs";
+import { Button } from "@/components/ui/button";
 import { SocietyChooser } from "@/features/society/society-chooser";
 import { firstNameOf, greetingFor } from "@/features/society/greeting";
 import { SocietyAccount } from "@/features/society/society-account";
@@ -25,7 +28,6 @@ import {
 } from "@/lib/event-status";
 import { useEventContext } from "@/lib/event-context";
 import { useSocietyHome, type SocietyEvent } from "@/lib/society";
-import { cn } from "@/lib/utils";
 import { useDashboardMotion } from "@/lib/dashboard-motion";
 import { ScrollProgressBar } from "@/components/shared/dashboard-fx";
 
@@ -137,27 +139,18 @@ export function SocietyHomePage() {
   const showTabs = signedIn || !societySlug;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-4 sm:pt-6">
+    <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-3 sm:pt-5 lg:max-w-6xl lg:px-8">
       {motion ? <ScrollProgressBar /> : null}
-      {/* A compact greeting, then the two tabs. A signed-out visitor on a society's address gets that
-          society's own header instead, as before. */}
-      <div className="flex items-start justify-between gap-3">
-        {/* The app's own icon, the same file as the tab icon and the event header's way home. */}
-        <img src="/favicon.svg" alt="SymPal" width={40} height={40} className="mt-0.5 h-10 w-10 shrink-0 rounded-xl" />
-        <div className="min-w-0 flex-1">
-          {!signedIn && societySlug && society ? (
-            <SocietyHeader society={society} greeting={null} />
-          ) : (
-            <header>
-              <h1 className="font-display text-2xl font-semibold leading-tight sm:text-[28px]">
-                {greeting ?? (signedIn ? "Welcome back" : "Welcome to SymPal")}
-              </h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                {signedIn ? <>Here&rsquo;s what&rsquo;s coming up for you.</> : "Celebrate with your people, and with your society."}
-              </p>
-            </header>
-          )}
-        </div>
+      {/* The brand and the account, on one short row; then the switch between My space and the society. */}
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          to="/"
+          className="-ml-1 flex min-h-11 items-center gap-2 rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {/* The app's own icon, the same file as the tab icon and the event header's way home. */}
+          <img src="/favicon.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg" />
+          <span className="font-display text-xl font-semibold">SymPal</span>
+        </Link>
         <SocietyAccount
           role={memberRole}
           canManage={canManage}
@@ -175,26 +168,36 @@ export function SocietyHomePage() {
           societyTo={societyTo}
           societyLabel={societyTabLabel(societies)}
           societyLogoUrl={societies.length === 1 ? societies[0].logoUrl : null}
-          action={
-            view === "society" && canManage ? (
-              <Link
-                to="/new-event"
-                className="inline-flex h-9 items-center rounded-lg border bg-card px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                + Create event
-              </Link>
-            ) : null
-          }
         />
       ) : null}
 
       {view === "space" ? (
-        <MySpace canCreateSocietyEvent={canCreateSocietyEvent} />
+        <MySpace greeting={greeting ?? (signedIn ? "Welcome back" : "Welcome to SymPal")} canCreateSocietyEvent={canCreateSocietyEvent} />
       ) : !hasSociety ? (
         <NoSociety signedIn={signedIn} />
       ) : (
-      <>
-      {signedIn && showsSocietyChooser(societies.length) ? <SocietyChooser societies={societies} currentSlug={society?.slug ?? null} /> : null}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+      <div className="min-w-0">
+      <div className="mt-5 flex items-end justify-between gap-3">
+        <div className="min-w-0">{society ? <SocietyHeader society={society} greeting={signedIn ? greeting : null} /> : null}</div>
+        {canManage ? (
+          <Button asChild variant="outline" className="hidden shrink-0 sm:inline-flex">
+            <Link to="/new-event">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Create event
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+
+      {signedIn && showsSocietyChooser(societies.length) ? (
+        <section aria-labelledby="your-societies" className="mt-5">
+          <h2 id="your-societies" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Your societies
+          </h2>
+          <SocietyChooser societies={societies} currentSlug={society?.slug ?? null} />
+        </section>
+      ) : null}
 
       {data?.ready === false ? (
         <p className="mt-4 flex items-start gap-2 rounded-md bg-amber-100 p-3 text-sm text-amber-900">
@@ -243,49 +246,18 @@ export function SocietyHomePage() {
       {hasAnything ? (
         <>
           <h2 className="font-display mt-7 text-2xl font-semibold">Events</h2>
-
-          {/* Text tabs, equal thirds, with an underline under the chosen one: filled pills competed with
-              the hero for weight, and a dimmed tab read as disabled. A tab with nothing in it looks like
-              every other - it is as selectable as any - and says so when chosen. */}
-          <div role="tablist" aria-label="Events by when they happen" className="relative mt-1 grid grid-cols-3 border-b">
-            {/* One underline that slides to the chosen tab. The tabs are equal thirds, so its place is
-                the tab's index - nothing to measure. */}
-            {motion ? (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute -bottom-px left-0 h-0.5 w-1/3 px-3 transition-transform duration-500 ease-[cubic-bezier(0.3,1.3,0.5,1)]"
-                style={{ transform: `translateX(${tabs.findIndex((tab) => tab.key === current) * 100}%)` }}
-              >
-                <span className="block h-full rounded-full bg-primary" />
-              </span>
-            ) : null}
-            {tabs.map((tab) => {
-              const count = grouped[tab.key].length;
-              const selected = tab.key === current;
-              return (
-                <button
-                  key={tab.key}
-                  role="tab"
-                  type="button"
-                  aria-selected={selected}
-                  aria-controls={`panel-${tab.key}`}
-                  id={`tab-${tab.key}`}
-                  onClick={() => setChosen(tab.key)}
-                  className={cn(
-                    "font-display relative min-h-11 px-2 text-base font-medium transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                    selected ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {tab.label}
-                  {count ? <span className="ml-1.5 font-sans text-xs tabular-nums text-muted-foreground">{count}</span> : null}
-                  {selected && !motion ? <span aria-hidden className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary" /> : null}
-                </button>
-              );
-            })}
+          <div className="mt-1">
+            <FilterTabs
+              label="Events by when they happen"
+              idPrefix="society-events"
+              motion={motion}
+              value={current}
+              onChange={setChosen}
+              tabs={tabs.map((tab) => ({ key: tab.key, label: tab.label, count: grouped[tab.key].length }))}
+            />
           </div>
 
-          <section key={current} role="tabpanel" id={`panel-${current}`} aria-labelledby={`tab-${current}`} className="mt-1">
+          <section key={current} role="tabpanel" id="society-events-panel" aria-labelledby={`society-events-tab-${current}`} className="mt-1">
             {grouped[current].length ? (
               // Months only once there is enough to scan - see groupByMonth.
               groupByMonth(grouped[current], now).map((group) => (
@@ -317,10 +289,15 @@ export function SocietyHomePage() {
         <EmptySociety canCreate={canManage} />
       ) : null}
 
-      {canManage && data?.ready !== false ? <FestivalIdeas events={data?.events ?? []} now={now} eventPath={eventPath} /> : null}
 
       <CommunitySection entries={community} />
-      </>
+      </div>
+
+      <aside className="mt-8 space-y-6 lg:mt-5" aria-label="Plan and join">
+        {canManage && data?.ready !== false ? <FestivalIdeas events={data?.events ?? []} now={now} eventPath={eventPath} /> : null}
+        {signedIn ? <JoinEventCard variant="society" /> : null}
+      </aside>
+      </div>
       )}
     </main>
   );
@@ -380,34 +357,33 @@ function EmptySociety({ canCreate }: { canCreate: boolean }) {
   );
 }
 
-/** No society yet, and none in the address. Signed out, the society may simply be behind the sign-in. */
+/**
+ * No society yet, and none in the address. Signed out, the society may simply be behind the sign-in; either
+ * way the code box is right here, because a code from the committee is how somebody joins one.
+ */
 function NoSociety({ signedIn }: { signedIn: boolean }) {
-  if (!signedIn) {
-    return (
-      <div className="mt-8 flex flex-col items-center gap-2 py-4 text-center">
-        <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />
-        <p className="font-display text-2xl font-semibold">Already part of a society?</p>
-        <p className="max-w-sm text-[15px] text-muted-foreground">
-          Sign in to see its events and your passes. New here? Enter your society&rsquo;s code in My space.
-        </p>
-        <Link
-          to="/login"
-          state={{ from: "/society" }}
-          className="mt-2 inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Sign in
-        </Link>
-      </div>
-    );
-  }
+  const location = useLocation();
   return (
-    <div className="mt-8 flex flex-col items-center gap-2 py-4 text-center">
-      <CalendarDays className="h-8 w-8 text-muted-foreground" aria-hidden />
-      <p className="font-display text-2xl font-semibold">You haven&rsquo;t joined a society yet</p>
-      <p className="max-w-sm text-[15px] text-muted-foreground">
-        Your committee shares a link for each event. Open it and sign in, and your society&rsquo;s events will show
-        up here.
-      </p>
+    <div className="mx-auto mt-8 max-w-md">
+      <div className="flex flex-col items-center gap-2 py-2 text-center">
+        <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <CalendarDays className="h-6 w-6" strokeWidth={1.75} />
+        </span>
+        <p className="font-display text-2xl font-semibold">{signedIn ? "You haven\u2019t joined a society yet" : "Already part of a society?"}</p>
+        <p className="max-w-sm text-[15px] text-muted-foreground">
+          {signedIn
+            ? "Enter the code your committee shared, or open a link to one of its events and your society will show up here."
+            : "Sign in to see its events and your passes, or join one with its code."}
+        </p>
+        {!signedIn ? (
+          <Button asChild className="mt-2">
+            <Link to="/login" state={{ from: `${location.pathname}${location.search}` }}>
+              Sign in
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      <JoinEventCard variant="society" className="mt-6" />
     </div>
   );
 }

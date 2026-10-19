@@ -1,76 +1,112 @@
-import { CalendarHeart, Sparkles } from "lucide-react";
+import { Plus, Ticket } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OccasionIcon } from "@/components/shared/icon-tile";
 import { useSession } from "@/lib/auth";
+import { personalArtworkUrl } from "@/lib/personal-artwork";
 import { useSocietyActions } from "@/lib/societies";
-import { classifyCode, PERSONAL_KINDS } from "../../../shared/personal-events";
+import { themeByKey } from "@/lib/themes";
+import { cn } from "@/lib/utils";
+import { KIND_ACCENT, PERSONAL_KINDS, parseInviteInput } from "../../../shared/personal-events";
 
 /**
- * My space's two cards: "Create your free event" and "Got a code?".
+ * The home's own cards: the create banner, the kinds to start from, and "Join an event".
  *
- * Both work for somebody who is not signed in. Creating sends them through sign-in first (`/my/new` asks for
- * it and comes straight back); a code needs no account to *open* - an invitation can be replied to as a
- * guest - and only joining a society asks for sign-in, because membership belongs to an account.
+ * All three work for somebody who is not signed in. Creating sends them through sign-in first (`/my/new` asks
+ * for it and comes straight back); an invitation opens without an account; only joining a society asks to
+ * sign in, because membership belongs to an account.
  */
-export function CreateEventCard({ ready, canCreateSocietyEvent = false }: { ready: boolean; canCreateSocietyEvent?: boolean }) {
+
+/**
+ * The one call to create: a short banner, its picture drawn in code (personal-artwork.ts), one button. Kept to
+ * a band of the screen rather than a hero - it sits above the person's own events, which matter more once
+ * they have some. Before migration 049 it says personal events are coming and offers nothing that would fail.
+ */
+export function CreateEventBanner({ ready, motion }: { ready: boolean; motion: boolean }) {
   return (
-    <section aria-labelledby="host-own" className="mt-8 border-t pt-6">
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <CalendarHeart className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <h2 id="host-own" className="font-display text-xl font-semibold">
-            {ready ? "Create your free event" : "Host your own celebration"}
-          </h2>
-          <p className="mt-1 max-w-prose text-[15px] text-muted-foreground">
-            Birthdays, anniversaries, baby showers and get-togethers: private and invite-only, free, with replies
-            and wishes in one place.{ready ? " Guests reply without an account." : " Coming soon to My space."}
-          </p>
-          {ready ? (
-            <>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {PERSONAL_KINDS.slice(0, 6).map((kind) => (
-                  <Link
-                    key={kind.key}
-                    to={`/my/new?kind=${kind.key}`}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-full border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <OccasionIcon name={kind.key} className="h-4 w-4 text-primary" />
-                    {kind.name}
-                  </Link>
-                ))}
-              </div>
-              <Button asChild className="mt-3">
-                <Link to="/my/new">Create my event</Link>
-              </Button>
-            </>
-          ) : null}
-          {canCreateSocietyEvent ? (
-            <Link
-              to="/new-event"
-              className="mt-2 flex min-h-10 items-center gap-1.5 rounded-md text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Sparkles className="h-4 w-4" aria-hidden="true" />
-              Create a society event &rarr;
+    <section
+      aria-labelledby="create-banner"
+      className={cn("group relative mt-5 overflow-hidden rounded-3xl bg-primary shadow-sm", motion && "dfx-row")}
+    >
+      <img
+        src={personalArtworkUrl("birthday")}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 [@media(hover:hover)]:group-hover:scale-[1.03] motion-reduce:transition-none"
+      />
+      {/* Weighted to the left, where the words are; the picture stays clear on the right. */}
+      <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-transparent" />
+      <div className="relative flex min-h-44 flex-col justify-center p-5 text-white sm:min-h-52 sm:p-7">
+        <h2 id="create-banner" className="font-display max-w-[62%] text-[26px] font-semibold leading-tight sm:max-w-[15ch] sm:text-4xl">
+          Make every moment special
+        </h2>
+        <p className="mt-1.5 max-w-[58%] text-sm text-white/90 sm:max-w-[30ch] sm:text-[15px]">
+          {ready
+            ? "Private, free and invite-only. For birthdays, anniversaries and more."
+            : "Private birthdays, anniversaries and get-togethers are coming soon to My space."}
+        </p>
+        {ready ? (
+          <Button asChild className="mt-4 w-fit bg-white text-foreground shadow-sm hover:bg-white/90">
+            <Link to="/my/new">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Create event
             </Link>
-          ) : null}
-        </div>
+          </Button>
+        ) : (
+          <span className="mt-4 w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-semibold backdrop-blur">Coming soon</span>
+        )}
       </div>
     </section>
   );
 }
 
+/** Start from a kind: six tiles, each its own accent from the five presets (KIND_ACCENT). */
+export function KindTiles() {
+  return (
+    <section aria-labelledby="kind-tiles" className="mt-6">
+      <h2 id="kind-tiles" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Start with
+      </h2>
+      <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {PERSONAL_KINDS.slice(0, 6).map((kind) => {
+          const accent = themeByKey(KIND_ACCENT[kind.key]).primary;
+          return (
+            <li key={kind.key}>
+              <Link
+                to={`/my/new?kind=${kind.key}`}
+                className={cn(
+                  "flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-2xl border bg-card px-1 py-2.5 text-center text-sm font-medium transition",
+                  "[@media(hover:hover)]:hover:-translate-y-0.5 [@media(hover:hover)]:hover:shadow-md active:scale-[0.98] motion-reduce:transform-none",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{ background: `hsl(${accent} / 0.12)`, color: `hsl(${accent})` }}
+                >
+                  <OccasionIcon name={kind.key} className="h-5 w-5" />
+                </span>
+                <span className="leading-tight">{kind.name}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 /**
- * One box for both kinds of code, told apart by length (`classifyCode`): six characters is an invitation to
- * a personal event (opened at `/i/<code>`, no account needed), eight is a society's invite code, joined right
- * here (`?resource=join`). Joining needs an account, so a signed-out visitor is sent to sign in and brought
- * back to this box with the code still in it (`?code=`), one tap from joining.
+ * "Join an event": one box for an invitation code (6), a society's code (8), or a whole invitation link
+ * pasted from WhatsApp (`parseInviteInput`). An invitation opens at `/i/<code>`, which itself says whether
+ * the code exists, was cancelled or has closed; a society code is joined right here (`?resource=join`).
+ * Joining needs an account, so a signed-out visitor is sent to sign in and brought back to this box with
+ * the code still in it (`?code=`), one tap from joining.
  */
-export function CodeBox() {
+export function JoinEventCard({ variant = "event", className }: { variant?: "event" | "society"; className?: string }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [search] = useSearchParams();
@@ -78,21 +114,36 @@ export function CodeBox() {
   const { join } = useSocietyActions();
   const [value, setValue] = useState(() => search.get("code") ?? "");
   const [problem, setProblem] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const id = `join-${variant}`;
+
   return (
-    <section aria-labelledby="code-heading" className="mt-8 border-t pt-6">
-      <h2 id="code-heading" className="font-display text-xl font-semibold">
-        Got a code?
-      </h2>
-      <p className="mt-1 text-[15px] text-muted-foreground">
-        An invitation from a friend (6 letters and numbers), or your society&rsquo;s code (8).
-      </p>
+    <section aria-labelledby={`${id}-heading`} className={cn("rounded-3xl border bg-card p-4 shadow-sm sm:p-5", className)}>
+      <div className="flex items-start gap-3">
+        <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Ticket className="h-5 w-5" strokeWidth={1.75} />
+        </span>
+        <div className="min-w-0">
+          <h2 id={`${id}-heading`} className="font-display text-xl font-semibold leading-tight">
+            {variant === "society" ? "Join a society" : "Join an event"}
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {variant === "society"
+              ? "Enter the 8-character code your committee shared."
+              : "Have an invite code or link? Join a private event or a society."}
+          </p>
+        </div>
+      </div>
       <form
-        className="mt-3 flex max-w-sm gap-2"
+        className="mt-4 flex gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          const found = classifyCode(value);
-          if (!found) return setProblem("That doesn't look like a code. Check it with whoever sent it.");
-          if (found.kind === "invitation") return navigate(`/i/${found.code}`);
+          const found = parseInviteInput(value);
+          if (!found) return setProblem("That isn't a code or an invitation link. Check it with whoever sent it.");
+          if (found.kind === "invitation") {
+            setOpening(true);
+            return navigate(`/i/${found.code}`);
+          }
           if (!session) {
             const back = new URLSearchParams(location.search);
             back.set("code", found.code);
@@ -104,27 +155,38 @@ export function CodeBox() {
             .catch((error: unknown) => setProblem(error instanceof Error ? error.message : "Could not join. Try again."));
         }}
       >
-        <label htmlFor="any-code" className="sr-only">
-          Code
+        <label htmlFor={`${id}-code`} className="sr-only">
+          Invite code or link
         </label>
         <Input
-          id="any-code"
+          id={`${id}-code`}
           value={value}
-          maxLength={12}
+          maxLength={200}
           autoCapitalize="characters"
           autoComplete="off"
-          placeholder="K7Q4MX"
-          className="font-semibold uppercase tracking-[0.2em]"
+          spellCheck={false}
+          placeholder={variant === "society" ? "AB12CD34" : "K7Q4MX or a link"}
+          aria-invalid={problem ? true : undefined}
+          aria-describedby={problem ? `${id}-problem` : undefined}
+          className="font-semibold tracking-[0.12em] placeholder:font-normal placeholder:tracking-normal"
           onChange={(event) => {
             setValue(event.target.value);
             setProblem(null);
           }}
         />
-        <Button type="submit" disabled={join.isPending}>
-          {join.isPending ? "Joining…" : "Open"}
+        <Button type="submit" disabled={join.isPending || opening || !value.trim()}>
+          {join.isPending ? "Joining…" : opening ? "Opening…" : "Open"}
         </Button>
       </form>
-      {problem ? <p className="mt-2 text-sm text-destructive">{problem}</p> : null}
+      {problem ? (
+        <p id={`${id}-problem`} role="alert" className="mt-2 rounded-md bg-destructive/10 p-2.5 text-sm text-destructive">
+          {problem}
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {variant === "society" ? "You'll be asked to sign in first." : "6 characters for a private event, 8 for a society."}
+        </p>
+      )}
     </section>
   );
 }

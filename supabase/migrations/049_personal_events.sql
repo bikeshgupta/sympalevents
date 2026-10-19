@@ -27,6 +27,9 @@ create table if not exists public.personal_events (
   end_time time,
   venue text check (venue is null or char_length(venue) <= 120),
   address text check (address is null or char_length(address) <= 200),
+  -- An optional cover photograph, uploaded through /api/uploads into the host's
+  -- own folder (uploads/personal/<host id>/...). The API refuses any other URL.
+  cover_url text check (cover_url is null or char_length(cover_url) <= 500),
   -- The code a guest types; the link carries the same code. No I, L, O, 0 or 1.
   invite_code text not null unique check (invite_code ~ '^[A-HJKMNP-Z2-9]{6}$'),
   guests_see_list boolean not null default false,

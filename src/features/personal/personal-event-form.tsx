@@ -1,5 +1,5 @@
-import { ArrowLeft, Check } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ArrowLeft, Check, ImagePlus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,16 +10,24 @@ import { useHostedEvent, usePersonalEventMutations, whenLine, type PersonalEvent
 import { themePresets, themeVariables } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { OccasionIcon } from "@/components/shared/icon-tile";
-import { LIMITS, PERSONAL_KINDS, isKind } from "../../../shared/personal-events";
+import { prepareGalleryPhoto } from "@/lib/images";
+import { useImageUpload } from "@/lib/uploads";
+import { themeByKey } from "@/lib/themes";
+import { KIND_ACCENT, LIMITS, PERSONAL_KINDS, isKind } from "../../../shared/personal-events";
 
 /**
- * Create, or edit, a personal event: four short steps and a live preview of how it will look.
+ * Create, or edit, a personal event: five short steps and a live preview of how it will look - what kind,
+ * the details (title, note, cover photo, colour), when and where, who sees what, and a review. Inviting
+ * happens once it exists: the host's page hands out the link and the 6-character code.
+ *
+ * Anybody signed in may create one; nothing needs a society or anybody's approval, and the creator is its
+ * host (the only person who can manage it - there are no co-hosts yet).
  *
  * `/my/new` (optionally `?kind=birthday`, which the kind chips in My space pass) and `/my/e/<id>/edit`.
  * Signed in only. The page is drawn in the colour being chosen, so the choice is visible as it is made.
  */
 
-const steps = ["What it is", "When and where", "Guests", "Review"] as const;
+const steps = ["Type", "Details", "When", "Guests", "Review"] as const;
 
 const blank = (kind: string): PersonalEventInput => ({
   kind,
@@ -31,6 +39,7 @@ const blank = (kind: string): PersonalEventInput => ({
   endTime: "",
   venue: "",
   address: "",
+  coverUrl: "",
   guestsSeeList: false,
   allowPlusOnes: true,
 });
@@ -50,6 +59,9 @@ export function PersonalEventFormPage() {
   const [loaded, setLoaded] = useState(!editing);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const upload = useImageUpload();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
 
   useEffect(() => {
     const event = hosted.data?.event;
@@ -64,6 +76,7 @@ export function PersonalEventFormPage() {
       endTime: event.endTime ?? "",
       venue: event.venue ?? "",
       address: event.address ?? "",
+      coverUrl: event.coverUrl ?? "",
       guestsSeeList: event.guestsSeeList,
       allowPlusOnes: event.allowPlusOnes,
     });
@@ -82,6 +95,7 @@ export function PersonalEventFormPage() {
       endTime: draft.endTime || null,
       venue: draft.venue || null,
       address: draft.address || null,
+      coverUrl: draft.coverUrl || null,
       code: hosted.data?.event.code ?? "",
       guestsSeeList: draft.guestsSeeList,
       allowPlusOnes: draft.allowPlusOnes,
@@ -106,11 +120,13 @@ export function PersonalEventFormPage() {
 
   // What each step needs before Next works. The server checks all of it again.
   const problem =
-    step === 0 && !draft.title.trim()
+    step === 1 && !draft.title.trim()
       ? "Give the event a title."
-      : step === 1 && !draft.startsOn
-        ? "Choose the date."
-        : step === 1 && !editing && draft.startsOn < today
+      : step === 1 && upload.isPending
+        ? "Wait for the photo to finish uploading."
+        : step === 2 && !draft.startsOn
+          ? "Choose the date."
+          : step === 2 && !editing && draft.startsOn < today
           ? "That date has already passed."
           : null;
 
@@ -136,6 +152,23 @@ export function PersonalEventFormPage() {
   };
   const saving = create.isPending || update.isPending;
 
+  // A cover photo is re-encoded on the device (1600px, JPEG) before it goes up, like the gallery's, and filed
+  // under the host's own id; the API accepts no other URL.
+  const pickPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    try {
+      const prepared = await prepareGalleryPhoto(file);
+      const url = await upload.mutateAsync({ file: prepared.file, eventId: "", folder: "personal" });
+      set("coverUrl", url);
+      setPhotoNote(prepared.shrunk ? "Resized for the web before uploading." : null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not upload that photo.");
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   return (
     <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-4 sm:pt-6" style={themeVariables(draft.color)}>
       <Link
@@ -148,7 +181,7 @@ export function PersonalEventFormPage() {
       <h1 className="font-display mt-2 text-2xl font-semibold sm:text-3xl">{editing ? "Edit your event" : "Create your event"}</h1>
       <p className="mt-1 text-sm text-muted-foreground">Free, private, and only for the people you invite.</p>
 
-      <ol className="mt-5 grid grid-cols-4 gap-2" aria-label="Steps">
+      <ol className="mt-5 grid grid-cols-5 gap-1.5 sm:gap-2" aria-label="Steps">
         {steps.map((label, index) => (
           <li key={label}>
             <button
@@ -158,7 +191,7 @@ export function PersonalEventFormPage() {
               className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className={cn("block h-1.5 rounded-full transition-colors", index <= step ? "bg-primary" : "bg-muted")} />
-              <span className={cn("mt-1.5 block text-xs font-medium", index === step ? "text-foreground" : "text-muted-foreground")}>{label}</span>
+              <span className={cn("mt-1.5 block truncate text-xs font-medium", index === step ? "text-foreground" : "text-muted-foreground")}>{label}</span>
             </button>
           </li>
         ))}
@@ -178,17 +211,28 @@ export function PersonalEventFormPage() {
                     aria-pressed={draft.kind === kind.key}
                     onClick={() => set("kind", kind.key)}
                     className={cn(
-                      "flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border bg-card px-2 py-2 text-sm font-medium transition",
+                      "flex min-h-[92px] flex-col items-center justify-center gap-1.5 rounded-2xl border bg-card px-2 py-2.5 text-sm font-medium transition",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       draft.kind === kind.key ? "border-primary bg-primary/10 text-foreground" : "[@media(hover:hover)]:hover:bg-muted/50",
                     )}
                   >
-                    <OccasionIcon name={kind.key} className="h-6 w-6 text-primary" />
+                    <span
+                      aria-hidden="true"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{ background: `hsl(${themeByKey(KIND_ACCENT[kind.key]).primary} / 0.12)`, color: `hsl(${themeByKey(KIND_ACCENT[kind.key]).primary})` }}
+                    >
+                      <OccasionIcon name={kind.key} className="h-5 w-5" />
+                    </span>
                     {kind.name}
                   </button>
                 ))}
               </div>
             </Field>
+          </>
+        ) : null}
+
+        {step === 1 ? (
+          <>
             <Field label="Title" htmlFor="pe-title" count={`${draft.title.length}/${LIMITS.title}`}>
               <Input id="pe-title" value={draft.title} maxLength={LIMITS.title} placeholder="Aarav turns 5" onChange={(e) => set("title", e.target.value)} />
             </Field>
@@ -202,6 +246,24 @@ export function PersonalEventFormPage() {
                 onChange={(e) => set("description", e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
+            </Field>
+            <Field label="Cover photo" hint="Optional">
+              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" id="pe-cover" onChange={(e) => void pickPhoto(e.target.files?.[0])} />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={upload.isPending}>
+                  <ImagePlus className="h-4 w-4" aria-hidden="true" />
+                  {upload.isPending ? "Uploading…" : draft.coverUrl ? "Change photo" : "Add a photo"}
+                </Button>
+                {draft.coverUrl ? (
+                  <Button type="button" variant="ghost" onClick={() => set("coverUrl", "")}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground" role="status">
+                {photoNote ?? (draft.coverUrl ? "Shown on the invitation and your page." : "Without one, the invitation uses artwork for the kind of event.")}
+              </p>
             </Field>
             <Field label="Colour">
               <div className="flex flex-wrap gap-2" role="group" aria-label="Event colour">
@@ -230,7 +292,7 @@ export function PersonalEventFormPage() {
           </>
         ) : null}
 
-        {step === 1 ? (
+        {step === 2 ? (
           <>
             <Field label="Date" htmlFor="pe-date">
               <Input id="pe-date" type="date" min={editing ? undefined : today} value={draft.startsOn} onChange={(e) => set("startsOn", e.target.value)} />
@@ -252,7 +314,7 @@ export function PersonalEventFormPage() {
           </>
         ) : null}
 
-        {step === 2 ? (
+        {step === 3 ? (
           <div className="divide-y rounded-xl border bg-card">
             <Toggle
               label="Private, invite only"
@@ -275,7 +337,7 @@ export function PersonalEventFormPage() {
           </div>
         ) : null}
 
-        {step === 3 ? (
+        {step === 4 ? (
           <dl className="divide-y rounded-xl border bg-card text-sm">
             {[
               ["What", PERSONAL_KINDS.find((k) => k.key === draft.kind)?.name ?? ""],
@@ -284,6 +346,8 @@ export function PersonalEventFormPage() {
               ["Where", [draft.venue, draft.address].filter(Boolean).join(", ") || "—"],
               ["Who can see it", "People with the link or code"],
               ["Guest list", draft.guestsSeeList ? "Guests can see who's coming" : "Only you"],
+              ["Cover", draft.coverUrl ? "Your photo" : "Artwork"],
+              ["Inviting", editing ? "Your link and code stay the same" : "You'll get a link and a 6-character code to share"],
             ].map(([term, value]) => (
               <div key={term} className="flex justify-between gap-4 px-4 py-3">
                 <dt className="text-muted-foreground">{term}</dt>

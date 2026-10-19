@@ -73,6 +73,12 @@ export function InvitationPage() {
               ? error.message
               : "Check the code with the person who sent it."}
         </p>
+        <Link
+          to="/society?view=space"
+          className="mt-5 inline-flex min-h-10 items-center rounded-lg border bg-card px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Try another code
+        </Link>
       </main>
     );
   }
