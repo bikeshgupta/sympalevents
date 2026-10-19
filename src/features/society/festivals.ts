@@ -18,30 +18,32 @@ export type Festival = {
   date: string;
   /** One line of what a society usually does for it. */
   idea: string;
-  emoji: string;
+  /** A key in `occasionIcons` (src/components/shared/icon-tile.tsx). */
+  icon: string;
   /** Matched against event names to say "already planned". */
   match: RegExp;
 };
 
 export const FESTIVALS: Festival[] = [
-  { name: "Dussehra", date: "2026-10-20", emoji: "🏹", idea: "Ravan dahan on the ground and a fair for the kids", match: /dussehra|dasara|vijaya/i },
-  { name: "Karwa Chauth", date: "2026-10-29", emoji: "🌙", idea: "Mehendi, a moonrise gathering and dinner on the terrace", match: /karwa|karva/i },
-  { name: "Diwali", date: "2026-11-08", emoji: "🪔", idea: "Diyas, a rangoli contest, fireworks and a mela", match: /diwali|deepavali/i },
-  { name: "Chhath Puja", date: "2026-11-15", emoji: "🌅", idea: "A ghat, prasad and a team of volunteers", match: /chhath/i },
-  { name: "Guru Nanak Jayanti", date: "2026-11-24", emoji: "🙏", idea: "Kirtan and langar in the clubhouse", match: /gurpurab|guru nanak/i },
-  { name: "Christmas", date: "2026-12-25", emoji: "🎄", idea: "Carols, a tree lighting and Secret Santa", match: /christmas|xmas/i },
-  { name: "New Year's Eve", date: "2026-12-31", emoji: "🎆", idea: "A DJ night, dinner and a countdown to midnight", match: /new year/i },
-  { name: "Makar Sankranti", date: "2027-01-15", emoji: "🪁", idea: "Kite flying on the terrace and til-gul for everyone", match: /sankranti|pongal|lohri|uttarayan/i },
-  { name: "Republic Day", date: "2027-01-26", emoji: "🇮🇳", idea: "Flag hoisting and a kids' parade", match: /republic/i },
-  { name: "Vasant Panchami", date: "2027-02-11", emoji: "🌼", idea: "Saraswati puja for the children", match: /vasant|basant|saraswati/i },
-  { name: "Maha Shivratri", date: "2027-03-06", emoji: "🔱", idea: "Night-long bhajans at the temple", match: /shivratri/i },
-  { name: "Holi", date: "2027-03-22", emoji: "🎨", idea: "Organic colours, a rain dance and thandai", match: /holi/i },
+  { name: "Dussehra", date: "2026-10-20", icon: "swords", idea: "Ravan dahan on the ground and a fair for the kids", match: /dussehra|dasara|vijaya/i },
+  { name: "Karwa Chauth", date: "2026-10-29", icon: "moon", idea: "Mehendi, a moonrise gathering and dinner on the terrace", match: /karwa|karva/i },
+  { name: "Diwali", date: "2026-11-08", icon: "flame", idea: "Diyas, a rangoli contest, fireworks and a mela", match: /diwali|deepavali/i },
+  { name: "Chhath Puja", date: "2026-11-15", icon: "sunrise", idea: "A ghat, prasad and a team of volunteers", match: /chhath/i },
+  { name: "Guru Nanak Jayanti", date: "2026-11-24", icon: "hand-heart", idea: "Kirtan and langar in the clubhouse", match: /gurpurab|guru nanak/i },
+  { name: "Christmas", date: "2026-12-25", icon: "tree", idea: "Carols, a tree lighting and Secret Santa", match: /christmas|xmas/i },
+  { name: "New Year's Eve", date: "2026-12-31", icon: "party", idea: "A DJ night, dinner and a countdown to midnight", match: /new year/i },
+  { name: "Makar Sankranti", date: "2027-01-15", icon: "wind", idea: "Kite flying on the terrace and til-gul for everyone", match: /sankranti|pongal|lohri|uttarayan/i },
+  { name: "Republic Day", date: "2027-01-26", icon: "flag", idea: "Flag hoisting and a kids' parade", match: /republic/i },
+  { name: "Vasant Panchami", date: "2027-02-11", icon: "flower", idea: "Saraswati puja for the children", match: /vasant|basant|saraswati/i },
+  { name: "Maha Shivratri", date: "2027-03-06", icon: "mountain", idea: "Night-long bhajans at the temple", match: /shivratri/i },
+  { name: "Holi", date: "2027-03-22", icon: "palette", idea: "Organic colours, a rain dance and thandai", match: /holi/i },
 ];
 
 export type FestivalIdea = {
   name: string;
   date: string;
-  emoji: string;
+  /** A key in `occasionIcons` (src/components/shared/icon-tile.tsx). */
+  icon: string;
   idea: string;
   days: number;
   /** The society's own event for it, when there is one. */
@@ -71,7 +73,7 @@ export function upcomingFestivals(
       return {
         name: festival.name,
         date: festival.date,
-        emoji: festival.emoji,
+        icon: festival.icon,
         idea: festival.idea,
         days: Math.round(at - now),
         planned: match ? { id: match.id, name: match.name } : null,

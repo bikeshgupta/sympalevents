@@ -142,6 +142,8 @@ export function SocietyHomePage() {
       {/* A compact greeting, then the two tabs. A signed-out visitor on a society's address gets that
           society's own header instead, as before. */}
       <div className="flex items-start justify-between gap-3">
+        {/* The app's own icon, the same file as the tab icon and the event header's way home. */}
+        <img src="/favicon.svg" alt="SymPal" width={40} height={40} className="mt-0.5 h-10 w-10 shrink-0 rounded-xl" />
         <div className="min-w-0 flex-1">
           {!signedIn && societySlug && society ? (
             <SocietyHeader society={society} greeting={null} />

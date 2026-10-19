@@ -1,3 +1,4 @@
+import { IconTile } from "@/components/shared/icon-tile";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { formatEventWeekday } from "@/features/dashboard/dashboard-utils";
@@ -32,12 +33,7 @@ export function FestivalIdeas({ events, now, eventPath }: { events: SocietyEvent
           const planned = idea.planned ? events.find((event) => event.id === idea.planned?.id) : null;
           return (
             <li key={idea.name} className="flex gap-3.5 py-3.5">
-              <span
-                aria-hidden="true"
-                className="flex h-16 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-3xl"
-              >
-                {idea.emoji}
-              </span>
+              <IconTile name={idea.icon} className="h-16 w-14" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {formatEventWeekday(idea.date)} · in <span className="tabular-nums">{idea.days}</span> days

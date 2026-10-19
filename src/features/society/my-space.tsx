@@ -9,6 +9,7 @@ import { getDateInEventZone } from "@/lib/event-status";
 import { useEventContext, type EventOption } from "@/lib/event-context";
 import { useDashboardMotion } from "@/lib/dashboard-motion";
 import { useSession } from "@/lib/auth";
+import { OccasionIcon } from "@/components/shared/icon-tile";
 
 /**
  * My space: what is the person's own, across every society.
@@ -110,8 +111,12 @@ function PersonalLists({ data, today, motion }: { data: MinePersonal; today: str
         to={to}
         className="group -mx-2 flex items-center gap-3.5 rounded-lg px-2 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span aria-hidden="true" className="flex h-14 w-12 shrink-0 items-center justify-center rounded-lg text-2xl" style={{ background: `hsl(${themeByKey(color).primary} / 0.14)` }}>
-          {kindOf(kind).emoji}
+        <span
+          aria-hidden="true"
+          className="flex h-14 w-12 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: `hsl(${themeByKey(color).primary} / 0.12)`, color: `hsl(${themeByKey(color).primary})` }}
+        >
+          <OccasionIcon name={kindOf(kind).key} className="h-6 w-6" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="font-display block truncate text-lg font-semibold leading-snug">{title}</span>

@@ -17,15 +17,16 @@
  * - Wishes are shown to everybody who can open the invitation, under the first name the guest typed.
  */
 
+/** The screens draw each kind with a flat line icon keyed on `key` (src/components/shared/icon-tile.tsx). */
 export const PERSONAL_KINDS = [
-  { key: "birthday", name: "Birthday", emoji: "🎂" },
-  { key: "anniversary", name: "Anniversary", emoji: "💍" },
-  { key: "get_together", name: "Get-together", emoji: "🥂" },
-  { key: "festival", name: "Festival", emoji: "🪔" },
-  { key: "wedding", name: "Wedding", emoji: "💐" },
-  { key: "baby_shower", name: "Baby shower", emoji: "🍼" },
-  { key: "naming", name: "Naming ceremony", emoji: "👶" },
-  { key: "other", name: "Something else", emoji: "✨" },
+  { key: "birthday", name: "Birthday" },
+  { key: "anniversary", name: "Anniversary" },
+  { key: "get_together", name: "Get-together" },
+  { key: "festival", name: "Festival" },
+  { key: "wedding", name: "Wedding" },
+  { key: "baby_shower", name: "Baby shower" },
+  { key: "naming", name: "Naming ceremony" },
+  { key: "other", name: "Something else" },
 ] as const;
 
 export type PersonalKind = (typeof PERSONAL_KINDS)[number]["key"];

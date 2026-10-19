@@ -12,6 +12,7 @@ import { getDateInEventZone } from "@/lib/event-status";
 import { daysToGo, invitationUrl, useInvitation, usePersonalEventMutations } from "@/lib/personal-events";
 import { themeVariables } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { OccasionIcon } from "@/components/shared/icon-tile";
 import { LIMITS, type RsvpStatus } from "../../../shared/personal-events";
 
 /**
@@ -21,10 +22,10 @@ import { LIMITS, type RsvpStatus } from "../../../shared/personal-events";
  * What a guest can see is decided by the server: counts, wishes, and names only if the host chose to show
  * them. A phone number given here goes to the host alone.
  */
-const choices: { value: RsvpStatus; label: string; emoji: string }[] = [
-  { value: "going", label: "Going", emoji: "🎉" },
-  { value: "maybe", label: "Maybe", emoji: "🤔" },
-  { value: "declined", label: "Can't come", emoji: "💌" },
+const choices: { value: RsvpStatus; label: string }[] = [
+  { value: "going", label: "Going" },
+  { value: "maybe", label: "Maybe" },
+  { value: "declined", label: "Can't come" },
 ];
 
 export function InvitationPage() {
@@ -200,8 +201,8 @@ export function InvitationPage() {
                     status === choice.value ? "border-primary bg-primary/10" : "bg-background [@media(hover:hover)]:hover:bg-muted/50",
                   )}
                 >
-                  <span aria-hidden="true" className={cn("text-2xl transition-transform", status === choice.value && motion && "scale-125")}>
-                    {choice.emoji}
+                  <span aria-hidden="true" className={cn("inline-flex transition-transform", status === choice.value && motion && "scale-125")}>
+                    <OccasionIcon name={choice.value} className="h-6 w-6 text-primary" />
                   </span>
                   {choice.label}
                 </button>

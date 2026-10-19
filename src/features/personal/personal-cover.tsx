@@ -3,6 +3,7 @@ import { HeroEmbers, RisingWords } from "@/components/shared/dashboard-fx";
 import { useDashboardMotion } from "@/lib/dashboard-motion";
 import { whenLine, type PersonalEvent } from "@/lib/personal-events";
 import { cn } from "@/lib/utils";
+import { IconTile } from "@/components/shared/icon-tile";
 import { kindOf } from "../../../shared/personal-events";
 
 /**
@@ -24,9 +25,7 @@ export function PersonalCover({ event, eyebrow, className }: { event: PersonalEv
         className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/15 blur-3xl"
       />
       {motion && !cancelled ? <HeroEmbers /> : null}
-      <span aria-hidden="true" className="pointer-events-none absolute right-5 top-4 text-6xl drop-shadow-lg sm:right-8 sm:text-7xl">
-        {kind.emoji}
-      </span>
+      <IconTile name={kind.key} size="lg" tone="inverse" className="pointer-events-none absolute right-5 top-5 sm:right-8" />
       <div className="relative pr-20">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-foreground/85">{eyebrow}</p>
         <h1 className="font-display mt-2 text-3xl font-semibold leading-tight sm:text-4xl" aria-label={motion ? event.title : undefined}>

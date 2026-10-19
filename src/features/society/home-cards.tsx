@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OccasionIcon } from "@/components/shared/icon-tile";
 import { useSession } from "@/lib/auth";
 import { useSocietyActions } from "@/lib/societies";
 import { classifyCode, PERSONAL_KINDS } from "../../../shared/personal-events";
@@ -38,7 +39,7 @@ export function CreateEventCard({ ready, canCreateSocietyEvent = false }: { read
                     to={`/my/new?kind=${kind.key}`}
                     className="inline-flex min-h-10 items-center gap-1.5 rounded-full border bg-card px-3 text-sm font-medium transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <span aria-hidden="true">{kind.emoji}</span>
+                    <OccasionIcon name={kind.key} className="h-4 w-4 text-primary" />
                     {kind.name}
                   </Link>
                 ))}

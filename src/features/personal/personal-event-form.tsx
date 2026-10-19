@@ -9,6 +9,7 @@ import { getDateInEventZone } from "@/lib/event-status";
 import { useHostedEvent, usePersonalEventMutations, whenLine, type PersonalEvent, type PersonalEventInput } from "@/lib/personal-events";
 import { themePresets, themeVariables } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { OccasionIcon } from "@/components/shared/icon-tile";
 import { LIMITS, PERSONAL_KINDS, isKind } from "../../../shared/personal-events";
 
 /**
@@ -182,7 +183,7 @@ export function PersonalEventFormPage() {
                       draft.kind === kind.key ? "border-primary bg-primary/10 text-foreground" : "[@media(hover:hover)]:hover:bg-muted/50",
                     )}
                   >
-                    <span aria-hidden="true" className="text-2xl">{kind.emoji}</span>
+                    <OccasionIcon name={kind.key} className="h-6 w-6 text-primary" />
                     {kind.name}
                   </button>
                 ))}
