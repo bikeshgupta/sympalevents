@@ -1,4 +1,6 @@
 import { Navigate } from "react-router-dom";
+import { useSession } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { useEventContext } from "@/lib/event-context";
 
 /**
@@ -15,16 +17,21 @@ import { useEventContext } from "@/lib/event-context";
  * go to the same place because the server resolves `/society` to the viewer's
  * own, so there is nothing to choose between yet.
  *
- * With no society at all - demo mode, or Supabase unconfigured - it falls
- * through to the dashboard exactly as before, so the tour still works.
+ * Signed in with no society, it opens My space (the home page's own tab), which is where somebody with
+ * nothing yet starts. Signed out, it opens the guest home (create an event, open a code, sign in) - the
+ * home is for everybody. Only demo mode (Supabase unconfigured) still falls through to the dashboard, so
+ * the tour works.
  */
 export function SocietyRoot() {
   const { societies, isLoading } = useEventContext();
+  const { data: session, isLoading: sessionLoading } = useSession();
 
   // Deciding before the list has landed would send a member to the demo
   // dashboard and then bounce them, which reads as a flash of the wrong app.
-  if (isLoading) return null;
+  if (isLoading || sessionLoading) return null;
 
   if (societies.length >= 1) return <Navigate to="/society" replace />;
+  if (session) return <Navigate to="/society?view=space" replace />;
+  if (isSupabaseConfigured) return <Navigate to="/society" replace />;
   return <Navigate to="/dashboard" replace />;
 }

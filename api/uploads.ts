@@ -42,7 +42,10 @@ const EXT_BY_MIME: Record<string, string> = {
 // "closing" holds the celebration photographs on the closing page; like
 // "auctions" it is committee-only, decided explicitly rather than inherited.
 // "profiles" is a person's own photograph: not tied to an event, and filed under their own id.
-const ALLOWED_FOLDERS = new Set(["auctions", "closing", "events", "profiles"]);
+// "personal" is a personal event's cover (049): the same - any signed-in person, filed under their own id,
+// and the personal-events API accepts only a URL from that person's own folder.
+const ALLOWED_FOLDERS = new Set(["auctions", "closing", "events", "profiles", "personal"]);
+const OWN_FOLDERS = new Set(["profiles", "personal"]);
 
 /** Profile photographs are resized on the device to a few tens of KB; this is only a ceiling. */
 const MAX_PROFILE_BYTES = 1024 * 1024;
@@ -66,7 +69,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const folder = String(body.folder ?? "");
     const dataUrl = String(body.dataUrl ?? "");
 
-    if (!folder || (!eventId && folder !== "profiles")) {
+    if (!folder || (!eventId && !OWN_FOLDERS.has(folder))) {
       sendJson(res, 400, { error: "eventId and folder are required" });
       return;
     }
@@ -84,7 +87,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     //             album. Capped per person, and checked here as well as on
     //             the row insert: without this, somebody could fill the
     //             bucket with files that never become photographs.
-    if (folder === "profiles") {
+    if (OWN_FOLDERS.has(folder)) {
       // Anybody signed in may set their own photograph; there is nobody to ask. It is
       // filed under their id (below), so it can only ever be theirs.
     } else if (folder === "closing") {
@@ -132,7 +135,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return;
     }
 
-    const path = folder === "profiles" ? `profiles/${appUser.id}/${randomUUID()}.${ext}` : `${folder}/${randomUUID()}.${ext}`;
+    const path = OWN_FOLDERS.has(folder) ? `${folder}/${appUser.id}/${randomUUID()}.${ext}` : `${folder}/${randomUUID()}.${ext}`;
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, buffer, {
       contentType: mimeType,
       upsert: false,
