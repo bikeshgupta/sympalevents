@@ -1,0 +1,55 @@
+MIGRATION 049 - personal events  (prepared for review; YOU run it by hand)
+File: supabase/migrations/049_personal_events.sql
+Status: PREPARED, NOT APPLIED. Tested on a scratch PostgreSQL 16 (run twice, constraints checked - again after cover_url was added on
+2026-10-19), not on Supabase. Until it is applied, My space shows personal events as "coming soon", and every personal-event
+request answers "needs migration 049". Nothing else in the app changes.
+
+WHAT IT DOES (plain words)
+  Lets anybody signed in host a private, invite-only event of their own - a birthday, an anniversary, a
+  get-together - outside any society. Guests open it with a link or a six-letter code and reply without an
+  account. Only the host sees the guest list and phone numbers.
+
+WHAT IT ADDS (and only this)
+  - table public.personal_events       (one row per event; host, details, colour, optional cover photo URL,
+                                        invite code)
+  - table public.personal_event_rsvps  (one row per guest reply; name, going/maybe/can't, people, phone, wish)
+  - indexes on both; RLS enabled on both with NO policies (the API uses the service role, like every table)
+  It changes no existing table, column or row.
+
+------------------------------------------------------------------------------------
+1. PRE-CHECKS  (Supabase SQL editor)
+------------------------------------------------------------------------------------
+-- A. app_users exists with a uuid id (expect: uuid).
+select data_type from information_schema.columns
+where table_schema = 'public' and table_name = 'app_users' and column_name = 'id';
+
+-- B. The new tables do not exist yet (expect 0 rows).
+select table_name from information_schema.tables
+where table_schema = 'public' and table_name in ('personal_events', 'personal_event_rsvps');
+
+------------------------------------------------------------------------------------
+2. RUN
+------------------------------------------------------------------------------------
+Paste the whole of supabase/migrations/049_personal_events.sql into the SQL editor and run it once.
+It is safe to run again: everything is "if not exists".
+
+------------------------------------------------------------------------------------
+3. VERIFY
+------------------------------------------------------------------------------------
+-- A. Both tables, with row level security on (expect 2 rows, both t).
+select relname, relrowsecurity from pg_class
+where relname in ('personal_events', 'personal_event_rsvps') and relkind = 'r' order by 1;
+
+-- B. No policies on either (expect 0 rows).
+select tablename, policyname from pg_policies where tablename in ('personal_events', 'personal_event_rsvps');
+
+-- C. In the app: My space -> Create your free event -> create one -> open its link in a private window and
+--    reply without signing in -> the reply shows on the host's page.
+
+------------------------------------------------------------------------------------
+4. ROLLBACK  (only if nothing real has been created; this deletes every personal event and reply)
+------------------------------------------------------------------------------------
+begin;
+drop table if exists public.personal_event_rsvps;
+drop table if exists public.personal_events;
+commit;

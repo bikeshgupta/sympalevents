@@ -52,6 +52,9 @@ const SettingsPage = lazyPage(() => import("@/features/settings/settings-page"),
 const SponsorsPage = lazyPage(() => import("@/features/sponsors/sponsors-page"), (m) => m.SponsorsPage);
 const TasksPage = lazyPage(() => import("@/features/tasks/tasks-page"), (m) => m.TasksPage);
 const TeamsPage = lazyPage(() => import("@/features/teams/teams-page"), (m) => m.TeamsPage);
+const PersonalEventFormPage = lazyPage(() => import("@/features/personal/personal-event-form"), (m) => m.PersonalEventFormPage);
+const HostEventPage = lazyPage(() => import("@/features/personal/host-event-page"), (m) => m.HostEventPage);
+const InvitationPage = lazyPage(() => import("@/features/personal/invitation-page"), (m) => m.InvitationPage);
 
 let warmed = false;
 /** Fetch every on-demand page while the browser is idle, once. */
@@ -132,6 +135,14 @@ export function App() {
         <Route path="/society/:societySlug" element={<SocietyHomePage />} />
         {/* Private to society admins; the server decides, this only draws. */}
         <Route path="/society/:societySlug/admin" element={<Page><SocietyAdminPage /></Page>} />
+
+        {/* Personal events: private, invite-only, no society. Outside AppLayout - they are nobody's event
+            pages. /i/<code> is open to anybody with the code; /my/* is the host's. See api/_lib/personal-events.ts. */}
+        <Route path="/i/:code" element={<Page><InvitationPage /></Page>} />
+        {/* Join a society with its eight-character code; asks for sign-in first. */}
+        <Route path="/my/new" element={<Page><PersonalEventFormPage /></Page>} />
+        <Route path="/my/e/:id" element={<Page><HostEventPage /></Page>} />
+        <Route path="/my/e/:id/edit" element={<Page><PersonalEventFormPage /></Page>} />
       </Route>
 
       {/* The owner-only Platform Control Center. Reached by typing the address: nothing links here. The server

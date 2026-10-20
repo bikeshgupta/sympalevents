@@ -60,12 +60,12 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
     <Link
       to={to}
       className={cn(
-        "group relative block overflow-hidden sm:rounded-2xl",
+        "group relative block overflow-hidden rounded-[30px] shadow-[0_24px_50px_-28px_hsl(var(--foreground)/0.6)] ring-1 ring-white/40",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       )}
     >
       
-      <div ref={frameRef} className="relative aspect-[16/10] w-full overflow-hidden bg-primary/90 sm:aspect-[16/6]">
+      <div ref={frameRef} className="relative aspect-[16/10] w-full overflow-hidden bg-primary/90 sm:aspect-[16/6] xl:aspect-[16/5]">
         <div ref={pictureRef} className="absolute inset-0">
         <EventArtwork
           eventType={event.eventType}
@@ -123,7 +123,7 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
 
           <span
             className={cn(
-              "mt-2.5 inline-flex h-9 items-center rounded-lg bg-white px-3.5 text-sm font-semibold text-foreground",
+              "mt-2.5 inline-flex h-10 items-center rounded-full border border-white/70 bg-white/90 px-4 shadow-lg backdrop-blur-md text-sm font-semibold text-foreground",
               "shadow-sm transition-transform group-hover:translate-x-0.5",
             )}
           >

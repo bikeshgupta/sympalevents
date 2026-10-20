@@ -2267,6 +2267,121 @@ thumbnails and the role badge. Headings, tab labels and the hero title use `.fon
 - Counts shown in rows (photos, reviews, teams, contributors) are real and gated on the module being open to the
   viewer, as before. Do not fabricate "42 photos".
 
+## The home tabs: My space and the society
+
+The home (`/society`, `/society/<slug>`) is a short brand row (the app icon, "SymPal", the account menu), then
+**a compact two-option segmented control, My space | <society>** ([home-tabs.tsx](src/features/society/home-tabs.tsx);
+rules pure in [home-view.ts](src/features/society/home-view.ts), tested in `tests/home-tabs.test.mjs`): one soft
+track, the chosen half filled in `bg-primary`, 48px in all, the fill sliding between halves. It replaced the
+underlined text tabs on the owner's 2026 redesign brief (the earlier "no pills" note is superseded). The halves
+are links (`?view=space`, or the society's address), not a tablist, so refresh, sharing and Back agree. Each tab
+then opens with its own heading (My space: the greeting; the society: `SocietyHeader`). **The home uses the full
+width** (asked for: it looked small and wasted space): `max-w-[1600px]` only so it does not stretch on an
+ultrawide, 12px gutters on a phone, 24-40px above. **From `lg` both tabs are a main column and a side column**
+(360px, 400px from `xl`: join box and quick actions; festival ideas and Join a society); on a phone the side
+column follows the main one. Lists use the room: My events in 2 columns from `sm` and 3 from `2xl`, the society's
+event rows in 2 from `xl`; headings, card pictures and the banner step up from `sm`/`xl`. Lists of filters on both tabs are the
+shared `FilterTabs` ([filter-tabs.tsx](src/components/shared/filter-tabs.tsx), a real tablist with arrow keys).
+**There is no bottom tab bar** in the reference designs' sense - the fixed bottom bar was removed on purpose
+(see Navigation), and the home sits outside AppLayout.
+
+- **The second tab is named after the society when the person has exactly one**, and says "Societies" with a
+  chooser of society cards (`society-chooser.tsx`) once they have more. One society shows no chooser.
+- **Default tab:** the society for a member, unless it has no events to show (then My space, decided once its
+  events arrive; a society chosen by its address always opens); My space for somebody signed in with no society (`SocietyRoot` sends
+  them to `/society?view=space` instead of the demo dashboard). `?view=society` opens the society tab even with
+  no society, so the tab is never a dead link.
+- **The home is open to everybody, and it is the same page.** Signed out at `/` or `/society` there is no second
+  "guest" page: the same header ("Welcome to SymPal" with Sign in in the corner), the same two tabs, My space open
+  with Create your free event and Got a code?. **Sign-in is asked for only at the moment it is needed**: creating
+  an event (`/my/new` asks and comes straight back) and joining a society. The society tab, signed out, says to
+  sign in. A society opened by its address stays public and keeps its own header, as before. Only demo mode
+  (Supabase unconfigured) still goes to the dashboard. A separate guest page and a `/join/<code>` page were built
+  and rejected as needless: keep it one page.
+- **One join box** (`JoinEventCard` in home-cards.tsx, `parseInviteInput` in shared/personal-events.ts): a code or
+  a whole pasted link. Six characters (or `…/i/<code>`) opens a personal invitation at `/i/<code>` (no account
+  needed; that page says when a code is wrong, cancelled or closed); eight (or `…/join/<code>`) is a society's
+  invite code, joined in place (the existing `?resource=join`) and then opens that society. A link of the wrong
+  shape for its code, or any other URL, is not a code - nothing is fetched. "Paste link" reads the clipboard
+  where the browser allows it and otherwise just focuses the box. Signed out, joining a society goes to
+  sign-in and comes back to the box with the code filled in (`?code=`). `variant="society"` is the same box worded
+  for the society tab and its empty state.
+- **My space** ([my-space.tsx](src/features/society/my-space.tsx)) is **personal events only**: greeting, a compact
+  create banner (`CreateEventBanner` - its picture is the birthday artwork drawn in code, **not a photograph**; the
+  scrim is deliberately light, because a heavier one over the artwork's already-dark left edge turned the banner
+  nearly black on a phone; ~156px tall on a phone), then **My events**. **There is no kind picker on the home**
+  (an "occasion" row was built and removed on request): the kind is chosen on the create page's first step with Hosting / Invited / Joined / Past
+  (`myEventLists`, pure and tested in `tests/personal-home.test.mjs`): Invited is upcoming invitations not yet a
+  yes, a "maybe" first; Joined is the yeses; Past is anything whose day has gone. It opens on the first list with
+  something in it. Cards are `PersonalEventCard` (picture with the date on it, title, time and place, what it means
+  for you, how many are going). Society events are no longer listed here - they are the other tab. An invitation
+  is only known to My space once the person has replied to it while signed in (opening one records nothing).
+- **The home is liquid glass** (owner's ask: "more rounded, liquid glass, animations"), and it supersedes the
+  Society Home "type and hairlines, not boxes" note for these two tabs. Pieces in globals.css: `HomeAmbient`
+  ([home-ambient.tsx](src/features/society/home-ambient.tsx), portalled, fixed) drifts three soft washes of colour
+  behind the page so the glass has something to refract; the brand row (icon, name, avatar) is **flat on the page,
+  not in glass** (asked for), with a press effect on the icon and avatar; the switch
+  is `.liquid-track` + `.liquid-thumb`, and the thumb stretches as it travels (`.liquid-go`, the CSS `scale`
+  property, separate from the sliding `transform`); `FilterTabs` is the same track with a white glass bead;
+  **one panel per section**: a section's heading, its filter and its items sit in a single `.glass-card` (My events
+  = heading + Hosting/Invited/Joined/Past + the cards; society Events = heading + Upcoming/Live/Past + the rows;
+  Your societies; Plan your next event; the join box), and what is inside a panel is flat (`bg-white/55`, a faint
+  ring), never glass on glass - asked for, to save space and show what belongs together. Panels are 30px round;
+  buttons and inputs on the home are fully round. Every glass rule has a solid fallback without backdrop-filter.
+  **Nothing fixed may sit inside the glass bar** (backdrop-filter makes it the containing block) - the account
+  menu is a Radix portal, which is why it works.
+- **Motion on the home** (all through `useDashboardMotion`, so off for reduced motion; the pieces are the
+  dashboard's own, `dashboard-fx.tsx` / `dashboard-motion.ts`): the scroll bar along the top; the banner's drifting
+  aurora, rising embers, headline rising a word at a time, artwork easing with the scroll and a light sweeping the
+  Create button (`.dfx-glint`, the screen's one loop), which leans towards a mouse; the greeting rising in; sections
+  below the first screen sliding up as they arrive (`useScrollReveal`); event cards rising in a stagger, leaning
+  towards the mouse with a light under it and saying "In N days"; switching My space | society sliding the content
+  in from that half's side (`.dfx-from-left/right`); a wrong code shaking the join box (`.dfx-shake`). The create
+  page's heading and kind tiles get the same entrance.
+- **Plan your next event** ([festival-ideas.tsx](src/features/society/festival-ideas.tsx), dates and rules in
+  [festivals.ts](src/features/society/festivals.ts)): the next festivals on the Indian calendar, 3 to 75 days away,
+  for organisers (`canManage`) only. One the society already has an event for (name match within 12 days) links to
+  it. **The festival list must be extended once a year**; when it runs out the section disappears.
+- The society tab keeps every behaviour it had (featured event, Upcoming/Live/Past, passes, drafts, community,
+  festival ideas, Create event for `canManage`); only the layout around it changed, and the chooser is headed
+  "Your societies". Somebody with no society gets the join box in the empty state.
+
+## Personal events (My space)
+
+Private, invite-only events one person hosts outside any society - a birthday, an anniversary, a
+get-together. **Migration 049 (`personal_events`, `personal_event_rsvps`) is PREPARED, NOT APPLIED** (note in
+`docs/migration-notes/049_personal_events.txt`; tested on a scratch PostgreSQL, not Supabase). Until it is,
+My space shows the "coming soon" card and every request answers 501 naming 049.
+
+- **Separate tables on purpose**, not rows in `events`: everything about `events` assumes a society (page
+  visibility, modules, members, public pages), and a personal event must never surface through any of it.
+- API: `/api/events?resource=personal&part=mine|invite|event|create|rsvp` ([api/_lib/personal-events.ts](api/_lib/personal-events.ts));
+  the function count is still 12. Rules pure in [shared/personal-events.ts](shared/personal-events.ts), tested in
+  `tests/personal-events.test.mjs`.
+- Pages ([src/features/personal/](src/features/personal/)), outside AppLayout: `/my/new` and `/my/e/<id>/edit`
+  (five steps - Type, Details, When, Guests, Review - with a live preview; inviting is the link and code the host's
+  page hands out once it exists), `/my/e/<id>` (the host's page), `/i/<code>` (the invitation, public).
+- **A cover photograph** (`cover_url`, in 049): uploaded through `/api/uploads` with the `personal` folder, which is
+  any signed-in person filed under their own id like `profiles`, re-encoded on the device (`prepareGalleryPhoto`);
+  the API accepts only a URL in **that person's own** `personal/<id>/` folder (`isOwnUploadUrl`, shared/profile.ts).
+  The bucket is public, so a cover is reachable by anybody holding its (random) URL, the same as every upload here.
+  Without one, the kind's artwork ([personal-artwork.ts](src/lib/personal-artwork.ts)) is the picture.
+- **The audit log keeps no private detail of a personal event** (`auditView`): kind, colour, dates, status and the
+  two switches - never the title, note, venue, address, cover or code. `audit_log` is read by the platform owner.
+- **Whoever has the code can open the invitation; nothing lists personal events anywhere else.** The code is six
+  characters with no I, L, O, 0 or 1. "New code" retires the old link at once.
+- **Guests reply without an account.** Their browser keeps a random token (`x-guest-token`, `sympal:guest-token`
+  in localStorage); only its SHA-256 is stored. A guest who later signs in keeps the same reply.
+- **Privacy:** guests see counts, not names, unless the host turns on "guests can see who's coming" (then first
+  names). **A phone number goes to the host and nobody else**, the guest's own reply included. Wishes are shown
+  to everyone with the code, signed with a first name. No flats, ever.
+- Limits: 20 upcoming events per host, 300 replies per event, replies close after the day or on cancel.
+- The event colour is one of the five `themes.ts` presets, applied with `themeVariables` on the page wrapper only.
+- `personal` query keys are not in `persistedRoots` (a guest list carries phone numbers) - keep it that way.
+- Not built yet: co-hosts (the host is the only manager), a schedule, a gallery and a memory page, deleting an
+  event, copying one into a society, and rate-limiting code guesses (a 6-character code is ~887 million
+  possibilities; the API does not throttle `part=invite`).
+
 ## Society Management
 
 `/society/<slug>/admin` ([src/features/society/admin/](src/features/society/admin/)), API

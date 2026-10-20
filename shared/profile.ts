@@ -27,9 +27,17 @@ export function cleanProfilePhone(value: unknown) {
  * borrow their picture.
  */
 export function isOwnAvatarUrl(url: string, userId: string, storageOrigin?: string) {
+  return isOwnUploadUrl(url, userId, "profiles", storageOrigin);
+}
+
+/**
+ * The same rule for any folder filed under a person's own id (`profiles`, and `personal` for a personal
+ * event's cover): a URL this app stored, in that person's own folder, and nowhere else.
+ */
+export function isOwnUploadUrl(url: string, userId: string, folder: "profiles" | "personal", storageOrigin?: string) {
   if (!/^[0-9a-f-]{36}$/i.test(userId)) return false;
   // Where this app's storage lives, when the caller knows it (the API does): the host has to match too.
-  if (storageOrigin && !url.startsWith(`${storageOrigin.replace(/\/$/, "")}/storage/v1/object/public/uploads/profiles/`)) return false;
-  const prefix = /^https:\/\/[^/]+\/storage\/v1\/object\/public\/uploads\/profiles\/([0-9a-f-]{36})\/[A-Za-z0-9._-]+$/i.exec(url);
+  if (storageOrigin && !url.startsWith(`${storageOrigin.replace(/\/$/, "")}/storage/v1/object/public/uploads/${folder}/`)) return false;
+  const prefix = new RegExp(`^https://[^/]+/storage/v1/object/public/uploads/${folder}/([0-9a-f-]{36})/[A-Za-z0-9._-]+$`, "i").exec(url);
   return Boolean(prefix) && prefix![1].toLowerCase() === userId.toLowerCase() && url.length <= 500;
 }

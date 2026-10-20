@@ -591,6 +591,109 @@
   .dfx-row { animation: none; }
 }
 
+/* Home: switching My space | society slides the content in from the side of the half that was chosen. */
+.dfx-from-left { animation: dfx-from-left 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.dfx-from-right { animation: dfx-from-right 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes dfx-from-left { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes dfx-from-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+/* A code that is not a code: the box shakes once. */
+.dfx-shake { animation: dfx-shake 0.4s ease-in-out; }
+@keyframes dfx-shake { 25% { transform: translateX(-6px); } 50% { transform: translateX(6px); } 75% { transform: translateX(-3px); } }
+/* A light sweeping across a button, every few seconds. One per screen. */
+.dfx-glint { position: relative; overflow: hidden; isolation: isolate; }
+.dfx-glint::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, hsl(42 95% 75% / 0.55) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: dfx-glint 3.8s ease-in-out 1.2s infinite;
+}
+@keyframes dfx-glint { 0% { transform: translateX(-120%); } 40%, 100% { transform: translateX(120%); } }
+@media (prefers-reduced-motion: reduce) {
+  .dfx-from-left, .dfx-from-right, .dfx-shake { animation: none; }
+  .dfx-glint::after { display: none; }
+}
+
+/*
+ * The home's liquid glass (src/features/society/). Built on `.glass` above; these add the shapes and motion.
+ *
+ * .home-ambient   soft colour washes drifting behind the page, so the glass has something to refract.
+ * .liquid-track   a fully round glass track for a segmented switch.
+ * .liquid-thumb   the chosen half: a glossy pill in the primary colour with a light along its top edge.
+ *                 `.liquid-go` plays while it travels - it stretches along its path and settles, like a drop.
+ * .glass-card     a glass card with a deeper, softer shadow and a light under the mouse (`--mx` / `--my`).
+ */
+.home-ambient span {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.55;
+  animation: dfx-drift-1 18s ease-in-out infinite alternate;
+}
+.home-ambient span:nth-child(2) { animation-name: dfx-drift-2; animation-duration: 23s; }
+.home-ambient span:nth-child(3) { animation-name: dfx-drift-3; animation-duration: 27s; }
+
+.liquid-track {
+  position: relative;
+  border-radius: 9999px;
+  border: 1px solid hsl(0 0% 100% / 0.75);
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.62), hsl(0 0% 100% / 0.38));
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.95),
+    inset 0 -1px 2px hsl(var(--foreground) / 0.06),
+    0 12px 28px -16px hsl(var(--foreground) / 0.35);
+}
+.liquid-thumb {
+  border-radius: 9999px;
+  background:
+    linear-gradient(180deg, hsl(0 0% 100% / 0.28) 0%, hsl(0 0% 100% / 0) 52%),
+    linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.86) 100%);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.45),
+    inset 0 -2px 4px hsl(0 0% 0% / 0.18),
+    0 8px 18px -6px hsl(var(--primary) / 0.55);
+  transform-origin: center;
+}
+.liquid-go { animation: liquid-go 0.55s cubic-bezier(0.3, 1.2, 0.5, 1); }
+@keyframes liquid-go {
+  0% { scale: 1 1; }
+  35% { scale: 1.16 0.86; }
+  70% { scale: 0.97 1.04; }
+  100% { scale: 1 1; }
+}
+.glass-card {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid hsl(0 0% 100% / 0.75);
+  background: linear-gradient(150deg, hsl(0 0% 100% / 0.82) 0%, hsl(0 0% 100% / 0.56) 100%);
+  -webkit-backdrop-filter: blur(18px) saturate(1.7);
+  backdrop-filter: blur(18px) saturate(1.7);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.95),
+    0 18px 40px -24px hsl(var(--foreground) / 0.4),
+    0 2px 6px -2px hsl(var(--foreground) / 0.08);
+}
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.55) 0%, hsl(0 0% 100% / 0) 40%);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .liquid-track, .glass-card { background: hsl(0 0% 100% / 0.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-ambient span, .liquid-go { animation: none; }
+}
+
 /* The closing reminder rising into place (src/features/closing/closing-reminder.tsx). A wrapper animates,
    never the Radix content box, so nothing fights the box's own positioning. */
 .dfx-sheet { animation: dfx-sheet 0.6s cubic-bezier(0.25, 1.25, 0.4, 1) both; }

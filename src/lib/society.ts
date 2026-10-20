@@ -65,9 +65,11 @@ export type SocietyHome = {
   myPasses?: { eventId: string; people: number; paymentStatus: string }[];
 };
 
-export function useSocietyHome(slug?: string) {
+export function useSocietyHome(slug?: string, { enabled = true }: { enabled?: boolean } = {}) {
   const {data:session}=useSession();
   return useQuery({
+    // My space has no society to read, and somebody with no society would only get a 404 for asking.
+    enabled,
     queryKey: ["society-home", slug ?? "mine", session?.user.appUserId ?? "guest"],
     queryFn: () =>
       apiFetch<SocietyHome>(
