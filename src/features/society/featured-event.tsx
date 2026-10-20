@@ -65,7 +65,7 @@ export function FeaturedEvent({ event, to, now }: { event: SocietyEvent; to: str
       )}
     >
       
-      <div ref={frameRef} className="relative aspect-[16/10] w-full overflow-hidden bg-primary/90 sm:aspect-[16/6]">
+      <div ref={frameRef} className="relative aspect-[16/10] w-full overflow-hidden bg-primary/90 sm:aspect-[16/6] xl:aspect-[16/5]">
         <div ref={pictureRef} className="absolute inset-0">
         <EventArtwork
           eventType={event.eventType}

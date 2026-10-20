@@ -38,13 +38,13 @@ export function MySpace({ greeting, canCreateSocietyEvent }: { greeting: string;
   useScrollReveal(asideRef, motion);
 
   return (
-    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-10">
       <div ref={mainRef} className="min-w-0">
         <header className="mt-5">
-          <h1 className="font-display text-2xl font-semibold leading-tight sm:text-3xl" aria-label={motion ? greeting : undefined}>
+          <h1 className="font-display text-[26px] font-semibold leading-tight sm:text-4xl" aria-label={motion ? greeting : undefined}>
             {motion ? <RisingWords text={greeting} /> : greeting}
           </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground sm:text-[15px]">Your celebrations, invitations and memories</p>
+          <p className="mt-1 text-[15px] text-muted-foreground sm:text-base">Your celebrations, invitations and memories</p>
         </header>
         <CreateEventBanner ready={ready} motion={motion} />
         <MyEvents signedIn={Boolean(session)} query={personal} motion={motion} />
@@ -91,7 +91,7 @@ const replyChip: Record<"going" | "maybe" | "declined", CardChip> = {
 function EventsPanel({ children, busy }: { children: ReactNode; busy?: boolean }) {
   return (
     <section aria-labelledby="my-events" aria-busy={busy || undefined} className="glass-card mt-6 rounded-[30px] p-3 sm:p-4">
-      <h2 id="my-events" className="font-display px-1 text-xl font-semibold">
+      <h2 id="my-events" className="font-display px-1 text-xl font-semibold sm:text-2xl">
         My events
       </h2>
       {children}
@@ -125,7 +125,7 @@ function MyEvents({ signedIn, query, motion }: { signedIn: boolean; query: Retur
     return (
       <EventsPanel busy>
         <div className="mt-3 h-11 animate-pulse rounded-full bg-white/60" />
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 sm:gap-3 2xl:grid-cols-3">
           {[0, 1].map((key) => (
             <div key={key} className="flex animate-pulse gap-3.5 rounded-[22px] bg-white/50 p-2">
               <div className="h-[84px] w-[84px] rounded-[18px] bg-muted" />
@@ -241,7 +241,7 @@ function EventGrid({ lists, current, motion }: { lists: Lists; current: ListKey;
   if (!cards.length) return <p className="rounded-[22px] bg-white/50 px-4 py-3 text-sm text-muted-foreground">{emptyLine[current]}</p>;
 
   return (
-    <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
+    <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 sm:gap-3 2xl:grid-cols-3">
       {cards.map((card, index) => (
         <li key={card.key} className={motion ? "dfx-row" : undefined} style={motion ? { animationDelay: `${Math.min(index, 11) * 60}ms` } : undefined}>
           <PersonalEventCard event={card.event} to={card.to} chip={card.chip} going={card.going} past={current === "past"} />

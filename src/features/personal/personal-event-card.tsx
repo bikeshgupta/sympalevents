@@ -69,7 +69,7 @@ export function PersonalEventCard({
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transform-none motion-reduce:transition-none",
       )}
     >
-      <span className={cn("relative h-[84px] w-[84px] shrink-0 overflow-hidden rounded-[18px] bg-muted", past && "grayscale-[35%]")}>
+      <span className={cn("relative h-[84px] w-[84px] shrink-0 overflow-hidden rounded-[18px] bg-muted sm:h-[104px] sm:w-[104px] sm:rounded-[20px]", past && "grayscale-[35%]")}>
         <PersonalEventImage event={event} className="transition-transform duration-500 [@media(hover:hover)]:group-hover:scale-105 motion-reduce:transition-none" />
         <span className="absolute left-1.5 top-1.5 flex flex-col items-center rounded-xl border border-white/70 bg-white/75 px-1.5 py-1 leading-none text-foreground shadow-sm backdrop-blur-md">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{when.weekday}</span>
@@ -78,7 +78,7 @@ export function PersonalEventCard({
         </span>
       </span>
       <span className="min-w-0 flex-1">
-        <span className="font-display block truncate text-lg font-semibold leading-snug">{event.title}</span>
+        <span className="font-display block truncate text-lg font-semibold leading-snug sm:text-xl">{event.title}</span>
         <span className="mt-0.5 block truncate text-sm text-muted-foreground">
           {[time, event.venue].filter(Boolean).join(" · ") || "Time and place to follow"}
         </span>

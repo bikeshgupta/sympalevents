@@ -2275,9 +2275,12 @@ rules pure in [home-view.ts](src/features/society/home-view.ts), tested in `test
 track, the chosen half filled in `bg-primary`, 48px in all, the fill sliding between halves. It replaced the
 underlined text tabs on the owner's 2026 redesign brief (the earlier "no pills" note is superseded). The halves
 are links (`?view=space`, or the society's address), not a tablist, so refresh, sharing and Back agree. Each tab
-then opens with its own heading (My space: the greeting; the society: `SocietyHeader`). **From `lg` both tabs
-are a main column and a 340px side column** (join box and quick actions; festival ideas and Join a society), in a
-`max-w-6xl` container; on a phone the side column follows the main one. Lists of filters on both tabs are the
+then opens with its own heading (My space: the greeting; the society: `SocietyHeader`). **The home uses the full
+width** (asked for: it looked small and wasted space): `max-w-[1600px]` only so it does not stretch on an
+ultrawide, 12px gutters on a phone, 24-40px above. **From `lg` both tabs are a main column and a side column**
+(360px, 400px from `xl`: join box and quick actions; festival ideas and Join a society); on a phone the side
+column follows the main one. Lists use the room: My events in 2 columns from `sm` and 3 from `2xl`, the society's
+event rows in 2 from `xl`; headings, card pictures and the banner step up from `sm`/`xl`. Lists of filters on both tabs are the
 shared `FilterTabs` ([filter-tabs.tsx](src/components/shared/filter-tabs.tsx), a real tablist with arrow keys).
 **There is no bottom tab bar** in the reference designs' sense - the fixed bottom bar was removed on purpose
 (see Navigation), and the home sits outside AppLayout.

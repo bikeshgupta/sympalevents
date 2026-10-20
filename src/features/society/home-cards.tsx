@@ -70,7 +70,7 @@ export function CreateEventBanner({ ready, motion }: { ready: boolean; motion: b
           <HeroEmbers />
         </span>
       ) : null}
-      <div className="relative flex flex-col justify-center px-5 py-3.5 text-white sm:px-7 sm:py-5">
+      <div className="relative flex flex-col justify-center px-5 py-3.5 text-white sm:px-8 sm:py-7 xl:px-10 xl:py-9">
         <p className="hidden w-fit items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/90 backdrop-blur-md sm:flex">
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           Your space for celebrations
@@ -78,11 +78,11 @@ export function CreateEventBanner({ ready, motion }: { ready: boolean; motion: b
         <h2
           id="create-banner"
           aria-label={motion ? headline : undefined}
-          className="font-display max-w-[56%] text-[22px] font-semibold leading-tight sm:mt-1 sm:max-w-[60%] sm:text-3xl"
+          className="font-display max-w-[56%] text-[22px] font-semibold leading-tight sm:mt-1.5 sm:max-w-[60%] sm:text-4xl xl:text-5xl"
         >
           {motion ? <RisingWords text={headline} /> : headline}
         </h2>
-        <p className="mt-1 max-w-[56%] text-sm leading-snug text-white/90 sm:max-w-[60%] sm:text-[15px]">
+        <p className="mt-1 max-w-[56%] text-sm leading-snug text-white/90 sm:mt-2 sm:max-w-[55%] sm:text-base">
           {ready ? (
             <>
               Private and invite-only<span className="hidden sm:inline">, free for every birthday, anniversary and get-together</span>.

@@ -115,7 +115,7 @@ export function SocietyHomePage() {
 
   if (error && view === "society") {
     return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-6">
+      <main className="mx-auto w-full max-w-[1600px] px-3 sm:px-6 lg:px-10 py-6">
         <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           {error instanceof Error ? error.message : "Could not load this society."}
         </p>
@@ -140,7 +140,7 @@ export function SocietyHomePage() {
   const showTabs = signedIn || !societySlug;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-12 pt-3 sm:pt-5 lg:max-w-6xl lg:px-8">
+    <main className="mx-auto w-full max-w-[1600px] px-3 sm:px-6 lg:px-10 pb-12 pt-3 sm:pt-5">
       {motion ? <ScrollProgressBar /> : null}
       <HomeAmbient />
       {/* The brand and the account, flat on the page (no bar): the glass is kept for the content below. */}
@@ -190,7 +190,7 @@ export function SocietyHomePage() {
       ) : !hasSociety ? (
         <NoSociety signedIn={signedIn} />
       ) : (
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-10">
       <div className="min-w-0">
       <div className="mt-5 flex items-end justify-between gap-3">
         <div className="min-w-0">{society ? <SocietyHeader society={society} greeting={signedIn ? greeting : null} /> : null}</div>
@@ -206,7 +206,7 @@ export function SocietyHomePage() {
 
       {signedIn && showsSocietyChooser(societies.length) ? (
         <section aria-labelledby="your-societies" className="glass-card mt-5 rounded-[30px] p-3 sm:p-4">
-          <h2 id="your-societies" className="font-display px-1 text-xl font-semibold">
+          <h2 id="your-societies" className="font-display px-1 text-xl font-semibold sm:text-2xl">
             Your societies
           </h2>
           <SocietyChooser societies={societies} currentSlug={society?.slug ?? null} />
@@ -260,7 +260,7 @@ export function SocietyHomePage() {
       {hasAnything ? (
         // One panel: the heading, its filter and the events it filters belong together.
         <section aria-labelledby="society-events" className="glass-card mt-6 rounded-[30px] p-3 sm:p-4">
-          <h2 id="society-events" className="font-display px-1 text-xl font-semibold">
+          <h2 id="society-events" className="font-display px-1 text-xl font-semibold sm:text-2xl">
             Events
           </h2>
           <div className="mt-2">
@@ -284,7 +284,7 @@ export function SocietyHomePage() {
                       {group.heading}
                     </h3>
                   ) : null}
-                  <ul className="divide-y">
+                  <ul className="grid xl:grid-cols-2 xl:gap-x-8 [&>li]:border-b [&>li]:border-border/60">
                     {group.events.map((event, index) => (
                       <li
                         key={event.id}
@@ -414,7 +414,7 @@ function NoSociety({ signedIn }: { signedIn: boolean }) {
  *  "unknown" is a lie, and this page is made almost entirely of counts. */
 function SocietyHomeSkeleton() {
   return (
-    <main className="mx-auto w-full max-w-3xl animate-pulse px-4 pb-12 pt-4 sm:pt-6" aria-hidden>
+    <main className="mx-auto w-full max-w-[1600px] px-3 sm:px-6 lg:px-10 animate-pulse pb-12 pt-4 sm:pt-6" aria-hidden>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <div className="h-3 w-44 rounded bg-muted" />
